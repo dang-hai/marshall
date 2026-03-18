@@ -24,7 +24,7 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: "hiddenInset",
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.mjs"),
       nodeIntegration: false,
       contextIsolation: true,
     },
