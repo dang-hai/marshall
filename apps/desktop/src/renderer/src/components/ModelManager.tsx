@@ -51,15 +51,15 @@ export function ModelManager({
 
   return (
     <Card className="w-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-base">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
           <span>Models</span>
-          <span className="text-xs font-normal text-muted-foreground">
+          <span className="text-2xs font-normal text-muted-foreground font-mono">
             {formatSize(totalDownloaded)} used
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-1.5">
         {models.map((model) => {
           const isDownloading = downloadProgress?.modelName === model.name;
           const isSelected = selectedModel === model.name;
@@ -68,9 +68,9 @@ export function ModelManager({
           return (
             <div
               key={model.name}
-              className={`flex items-center justify-between p-2 rounded-md border ${
-                isSelected ? "border-primary bg-primary/5" : "border-border"
-              } ${model.downloaded && !disabled ? "cursor-pointer hover:bg-muted/50" : ""}`}
+              className={`flex items-center justify-between p-2 rounded-md border transition-colors ${
+                isSelected ? "border-primary/40 bg-primary/5" : "border-border/60"
+              } ${model.downloaded && !disabled ? "cursor-pointer hover:bg-muted/30" : ""}`}
               onClick={() => {
                 if (model.downloaded && !disabled && !isDownloading) {
                   onSelect(model.name);
@@ -78,37 +78,36 @@ export function ModelManager({
               }}
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{model.name}</span>
-                  {model.downloaded && <span className="text-xs text-green-500">Downloaded</span>}
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-xs">{model.name}</span>
+                  {model.downloaded && <span className="text-2xs text-green-600">Downloaded</span>}
                   {isSelected && (
-                    <span className="text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
+                    <span className="text-2xs bg-primary text-primary-foreground px-1 py-0.5 rounded">
                       Selected
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-2xs text-muted-foreground font-mono">
                   {model.size}
                   {modelSize && ` (${formatSize(modelSize)} on disk)`}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-1.5 ml-2">
                 {isDownloading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-12 h-1 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-primary transition-all"
                         style={{ width: `${downloadProgress.percent}%` }}
                       />
                     </div>
-                    <span className="text-xs w-8">{downloadProgress.percent}%</span>
+                    <span className="text-2xs font-mono w-7">{downloadProgress.percent}%</span>
                   </div>
                 ) : model.downloaded ? (
                   <Button
                     variant={confirmDelete === model.name ? "destructive" : "ghost"}
                     size="sm"
-                    className="h-7 text-xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(model.name);
@@ -121,7 +120,6 @@ export function ModelManager({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       onDownload(model.name);
@@ -137,8 +135,8 @@ export function ModelManager({
         })}
 
         {storageInfo && (
-          <p className="text-xs text-muted-foreground pt-2">
-            Models stored in: {storageInfo.modelsDir}
+          <p className="text-2xs text-muted-foreground pt-2 font-mono truncate">
+            {storageInfo.modelsDir}
           </p>
         )}
       </CardContent>

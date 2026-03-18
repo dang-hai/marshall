@@ -24,7 +24,7 @@ export function VoiceActivityIndicator({
 
     // Add level to history
     historyRef.current.push(level);
-    if (historyRef.current.length > 50) {
+    if (historyRef.current.length > 60) {
       historyRef.current.shift();
     }
 
@@ -41,21 +41,21 @@ export function VoiceActivityIndicator({
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Draw background
-    ctx.fillStyle = isSpeaking ? "rgba(34, 197, 94, 0.1)" : "rgba(100, 100, 100, 0.1)";
+    // Subtle background
+    ctx.fillStyle = isSpeaking ? "rgba(22, 163, 74, 0.06)" : "rgba(120, 113, 108, 0.04)";
     ctx.fillRect(0, 0, width, height);
 
-    // Draw waveform
+    // Draw waveform bars
     const barWidth = width / history.length;
-    const maxHeight = height * 0.8;
+    const maxHeight = height * 0.7;
 
     history.forEach((val, i) => {
-      const barHeight = Math.max(2, val * maxHeight * 20); // Scale up for visibility
+      const barHeight = Math.max(1, val * maxHeight * 20);
       const x = i * barWidth;
       const y = (height - barHeight) / 2;
 
-      ctx.fillStyle = isSpeaking ? "rgb(34, 197, 94)" : "rgb(100, 100, 100)";
-      ctx.fillRect(x, y, barWidth - 1, barHeight);
+      ctx.fillStyle = isSpeaking ? "rgb(22, 163, 74)" : "rgb(120, 113, 108)";
+      ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
     });
   }, [level, isSpeaking, isRecording]);
 
@@ -65,11 +65,16 @@ export function VoiceActivityIndicator({
 
   return (
     <div className={`relative ${className}`}>
-      <canvas ref={canvasRef} width={200} height={40} className="w-full h-10 rounded-md border" />
-      <div className="absolute top-0 right-0 p-1">
+      <canvas
+        ref={canvasRef}
+        width={240}
+        height={32}
+        className="w-full h-7 rounded border border-border/50"
+      />
+      <div className="absolute top-1 right-1">
         <div
-          className={`w-2 h-2 rounded-full ${
-            isSpeaking ? "bg-green-500 animate-pulse" : "bg-gray-400"
+          className={`w-1.5 h-1.5 rounded-full transition-colors ${
+            isSpeaking ? "bg-green-600 animate-pulse" : "bg-muted-foreground/40"
           }`}
         />
       </div>
@@ -89,17 +94,17 @@ export function AudioLevelMeter({ level, threshold, className = "" }: AudioLevel
   const scaledThreshold = Math.min(1, threshold * 30);
 
   return (
-    <div className={`relative h-2 bg-muted rounded-full overflow-hidden ${className}`}>
+    <div className={`relative h-1 bg-muted rounded-full overflow-hidden ${className}`}>
       {/* Level bar */}
       <div
         className={`absolute left-0 top-0 h-full transition-all duration-75 ${
-          scaledLevel > scaledThreshold ? "bg-green-500" : "bg-blue-500"
+          scaledLevel > scaledThreshold ? "bg-green-600" : "bg-primary/60"
         }`}
         style={{ width: `${scaledLevel * 100}%` }}
       />
       {/* Threshold marker */}
       <div
-        className="absolute top-0 h-full w-0.5 bg-yellow-500"
+        className="absolute top-0 h-full w-px bg-amber-500"
         style={{ left: `${scaledThreshold * 100}%` }}
       />
     </div>
