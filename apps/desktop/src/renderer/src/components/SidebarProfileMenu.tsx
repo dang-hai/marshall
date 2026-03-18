@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import { ChevronUp, Settings } from "lucide-react";
-import { cn } from "../lib/utils";
+import { cn, getInitial } from "../lib/utils";
 import { fallbackUser } from "./settings-config";
 
 interface SidebarProfileMenuProps {
@@ -9,10 +9,6 @@ interface SidebarProfileMenuProps {
   isOpen: boolean;
   onOpenSettings: () => void;
   onToggle: () => void;
-}
-
-function getInitial(name: string) {
-  return name.trim().charAt(0).toUpperCase();
 }
 
 export function SidebarProfileMenu({

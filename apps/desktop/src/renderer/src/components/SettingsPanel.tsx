@@ -1,7 +1,7 @@
 import { Check, ChevronRight, X } from "lucide-react";
 import { useAudioCapture } from "../hooks/useAudioCapture";
 import { type AppSettings, useSettings } from "../hooks/useSettings";
-import { cn } from "../lib/utils";
+import { cn, getInitial } from "../lib/utils";
 import { fallbackUser, type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
 
@@ -182,7 +182,7 @@ export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
             </p>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-muted-foreground">
-                {fallbackUser.name.charAt(0)}
+                {getInitial(fallbackUser.name)}
               </div>
               <div>
                 <h3 className="text-sm font-medium text-foreground">{fallbackUser.name}</h3>

@@ -74,7 +74,7 @@ export function AppShell({
       return;
     }
 
-    const handlePointerDown = (event: MouseEvent) => {
+    const handleMouseDown = (event: MouseEvent) => {
       if (!profileMenuRef.current?.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
@@ -86,11 +86,11 @@ export function AppShell({
       }
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isProfileMenuOpen]);
