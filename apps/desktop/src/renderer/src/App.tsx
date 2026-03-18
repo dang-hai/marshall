@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Home, MessageSquare, ChevronRight } from "lucide-react";
 import { APP_NAME } from "@marshall/shared";
 import { cn } from "./lib/utils";
+import { HomePanel } from "./components/HomePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 
 const sidebarItems = [
@@ -88,16 +89,7 @@ export default function App() {
         </aside>
 
         <section className="app-no-drag flex flex-1 flex-col overflow-auto p-5">
-          {activeView === "home" && (
-            <div className="flex flex-1 items-center justify-center">
-              <div className="text-center space-y-2">
-                <p className="text-2xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
-                  Welcome to Marshall
-                </p>
-                <p className="text-sm text-muted-foreground">Your focused call moderator</p>
-              </div>
-            </div>
-          )}
+          {activeView === "home" && <HomePanel />}
 
           {activeView === "chat" && (
             <div className="flex flex-1 items-center justify-center">
