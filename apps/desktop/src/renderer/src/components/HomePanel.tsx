@@ -25,13 +25,18 @@ const INLINE_CODE_CLASS = "rounded bg-muted px-1 py-0.5 font-mono text-[0.875em]
 
 type MarkdownBlockType = "paragraph" | "heading-1" | "heading-2" | "bullet" | "quote";
 
+const METADATA_CHIP_CLASS =
+  "inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground";
+
+const timestampFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 function formatTimestamp(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(timestamp);
+  return timestampFormatter.format(timestamp);
 }
 
 function loadStoredNotes(): QuickNote[] {
@@ -234,7 +239,10 @@ export function HomePanel() {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    window.localStorage.setItem(QUICK_NOTES_STORAGE_KEY, JSON.stringify(notes));
+    const serialized = JSON.stringify(notes);
+    if (window.localStorage.getItem(QUICK_NOTES_STORAGE_KEY) !== serialized) {
+      window.localStorage.setItem(QUICK_NOTES_STORAGE_KEY, serialized);
+    }
   }, [notes]);
 
   const activeNote = useMemo(
@@ -327,8 +335,13 @@ export function HomePanel() {
       return;
     }
 
-    setNotes((currentNotes) =>
-      currentNotes.map((note) =>
+    setNotes((currentNotes) => {
+      const target = currentNotes.find((note) => note.id === activeNoteId);
+      if (!target || target[field] === value) {
+        return currentNotes;
+      }
+
+      return currentNotes.map((note) =>
         note.id === activeNoteId
           ? {
               ...note,
@@ -336,8 +349,8 @@ export function HomePanel() {
               updatedAt: Date.now(),
             }
           : note
-      )
-    );
+      );
+    });
   };
 
   const syncBodyHtml = () => {
@@ -459,25 +472,19 @@ export function HomePanel() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground"
-              >
+              <button type="button" className={METADATA_CHIP_CLASS}>
                 <CalendarDays className="h-3 w-3" />
                 <span>Date</span>
                 <span className="font-medium text-foreground">Today</span>
               </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground"
-              >
+              <button type="button" className={METADATA_CHIP_CLASS}>
                 <UserRound className="h-3 w-3" />
                 <span>Attendees</span>
                 <span className="font-medium text-foreground">Me</span>
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-full border border-dashed border-border/60 bg-background/50 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground"
+                className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
               >
                 <FolderPlus className="h-3 w-3" />
                 <span>Add Folder</span>
