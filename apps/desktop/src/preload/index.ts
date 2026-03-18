@@ -1,9 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { DesktopNavigationRoute } from "../shared/navigation";
+import type { AppSettings } from "../shared/settings";
 
 // Electron API
 contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform,
-  onNavigate: (callback: (path: string) => void) => {
+  onNavigate: (callback: (path: DesktopNavigationRoute) => void) => {
     ipcRenderer.on("navigate", (_event, path) => callback(path));
   },
   minimize: () => ipcRenderer.send("window:minimize"),
@@ -156,41 +158,6 @@ interface StorageInfo {
   availableModels: Record<string, { size: string; url: string; bytes: number }>;
 }
 
-interface AppSettings {
-  transcription: {
-    selectedModel: string;
-    language: string;
-    useGPU: boolean;
-    streamingEnabled: boolean;
-  };
-  audio: {
-    source: "microphone" | "system" | "both";
-    sampleRate: number;
-    vadThreshold: number;
-    vadEnabled: boolean;
-  };
-  ui: {
-    showTimestamps: boolean;
-    autoScroll: boolean;
-    theme: "light" | "dark" | "system";
-  };
-  calendar: {
-    visibleCalendars: {
-      work: boolean;
-      personal: boolean;
-      shared: boolean;
-    };
-    showDeclinedEvents: boolean;
-    showWeekends: boolean;
-    compactView: boolean;
-  };
-  app: {
-    startMinimized: boolean;
-    closeToTray: boolean;
-    checkUpdates: boolean;
-  };
-}
-
 declare global {
   interface Window {
     electron: {
@@ -212,7 +179,7 @@ declare global {
     };
     electronAPI: {
       platform: string;
-      onNavigate: (callback: (path: string) => void) => void;
+      onNavigate: (callback: (path: DesktopNavigationRoute) => void) => void;
       minimize: () => void;
       maximize: () => void;
       close: () => void;

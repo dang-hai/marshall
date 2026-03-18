@@ -1,42 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Home, MessageSquare, Shield, UserRound } from "lucide-react";
+import { Home, MessageSquare } from "lucide-react";
 import { APP_NAME } from "@marshall/shared";
+import { DESKTOP_NAVIGATION_ROUTES } from "../../shared/navigation";
 import { cn } from "./lib/utils";
 import { HomePanel } from "./components/HomePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
-import { fallbackUser, type SettingsSectionId } from "./components/settings-config";
+import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
 
 const sidebarItems = [
   { id: "home", label: "Home", icon: Home },
   { id: "chat", label: "Chat", icon: MessageSquare },
 ] as const;
-
-const settingsSidebarItems: Array<{
-  description: string;
-  icon: typeof UserRound;
-  id: SettingsSectionId;
-  label: string;
-}> = [
-  {
-    id: "account",
-    label: fallbackUser.name,
-    description: "Current user placeholder",
-    icon: UserRound,
-  },
-  {
-    id: "calendar",
-    label: "Calendar",
-    description: "Visible calendars and display",
-    icon: CalendarDays,
-  },
-  {
-    id: "permissions",
-    label: "Permissions",
-    description: "Microphone and screen recording",
-    icon: Shield,
-  },
-];
 
 type ViewId = (typeof sidebarItems)[number]["id"] | "settings";
 
@@ -59,7 +34,7 @@ export function AppShell({
 
   useEffect(() => {
     window.electronAPI?.onNavigate((path) => {
-      if (path === "/settings") {
+      if (path === DESKTOP_NAVIGATION_ROUTES.settings) {
         setActiveView("settings");
         setActiveSettingsSection("account");
         setIsProfileMenuOpen(false);
