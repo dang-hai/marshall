@@ -9,6 +9,7 @@
     "build": "electron-vite build",
     "start": "electron .",
     "preview": "electron-vite preview",
+    "test": "bun test test",
     "package": "electron-builder"
   },
   "dependencies": {
@@ -53,11 +54,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "hardenedRuntime": true,

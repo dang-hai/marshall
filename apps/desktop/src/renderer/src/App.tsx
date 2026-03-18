@@ -1,32 +1,105 @@
-import { useEffect, useState } from "react";
-import { Home, MessageSquare, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CalendarDays, Home, MessageSquare, Shield, UserRound } from "lucide-react";
 import { APP_NAME } from "@marshall/shared";
 import { cn } from "./lib/utils";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
+import { fallbackUser, type SettingsSectionId } from "./components/settings-config";
 
 const sidebarItems = [
   { id: "home", label: "Home", icon: Home },
   { id: "chat", label: "Chat", icon: MessageSquare },
 ] as const;
 
+const settingsSidebarItems: Array<{
+  description: string;
+  icon: typeof UserRound;
+  id: SettingsSectionId;
+  label: string;
+}> = [
+  {
+    id: "account",
+    label: fallbackUser.name,
+    description: "Current user placeholder",
+    icon: UserRound,
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    description: "Visible calendars and display",
+    icon: CalendarDays,
+  },
+  {
+    id: "permissions",
+    label: "Permissions",
+    description: "Microphone and screen recording",
+    icon: Shield,
+  },
+];
+
 type ViewId = (typeof sidebarItems)[number]["id"] | "settings";
 
-const fallbackUser = {
-  name: "Hai Dang",
-};
-
-function getInitial(name: string) {
-  return name.trim().charAt(0).toUpperCase();
+interface AppShellProps {
+  initialProfileMenuOpen?: boolean;
+  initialSettingsSection?: SettingsSectionId;
+  initialView?: ViewId;
 }
 
-export default function App() {
-  const [activeView, setActiveView] = useState<ViewId>("home");
+export function AppShell({
+  initialProfileMenuOpen = false,
+  initialSettingsSection = "account",
+  initialView = "home",
+}: AppShellProps) {
+  const [activeView, setActiveView] = useState<ViewId>(initialView);
+  const [activeSettingsSection, setActiveSettingsSection] =
+    useState<SettingsSectionId>(initialSettingsSection);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(initialProfileMenuOpen);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     window.electronAPI?.onNavigate((path) => {
-      setActiveView(path === "/settings" ? "settings" : "home");
+      if (path === "/settings") {
+        setActiveView("settings");
+        setActiveSettingsSection("account");
+        setIsProfileMenuOpen(false);
+        return;
+      }
+
+      setActiveView("home");
     });
   }, []);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isProfileMenuOpen]);
+
+  const openSettings = () => {
+    setActiveSettingsSection("account");
+    setActiveView("settings");
+    setIsProfileMenuOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -40,51 +113,78 @@ export default function App() {
             </p>
           </div>
 
-          <nav className="space-y-0.5">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeView === item.id;
+          {activeView === "settings" ? (
+            <nav className="space-y-1">
+              {settingsSidebarItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeSettingsSection === item.id;
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveView(item.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveSettingsSection(item.id)}
+                    className={cn(
+                      "flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors",
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium">{item.label}</p>
+                      <p
+                        className={cn(
+                          "text-2xs",
+                          isActive ? "text-primary-foreground/75" : "text-muted-foreground"
+                        )}
+                      >
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </nav>
+          ) : (
+            <>
+              <nav className="space-y-0.5">
+                {sidebarItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeView === item.id;
 
-          <button
-            type="button"
-            onClick={() => setActiveView("settings")}
-            className={cn(
-              "mt-auto rounded-lg border bg-card p-2.5 shadow-soft transition-colors text-left",
-              activeView === "settings"
-                ? "border-primary/40 bg-primary/5"
-                : "border-border/60 hover:border-border hover:bg-accent/50"
-            )}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground">
-                {getInitial(fallbackUser.name)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{fallbackUser.name}</p>
-                <p className="text-2xs text-muted-foreground">Profile & Settings</p>
-              </div>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-          </button>
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveView(item.id);
+                        setIsProfileMenuOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <SidebarProfileMenu
+                active={false}
+                containerRef={profileMenuRef}
+                isOpen={isProfileMenuOpen}
+                onOpenSettings={openSettings}
+                onToggle={() => setIsProfileMenuOpen((current) => !current)}
+              />
+            </>
+          )}
         </aside>
 
         <section className="app-no-drag flex flex-1 flex-col overflow-auto p-5">
@@ -118,9 +218,15 @@ export default function App() {
             </div>
           )}
 
-          {activeView === "settings" && <SettingsPanel onBack={() => setActiveView("home")} />}
+          {activeView === "settings" && (
+            <SettingsPanel onBack={() => setActiveView("home")} section={activeSettingsSection} />
+          )}
         </section>
       </main>
     </div>
   );
+}
+
+export default function App() {
+  return <AppShell />;
 }
