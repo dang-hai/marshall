@@ -17,7 +17,16 @@ export type StorySection = {
 
 export type IntegrationService = {
   name: string;
-  slug: "google-calendar" | "notion-calendar" | "notion" | "slack" | "attio" | "teams" | "email";
+  slug:
+    | "google-calendar"
+    | "notion-calendar"
+    | "notion"
+    | "slack"
+    | "attio"
+    | "teams"
+    | "email"
+    | "google-meet"
+    | "zoom";
 };
 
 export type IntegrationGroup = {
@@ -120,6 +129,8 @@ export const integrationGroups: IntegrationGroup[] = [
     services: [
       { name: "Google Calendar", slug: "google-calendar" },
       { name: "Notion Calendar", slug: "notion-calendar" },
+      { name: "Google Meet", slug: "google-meet" },
+      { name: "Zoom", slug: "zoom" },
     ],
   },
   {
@@ -131,9 +142,7 @@ export const integrationGroups: IntegrationGroup[] = [
     services: [
       { name: "Notion", slug: "notion" },
       { name: "Slack", slug: "slack" },
-      { name: "Attio", slug: "attio" },
       { name: "Teams", slug: "teams" },
-      { name: "Email", slug: "email" },
     ],
   },
 ];

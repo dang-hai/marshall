@@ -4,122 +4,17 @@ import {
   downloadPlaceholderHref,
   heroSignals,
   integrationGroups,
-  mobileAppNote,
   storySections,
   type IntegrationService,
 } from "./content";
 
 function IntegrationLogo({ service }: { service: IntegrationService }) {
-  const icon = (() => {
-    switch (service.slug) {
-      case "google-calendar":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <rect x="4" y="6" width="24" height="22" rx="6" fill="#ffffff" />
-            <path d="M10 4h2v6h-2z" fill="#34a853" />
-            <path d="M20 4h2v6h-2z" fill="#4285f4" />
-            <path d="M4 10h24v5H4z" fill="#ea4335" />
-            <path
-              d="M4 15h24v13a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z"
-              fill="#fbbc04"
-              transform="translate(0 -6)"
-            />
-            <rect x="10" y="17" width="4" height="4" rx="1.2" fill="#4285f4" />
-            <rect x="18" y="17" width="4" height="4" rx="1.2" fill="#34a853" />
-          </svg>
-        );
-      case "notion-calendar":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <rect x="4" y="4" width="24" height="24" rx="7" fill="#111111" />
-            <path d="M9 11h14" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-            <path d="M11 8v5M21 8v5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
-            <path
-              d="M11 18h4M17 18h4M11 22h10"
-              stroke="#ffffff"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        );
-      case "notion":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <rect
-              x="5"
-              y="5"
-              width="22"
-              height="22"
-              rx="4"
-              fill="#ffffff"
-              stroke="#111111"
-              strokeWidth="2"
-            />
-            <path
-              d="M11 22V10l10 12V10"
-              stroke="#111111"
-              strokeWidth="2.2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
-        );
-      case "slack":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <path d="M13 5a3 3 0 0 1 3 3v6h-3a3 3 0 1 1 0-6V5z" fill="#36c5f0" />
-            <path d="M19 13a3 3 0 0 1 3-3h5v3a3 3 0 1 1-6 0h-2z" fill="#2eb67d" />
-            <path d="M19 27a3 3 0 0 1-3-3v-6h3a3 3 0 1 1 0 6v3z" fill="#ecb22e" />
-            <path d="M5 19a3 3 0 0 1 3-3h6v3a3 3 0 1 1-6 0H5z" fill="#e01e5a" />
-          </svg>
-        );
-      case "attio":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <circle cx="13" cy="16" r="7" fill="#111111" />
-            <circle cx="20" cy="16" r="7" fill="#c8c2b8" />
-          </svg>
-        );
-      case "teams":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <circle cx="23" cy="11" r="4" fill="#7b83eb" />
-            <rect x="8" y="11" width="15" height="14" rx="4" fill="#5b5fc7" />
-            <rect x="5" y="9" width="13" height="16" rx="4" fill="#4447b8" />
-            <path d="M9 13h7v2h-2v6h-3v-6H9z" fill="#ffffff" />
-          </svg>
-        );
-      case "email":
-        return (
-          <svg viewBox="0 0 32 32" role="presentation">
-            <rect
-              x="5"
-              y="8"
-              width="22"
-              height="16"
-              rx="4"
-              fill="#ffffff"
-              stroke="#111111"
-              strokeWidth="2"
-            />
-            <path
-              d="M8 11.5 16 17l8-5.5"
-              stroke="#111111"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          </svg>
-        );
-    }
-  })();
+  const logoPath = `/images/integrations/${service.slug}.svg`;
 
   return (
     <div className="integration-logo" data-brand={service.slug}>
       <span className="integration-logo-icon" aria-hidden="true">
-        {icon}
+        <img src={logoPath} alt="" />
       </span>
       <span className="integration-logo-name">{service.name}</span>
     </div>
@@ -521,32 +416,15 @@ export default function App() {
         <section className="integrations-section" id="integrations">
           <div className="story-header compact">
             <span className="eyebrow">Integrations</span>
-            <h2>Marshall fits around your schedule and the places follow-up already happens.</h2>
-            <p>
-              The workflow stays inside the tools your team already trusts, from calendars to the
-              systems where decisions get shared.
-            </p>
+            <h2>Works with tools you already use.</h2>
           </div>
 
-          <div className="integrations-grid">
-            {integrationGroups.map((group) => (
-              <article className="integration-card" key={group.id}>
-                <span className="eyebrow">{group.eyebrow}</span>
-                <h3>{group.title}</h3>
-                <div className="integration-logo-row" aria-label={`${group.title} services`}>
-                  {group.services.map((service) => (
-                    <IntegrationLogo key={service.slug} service={service} />
-                  ))}
-                </div>
-                <p>{group.description}</p>
-              </article>
-            ))}
-
-            <aside className="integration-card integration-card-soon">
-              <span className="eyebrow">Coming soon</span>
-              <h3>Mobile app</h3>
-              <p>{mobileAppNote}</p>
-            </aside>
+          <div className="integrations-logo-strip">
+            {integrationGroups.flatMap((group) =>
+              group.services.map((service) => (
+                <IntegrationLogo key={service.slug} service={service} />
+              ))
+            )}
           </div>
         </section>
 
