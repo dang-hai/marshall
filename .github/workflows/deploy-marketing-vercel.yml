@@ -1,18 +1,12 @@
 name: Deploy Marketing To Vercel
 
 on:
-  push:
-    branches:
-      - release
-    paths:
-      - "apps/marketing/**"
-      - ".github/workflows/deploy-marketing-vercel.yml"
-      - "package.json"
-      - "bun.lock"
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-marketing-vercel-${{ github.ref }}
+  group: deploy-marketing-vercel
   cancel-in-progress: true
 
 jobs:
