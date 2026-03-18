@@ -2,11 +2,14 @@ import { Tray, Menu, nativeImage, BrowserWindow, app } from "electron";
 import { join } from "path";
 
 export function createTray(mainWindow: BrowserWindow | null): Tray {
-  // Load the tray icon from resources folder
+  // Load the tray icon
   // "Template" suffix tells macOS to treat it as a template image (auto dark/light mode)
-  // In dev: out/main -> resources (../resources)
-  // In prod: same structure after packaging
-  const iconPath = join(__dirname, "../resources/trayTemplate.png");
+  // In dev: use resources folder relative to __dirname
+  // In prod: use extraResources path (process.resourcesPath/tray)
+  const isDev = process.env.ELECTRON_RENDERER_URL !== undefined;
+  const iconPath = isDev
+    ? join(__dirname, "../resources/trayTemplate.png")
+    : join(process.resourcesPath, "tray/trayTemplate.png");
   const icon = nativeImage.createFromPath(iconPath);
   icon.setTemplateImage(true);
 

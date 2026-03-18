@@ -82,6 +82,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "resources",
+        "to": "tray",
+        "filter": [
+          "tray*.png"
+        ]
       }
     ]
   }
