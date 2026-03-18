@@ -19,6 +19,7 @@ packages/**/drizzle.config.js
 .env
 .env.local
 .env.*.local
+.neon
 
 # IDE
 .idea/
