@@ -1,3 +1,4 @@
+import { ConsentAwareAnalytics } from "./ConsentAwareAnalytics";
 import { legalSections, type MarketingLegalSection } from "./content";
 
 function findSection(id: MarketingLegalSection["id"]) {
@@ -80,6 +81,8 @@ export function LegalPage({ sectionId }: { sectionId: MarketingLegalSection["id"
 
         <p className="footer-copyright">© 2026 Marshall. All rights reserved.</p>
       </footer>
+
+      <ConsentAwareAnalytics />
     </div>
   );
 }

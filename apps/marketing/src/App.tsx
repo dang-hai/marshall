@@ -1,12 +1,10 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { ConsentAwareAnalytics } from "./ConsentAwareAnalytics";
 import {
   getStoredPrivacyPreferences,
   hasStoredPrivacyPreferences,
   savePrivacyPreferences,
-  syncAnalyticsConsent,
-  trackEvent,
-  trackPageView,
   type PrivacyPreferences,
 } from "./analytics";
 import {
@@ -171,39 +169,12 @@ export default function App() {
   );
   const heroSectionRef = useRef<HTMLElement | null>(null);
   const storySectionRef = useRef<HTMLElement | null>(null);
-  const previousPrivacyPreferencesRef = useRef<PrivacyPreferences | null>(null);
 
   useEffect(() => {
     if (!hasStoredPrivacyPreferences()) {
       setIsPrivacyPopupOpen(true);
     }
   }, []);
-
-  useEffect(() => {
-    syncAnalyticsConsent(privacyPreferences);
-
-    const previousPreferences = previousPrivacyPreferencesRef.current;
-    const analyticsJustEnabled =
-      privacyPreferences.analytics &&
-      (previousPreferences === null || !previousPreferences.analytics);
-    const preferencesChanged =
-      previousPreferences !== null &&
-      (previousPreferences.analytics !== privacyPreferences.analytics ||
-        previousPreferences.marketing !== privacyPreferences.marketing);
-
-    if (analyticsJustEnabled) {
-      trackPageView();
-    }
-
-    if (preferencesChanged && privacyPreferences.analytics) {
-      trackEvent("privacy_preferences_updated", {
-        analytics_enabled: privacyPreferences.analytics ? "true" : "false",
-        marketing_enabled: privacyPreferences.marketing ? "true" : "false",
-      });
-    }
-
-    previousPrivacyPreferencesRef.current = privacyPreferences;
-  }, [privacyPreferences]);
 
   // Reset scenario index when section changes
   useEffect(() => {
@@ -233,7 +204,6 @@ export default function App() {
   const handleCardClick = (sectionId: string) => {
     setActiveSectionId(sectionId);
     setIsPaused(true);
-    trackEvent("story_section_selected", { section_id: sectionId });
     // Resume after 10 seconds of no interaction
     setTimeout(() => setIsPaused(false), 10000);
   };
@@ -241,20 +211,6 @@ export default function App() {
   const handlePrivacyPreferencesSave = (preferences: PrivacyPreferences) => {
     setPrivacyPreferences(savePrivacyPreferences(preferences));
     setIsPrivacyPopupOpen(false);
-  };
-
-  const handleNavigationClick = (target: string, location: string) => {
-    trackEvent("navigation_click", {
-      target,
-      location,
-    });
-  };
-
-  const handleCtaClick = (ctaName: string, location: string) => {
-    trackEvent("cta_click", {
-      cta_name: ctaName,
-      location,
-    });
   };
 
   // Parallax effect for hero section
@@ -309,32 +265,16 @@ export default function App() {
           Marshall
         </a>
         <div className="nav-actions">
-          <a
-            className="text-link"
-            href="#story"
-            onClick={() => handleNavigationClick("story", "header")}
-          >
+          <a className="text-link" href="#story">
             How it works
           </a>
-          <a
-            className="text-link"
-            href="#integrations"
-            onClick={() => handleNavigationClick("integrations", "header")}
-          >
+          <a className="text-link" href="#integrations">
             Integrations
           </a>
-          <a
-            className="cta-button"
-            href={downloadPlaceholderHref}
-            onClick={() => handleCtaClick("download", "header")}
-          >
+          <a className="cta-button" href={downloadPlaceholderHref}>
             <DownloadButtonLabel />
           </a>
-          <a
-            className="secondary-button"
-            href={bookCallPlaceholderHref}
-            onClick={() => handleCtaClick("book_call", "header")}
-          >
+          <a className="secondary-button" href={bookCallPlaceholderHref}>
             Book a Call
           </a>
         </div>
@@ -354,25 +294,13 @@ export default function App() {
               stall, or action items need owners.
             </p>
             <div className="hero-actions">
-              <a
-                className="cta-button"
-                href={downloadPlaceholderHref}
-                onClick={() => handleCtaClick("download", "hero")}
-              >
+              <a className="cta-button" href={downloadPlaceholderHref}>
                 <DownloadButtonLabel />
               </a>
-              <a
-                className="secondary-button"
-                href={bookCallPlaceholderHref}
-                onClick={() => handleCtaClick("book_call", "hero")}
-              >
+              <a className="secondary-button" href={bookCallPlaceholderHref}>
                 Book a Call
               </a>
-              <a
-                className="secondary-button"
-                href="#story"
-                onClick={() => handleNavigationClick("story", "hero")}
-              >
+              <a className="secondary-button" href="#story">
                 See the flow
               </a>
             </div>
@@ -600,13 +528,7 @@ export default function App() {
                     <button
                       key={scenario.label}
                       className={`scenario-btn${index === activeScenarioIndex ? " is-active" : ""}`}
-                      onClick={() => {
-                        setActiveScenarioIndex(index);
-                        trackEvent("story_scenario_selected", {
-                          section_id: activeSection.id,
-                          scenario_label: scenario.label,
-                        });
-                      }}
+                      onClick={() => setActiveScenarioIndex(index)}
                     >
                       {scenario.label}
                     </button>
@@ -707,11 +629,7 @@ export default function App() {
           <span className="eyebrow">Get started</span>
           <h2>Free for personal use. No account required.</h2>
           <p>Download Marshall for macOS. Your audio stays on-device.</p>
-          <a
-            className="cta-button large"
-            href={downloadPlaceholderHref}
-            onClick={() => handleCtaClick("download", "download_section")}
-          >
+          <a className="cta-button large" href={downloadPlaceholderHref}>
             <DownloadButtonLabel />
           </a>
         </section>
@@ -727,27 +645,16 @@ export default function App() {
           <a href="#about" className="footer-link">
             About
           </a>
-          <a
-            href="/privacy/"
-            className="footer-link"
-            onClick={() => handleNavigationClick("privacy", "footer")}
-          >
+          <a href="/privacy/" className="footer-link">
             Privacy
           </a>
-          <a
-            href="/terms/"
-            className="footer-link"
-            onClick={() => handleNavigationClick("terms", "footer")}
-          >
+          <a href="/terms/" className="footer-link">
             Terms
           </a>
           <button
             type="button"
             className="footer-link footer-link-button"
-            onClick={() => {
-              setIsPrivacyPopupOpen(true);
-              trackEvent("manage_cookies_opened", { location: "footer" });
-            }}
+            onClick={() => setIsPrivacyPopupOpen(true)}
           >
             Manage Cookies
           </button>
@@ -762,6 +669,7 @@ export default function App() {
         onClose={() => setIsPrivacyPopupOpen(false)}
         onSave={handlePrivacyPreferencesSave}
       />
+      <ConsentAwareAnalytics enabled={privacyPreferences.analytics} />
     </div>
   );
 }
