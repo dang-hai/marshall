@@ -1,0 +1,49 @@
+name: Deploy Marketing To Vercel
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/marketing/**"
+      - ".github/workflows/deploy-marketing-vercel.yml"
+      - "package.json"
+      - "bun.lock"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-marketing-vercel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VITE_GA_MEASUREMENT_ID: ${{ secrets.VITE_GA_MEASUREMENT_ID }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Pull Vercel project settings
+        working-directory: apps/marketing
+        run: bunx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build marketing site
+        working-directory: apps/marketing
+        run: bunx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        working-directory: apps/marketing
+        run: bunx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
