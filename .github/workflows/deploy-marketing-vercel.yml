@@ -3,7 +3,7 @@ name: Deploy Marketing To Vercel
 on:
   push:
     branches:
-      - main
+      - release
     paths:
       - "apps/marketing/**"
       - ".github/workflows/deploy-marketing-vercel.yml"
