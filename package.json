@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "setup": "./scripts/setup.sh",
     "dev": "bun run --filter @marshall/desktop dev",
     "build": "bun run --filter @marshall/desktop build",
     "dev:marketing": "bun run --filter @marshall/marketing dev",
