@@ -58,6 +58,9 @@ if (existsSync(neonContextFile)) {
 writeFileSync(envFile, current);
 EOF
 
+echo "Building whisper binary..."
+bun run --filter @marshall/transcription build:whisper
+
 echo "Running typecheck..."
 bun run typecheck
 
