@@ -1,0 +1,626 @@
+import { ClipboardEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, Ellipsis, FolderPlus, Trash2, UserRound } from "lucide-react";
+import { Button } from "./ui/button";
+
+interface QuickNote {
+  id: number;
+  title: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+  trashedAt: number | null;
+}
+
+const QUICK_NOTES_STORAGE_KEY = "marshall.quick-notes";
+const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
+const HEADING_ONE_BLOCK_CLASS =
+  "min-h-[2.5rem] font-serif text-[1.5rem] font-medium leading-tight tracking-[-0.01em]";
+const HEADING_TWO_BLOCK_CLASS =
+  "min-h-[2.2rem] font-serif text-[1.25rem] font-medium leading-tight tracking-[-0.01em]";
+const BULLET_BLOCK_CLASS =
+  "relative min-h-[1.85rem] pl-6 before:absolute before:left-0 before:top-0 before:text-foreground/65 before:content-['•']";
+const QUOTE_BLOCK_CLASS = "min-h-[1.85rem] border-l-2 border-border/80 pl-4 text-muted-foreground";
+const DIVIDER_BLOCK_CLASS = "my-4 border-0 border-t border-border/80";
+const INLINE_CODE_CLASS = "rounded bg-muted px-1 py-0.5 font-mono text-[0.875em] text-foreground";
+
+type MarkdownBlockType = "paragraph" | "heading-1" | "heading-2" | "bullet" | "quote";
+
+function formatTimestamp(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(timestamp);
+}
+
+function loadStoredNotes(): QuickNote[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const storedNotes = window.localStorage.getItem(QUICK_NOTES_STORAGE_KEY);
+  if (!storedNotes) {
+    return [];
+  }
+
+  try {
+    const parsedNotes = JSON.parse(storedNotes);
+    if (!Array.isArray(parsedNotes)) {
+      return [];
+    }
+
+    return parsedNotes.flatMap((note) => {
+      if (
+        typeof note?.id !== "number" ||
+        typeof note?.title !== "string" ||
+        typeof note?.body !== "string" ||
+        typeof note?.createdAt !== "number" ||
+        typeof note?.updatedAt !== "number"
+      ) {
+        return [];
+      }
+
+      const migratedBody = note.body.includes("<")
+        ? note.body
+        : textToParagraphHtml(note.body.replace(/\r\n/g, "\n"));
+
+      return [
+        {
+          id: note.id,
+          title: note.title,
+          body: migratedBody,
+          createdAt: note.createdAt,
+          updatedAt: note.updatedAt,
+          trashedAt: typeof note.trashedAt === "number" ? note.trashedAt : null,
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function createEmptyNote(): QuickNote {
+  const now = Date.now();
+  return {
+    id: now,
+    title: "",
+    body: "",
+    createdAt: now,
+    updatedAt: now,
+    trashedAt: null,
+  };
+}
+
+function summarizeBody(body: string) {
+  const normalized = extractPlainTextFromHtml(body).replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "Write notes...";
+  }
+
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+}
+
+function focusEditableAtEnd(element: HTMLDivElement) {
+  element.focus();
+
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function setEditableHtml(element: HTMLDivElement, value: string) {
+  if (normalizeEditorHtml(element.innerHTML) === normalizeEditorHtml(value)) {
+    return;
+  }
+
+  element.innerHTML = value;
+}
+
+function insertPlainTextAtSelection(text: string) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+
+  const textNode = document.createTextNode(text);
+  range.insertNode(textNode);
+  range.setStartAfter(textNode);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderInlineMarkdown(text: string) {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, `<code class="${INLINE_CODE_CLASS}">$1</code>`)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>")
+    .replace(/(^|[^_])_([^_]+)_(?!_)/g, "$1<em>$2</em>");
+}
+
+function textToParagraphHtml(text: string) {
+  const lines = text.split("\n");
+  return lines
+    .map(
+      (line) =>
+        `<div class="${PARAGRAPH_BLOCK_CLASS}">${renderInlineMarkdown(line) || "<br>"}</div>`
+    )
+    .join("");
+}
+
+function extractPlainTextFromHtml(html: string) {
+  if (typeof window === "undefined") {
+    return html.replace(/<[^>]+>/g, " ");
+  }
+
+  const container = window.document.createElement("div");
+  container.innerHTML = html;
+  return container.innerText.replace(/\r\n/g, "\n");
+}
+
+function normalizeEditorHtml(html: string) {
+  return html.trim();
+}
+
+function getBlockClassName(type: MarkdownBlockType) {
+  switch (type) {
+    case "heading-1":
+      return HEADING_ONE_BLOCK_CLASS;
+    case "heading-2":
+      return HEADING_TWO_BLOCK_CLASS;
+    case "bullet":
+      return BULLET_BLOCK_CLASS;
+    case "quote":
+      return QUOTE_BLOCK_CLASS;
+    default:
+      return PARAGRAPH_BLOCK_CLASS;
+  }
+}
+
+function findEditorBlock(editor: HTMLDivElement, node: Node | null): HTMLElement | null {
+  let currentNode = node;
+
+  while (currentNode && currentNode !== editor) {
+    if (currentNode instanceof HTMLElement && currentNode.parentElement === editor) {
+      return currentNode;
+    }
+    currentNode = currentNode.parentNode;
+  }
+
+  return null;
+}
+
+function applyBlockType(block: HTMLElement, type: MarkdownBlockType, text: string) {
+  block.dataset.mdType = type;
+  block.className = getBlockClassName(type);
+  block.innerHTML = renderInlineMarkdown(text) || "<br>";
+}
+
+function insertParagraphAfter(target: HTMLElement) {
+  const paragraph = document.createElement("div");
+  paragraph.dataset.mdType = "paragraph";
+  paragraph.className = PARAGRAPH_BLOCK_CLASS;
+  paragraph.innerHTML = "<br>";
+  target.insertAdjacentElement("afterend", paragraph);
+  focusEditableAtEnd(paragraph as HTMLDivElement);
+}
+
+export function HomePanel() {
+  const [notes, setNotes] = useState<QuickNote[]>(() => loadStoredNotes());
+  const [activeNoteId, setActiveNoteId] = useState<number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.localStorage.setItem(QUICK_NOTES_STORAGE_KEY, JSON.stringify(notes));
+  }, [notes]);
+
+  const activeNote = useMemo(
+    () => notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null,
+    [notes, activeNoteId]
+  );
+  const visibleNotes = useMemo(() => notes.filter((note) => note.trashedAt === null), [notes]);
+
+  useEffect(() => {
+    if (openMenuId === null) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("[data-note-menu-root='true']")) {
+        return;
+      }
+
+      setOpenMenuId(null);
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => window.removeEventListener("mousedown", handlePointerDown);
+  }, [openMenuId]);
+
+  useEffect(() => {
+    if (!activeNote) {
+      return;
+    }
+
+    if (titleRef.current && titleRef.current.textContent !== activeNote.title) {
+      titleRef.current.textContent = activeNote.title;
+    }
+
+    if (bodyRef.current) {
+      setEditableHtml(bodyRef.current, activeNote.body);
+    }
+  }, [activeNote]);
+
+  useEffect(() => {
+    if (activeNoteId === null || !bodyRef.current) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      if (bodyRef.current) {
+        focusEditableAtEnd(bodyRef.current);
+      }
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [activeNoteId]);
+
+  const noteCountLabel =
+    visibleNotes.length === 1 ? "1 note captured" : `${visibleNotes.length} notes captured`;
+
+  const openNote = (noteId: number) => {
+    setOpenMenuId(null);
+    setActiveNoteId(noteId);
+  };
+
+  const createNote = () => {
+    const note = createEmptyNote();
+    setNotes((currentNotes) => [note, ...currentNotes]);
+    setOpenMenuId(null);
+    setActiveNoteId(note.id);
+  };
+
+  const moveNoteToTrash = (noteId: number) => {
+    setNotes((currentNotes) =>
+      currentNotes.map((note) =>
+        note.id === noteId
+          ? {
+              ...note,
+              trashedAt: Date.now(),
+              updatedAt: Date.now(),
+            }
+          : note
+      )
+    );
+    setOpenMenuId(null);
+    if (activeNoteId === noteId) {
+      setActiveNoteId(null);
+    }
+  };
+
+  const updateActiveNote = (field: "title" | "body", value: string) => {
+    if (activeNoteId === null) {
+      return;
+    }
+
+    setNotes((currentNotes) =>
+      currentNotes.map((note) =>
+        note.id === activeNoteId
+          ? {
+              ...note,
+              [field]: value,
+              updatedAt: Date.now(),
+            }
+          : note
+      )
+    );
+  };
+
+  const syncBodyHtml = () => {
+    if (!bodyRef.current) {
+      return;
+    }
+
+    updateActiveNote("body", normalizeEditorHtml(bodyRef.current.innerHTML));
+  };
+
+  const handleBodyPaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const pastedText = event.clipboardData.getData("text/plain");
+    insertPlainTextAtSelection(pastedText);
+    window.requestAnimationFrame(syncBodyHtml);
+  };
+
+  const handleBodyKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!bodyRef.current) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    const currentBlock = findEditorBlock(bodyRef.current, selection?.anchorNode ?? null);
+    if (!currentBlock) {
+      return;
+    }
+
+    const blockText = currentBlock.innerText.replace(/\r\n/g, "\n").trim();
+
+    if (event.key === " " && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+      if (blockText === "#") {
+        event.preventDefault();
+        applyBlockType(currentBlock, "heading-1", "");
+        syncBodyHtml();
+        return;
+      }
+
+      if (blockText === "##") {
+        event.preventDefault();
+        applyBlockType(currentBlock, "heading-2", "");
+        syncBodyHtml();
+        return;
+      }
+
+      if (blockText === "-" || blockText === "*") {
+        event.preventDefault();
+        applyBlockType(currentBlock, "bullet", "");
+        syncBodyHtml();
+        return;
+      }
+
+      if (blockText === ">") {
+        event.preventDefault();
+        applyBlockType(currentBlock, "quote", "");
+        syncBodyHtml();
+        return;
+      }
+    }
+
+    if (event.key === "Enter" && blockText === "---") {
+      event.preventDefault();
+      const divider = document.createElement("hr");
+      divider.className = DIVIDER_BLOCK_CLASS;
+      divider.dataset.mdType = "divider";
+      currentBlock.replaceWith(divider);
+      insertParagraphAfter(divider);
+      syncBodyHtml();
+      return;
+    }
+
+    if (
+      event.key === " " &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      /(\*\*[^*]+\*\*|`[^`]+`|(^|[^*])\*[^*]+\*(?!\*))/.test(blockText)
+    ) {
+      window.requestAnimationFrame(() => {
+        currentBlock.innerHTML = renderInlineMarkdown(currentBlock.innerText);
+        focusEditableAtEnd(currentBlock as HTMLDivElement);
+        syncBodyHtml();
+      });
+    }
+  };
+
+  if (activeNote) {
+    return (
+      <div className="flex min-h-full flex-1 flex-col overflow-hidden">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <Button type="button" variant="ghost" onClick={() => setActiveNoteId(null)}>
+            <ChevronLeft className="mr-1 h-3.5 w-3.5" />
+            Back
+          </Button>
+          <p className="text-2xs tracking-wide text-muted-foreground/70">
+            Updated {formatTimestamp(activeNote.updatedAt)}
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-auto rounded-2xl bg-card/70 px-12 py-10 shadow-soft">
+          <div className="mx-auto flex h-full w-full max-w-2xl flex-col">
+            <div className="relative min-h-[2.75rem]">
+              {!activeNote.title.trim() && (
+                <div className="pointer-events-none absolute inset-0 font-serif text-[1.75rem] font-medium leading-tight text-muted-foreground/30">
+                  New note
+                </div>
+              )}
+              <div
+                ref={titleRef}
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Note title"
+                className="relative min-h-[2.75rem] font-serif text-[1.75rem] font-medium leading-tight tracking-[-0.01em] text-foreground outline-none"
+                onInput={(event) =>
+                  updateActiveNote("title", event.currentTarget.textContent ?? "")
+                }
+              />
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground"
+              >
+                <CalendarDays className="h-3 w-3" />
+                <span>Date</span>
+                <span className="font-medium text-foreground">Today</span>
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground"
+              >
+                <UserRound className="h-3 w-3" />
+                <span>Attendees</span>
+                <span className="font-medium text-foreground">Me</span>
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full border border-dashed border-border/60 bg-background/50 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground"
+              >
+                <FolderPlus className="h-3 w-3" />
+                <span>Add Folder</span>
+              </button>
+            </div>
+
+            <div className="relative mt-10 min-h-[20rem] flex-1">
+              {!extractPlainTextFromHtml(activeNote.body).trim() && (
+                <div className="pointer-events-none absolute inset-0 text-[0.9375rem] leading-[1.85] text-muted-foreground/30">
+                  Write notes...
+                </div>
+              )}
+              <div
+                ref={bodyRef}
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-label="Note body"
+                className="relative min-h-[20rem] whitespace-pre-wrap text-[0.9375rem] leading-[1.85] text-foreground/90 outline-none"
+                onInput={syncBodyHtml}
+                onKeyDown={handleBodyKeyDown}
+                onPaste={handleBodyPaste}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-full flex-1 flex-col">
+      <div className="flex items-start justify-between gap-6 border-b border-border/50 pb-6">
+        <div className="space-y-3">
+          <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
+            Welcome to Marshall
+          </p>
+          <div className="space-y-2">
+            <h1 className="font-serif text-2xl font-medium tracking-tight text-foreground">
+              Keep important context within reach
+            </h1>
+            <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+              Capture a quick note before, during, or after a call so the important detail does not
+              get lost.
+            </p>
+          </div>
+        </div>
+
+        <Button type="button" className="shrink-0" onClick={createNote}>
+          <span>+ Quick Note</span>
+        </Button>
+      </div>
+
+      <div className="grid flex-1 gap-6 pt-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+        <div className="space-y-3">
+          {visibleNotes.length > 0 ? (
+            visibleNotes.map((note) => (
+              <article
+                key={note.id}
+                className="rounded-xl border border-border/60 bg-card/90 px-5 py-4 shadow-soft transition-all hover:border-border hover:bg-card hover:shadow-lifted"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={() => openNote(note.id)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="truncate font-serif text-base font-medium text-foreground">
+                        {note.title.trim() || "New note"}
+                      </p>
+                      <p className="shrink-0 text-2xs tracking-wide text-muted-foreground/70">
+                        {formatTimestamp(note.updatedAt)}
+                      </p>
+                    </div>
+                    <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
+                      {summarizeBody(note.body)}
+                    </p>
+                  </button>
+
+                  <div className="relative shrink-0" data-note-menu-root="true">
+                    <button
+                      type="button"
+                      aria-label="Note actions"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      onClick={() =>
+                        setOpenMenuId((currentMenuId) =>
+                          currentMenuId === note.id ? null : note.id
+                        )
+                      }
+                    >
+                      <Ellipsis className="h-4 w-4" />
+                    </button>
+
+                    {openMenuId === note.id && (
+                      <div className="absolute right-0 top-10 z-10 min-w-36 rounded-lg border border-border/70 bg-popover p-1 shadow-lifted">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
+                          onClick={() => moveNoteToTrash(note.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Move to trash</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
+              <div className="max-w-xs text-center">
+                <p className="font-serif text-base font-medium text-foreground">No notes yet</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Use the + Quick Note button in the top right to open a fresh note document.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <aside className="h-fit rounded-xl border border-border/60 bg-card/70 p-5 shadow-soft">
+          <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
+            Home
+          </p>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-lg bg-muted/50 px-4 py-3">
+              <p className="text-2xs tracking-wide text-muted-foreground">Quick note status</p>
+              <p className="mt-1.5 font-serif text-lg font-medium text-foreground">
+                {noteCountLabel}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border/50 px-4 py-3">
+              <p className="text-xs font-medium text-foreground">Suggested use</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                Open a note when you need a blank page for context, decisions, or follow-ups.
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}

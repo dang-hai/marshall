@@ -12,6 +12,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ["SF Pro Text", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
+        serif: ["Newsreader", "Georgia", "Cambria", "Times New Roman", "serif"],
         mono: ["SF Mono", "Menlo", "Monaco", "Consolas", "monospace"],
       },
       fontSize: {
