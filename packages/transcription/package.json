@@ -1,0 +1,35 @@
+{
+  "name": "@marshall/transcription",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./whisper": {
+      "types": "./dist/whisper/index.d.ts",
+      "import": "./dist/whisper/index.js"
+    },
+    "./audio": {
+      "types": "./dist/audio/index.d.ts",
+      "import": "./dist/audio/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "build:whisper": "./scripts/build-whisper.sh",
+    "download:model": "node --loader ts-node/esm scripts/download-model.ts"
+  },
+  "dependencies": {
+    "node-wav": "^0.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

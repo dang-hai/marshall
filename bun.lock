@@ -26,6 +26,7 @@
         "@marshall/auth": "workspace:*",
         "@marshall/database": "workspace:*",
         "@marshall/shared": "workspace:*",
+        "@marshall/transcription": "workspace:*",
         "@tanstack/react-query": "^5.50.0",
         "@trpc/client": "^11.0.0",
         "@trpc/react-query": "^11.0.0",
@@ -93,6 +94,17 @@
       "name": "@marshall/shared",
       "version": "0.0.1",
       "devDependencies": {
+        "typescript": "^5.4.0",
+      },
+    },
+    "packages/transcription": {
+      "name": "@marshall/transcription",
+      "version": "0.0.1",
+      "dependencies": {
+        "node-wav": "^0.0.2",
+      },
+      "devDependencies": {
+        "@types/node": "^20.0.0",
         "typescript": "^5.4.0",
       },
     },
@@ -307,6 +319,8 @@
     "@marshall/desktop": ["@marshall/desktop@workspace:apps/desktop"],
 
     "@marshall/shared": ["@marshall/shared@workspace:packages/shared"],
+
+    "@marshall/transcription": ["@marshall/transcription@workspace:packages/transcription"],
 
     "@mongodb-js/saslprep": ["@mongodb-js/saslprep@1.4.6", "", { "dependencies": { "sparse-bitfield": "^3.0.3" } }, "sha512-y+x3H1xBZd38n10NZF/rEBlvDOOMQ6LKUTHqr8R9VkJ+mmQOYtJFxIlkkK8fZrtOiL6VixbOBWMbZGBdal3Z1g=="],
 
@@ -1071,6 +1085,8 @@
     "node-addon-api": ["node-addon-api@1.7.2", "", {}, "sha512-ibPK3iA+vaY1eEjESkQkM0BbCqFOaZMiXRTtdB0u7b4djtY6JnsjvPdUHVMg6xQt3B8fpTTWHI9A+ADjM9frzg=="],
 
     "node-releases": ["node-releases@2.0.36", "", {}, "sha512-TdC8FSgHz8Mwtw9g5L4gR/Sh9XhSP/0DEkQxfEFXOpiul5IiHgHan2VhYYb6agDSfp4KuvltmGApc8HMgUrIkA=="],
+
+    "node-wav": ["node-wav@0.0.2", "", {}, "sha512-M6Rm/bbG6De/gKGxOpeOobx/dnGuP0dz40adqx38boqHhlWssBJZgLCPBNtb9NkrmnKYiV04xELq+R6PFOnoLA=="],
 
     "normalize-path": ["normalize-path@3.0.0", "", {}, "sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA=="],
 

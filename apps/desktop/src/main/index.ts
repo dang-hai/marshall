@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray } from "electron";
 import { join } from "path";
 import { createTray } from "./tray";
+import { setupTranscriptionIPC } from "./transcription";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -57,6 +58,11 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   tray = createTray(mainWindow);
+
+  // Set up transcription IPC handlers
+  if (mainWindow) {
+    setupTranscriptionIPC(mainWindow);
+  }
 
   app.on("activate", () => {
     if (mainWindow === null) {

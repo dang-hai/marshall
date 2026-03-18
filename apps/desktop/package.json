@@ -16,6 +16,7 @@
     "@marshall/auth": "workspace:*",
     "@marshall/database": "workspace:*",
     "@marshall/shared": "workspace:*",
+    "@marshall/transcription": "workspace:*",
     "@trpc/client": "^11.0.0",
     "@trpc/react-query": "^11.0.0",
     "@tanstack/react-query": "^5.50.0",
@@ -48,7 +49,22 @@
       "target": [
         "dmg",
         "zip"
-      ]
-    }
+      ],
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Marshall needs microphone access to transcribe your voice during meetings.",
+        "NSScreenCaptureUsageDescription": "Marshall needs screen capture access to transcribe audio from meeting applications."
+      }
+    },
+    "extraResources": [
+      {
+        "from": "../../packages/transcription/bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   }
 }

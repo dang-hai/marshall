@@ -17,6 +17,7 @@
     { "path": "./packages/database" },
     { "path": "./packages/auth" },
     { "path": "./packages/api" },
+    { "path": "./packages/transcription" },
     { "path": "./apps/desktop" }
   ]
 }
