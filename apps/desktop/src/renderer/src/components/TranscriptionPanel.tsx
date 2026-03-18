@@ -96,13 +96,7 @@ export function TranscriptionPanel() {
     await startRecording(audioSource);
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  const formatTimestamp = (seconds: number): string => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
@@ -148,7 +142,7 @@ export function TranscriptionPanel() {
             {isRecording && (
               <span className="flex items-center gap-1.5 text-xs font-normal text-destructive">
                 <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
-                {formatDuration(audioCapture.duration)}
+                {formatTime(audioCapture.duration)}
               </span>
             )}
           </CardTitle>
@@ -287,7 +281,7 @@ export function TranscriptionPanel() {
                     {transcript.segments.map((segment, i) => (
                       <p key={i} className="text-xs leading-relaxed">
                         <span className="text-2xs text-muted-foreground font-mono mr-1.5">
-                          [{formatTimestamp(segment.start)}]
+                          [{formatTime(segment.start)}]
                         </span>
                         {segment.text}
                       </p>

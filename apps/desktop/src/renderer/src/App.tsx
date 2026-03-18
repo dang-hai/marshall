@@ -3,7 +3,6 @@ import { Home, MessageSquare, ChevronRight } from "lucide-react";
 import { APP_NAME } from "@marshall/shared";
 import { cn } from "./lib/utils";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { useAudioCapture } from "./hooks/useAudioCapture";
 
 const sidebarItems = [
   { id: "home", label: "Home", icon: Home },
@@ -22,9 +21,6 @@ function getInitial(name: string) {
 
 export default function App() {
   const [activeView, setActiveView] = useState<ViewId>("home");
-
-  const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
-    useAudioCapture();
 
   useEffect(() => {
     window.electronAPI?.onNavigate((path) => {
@@ -122,15 +118,7 @@ export default function App() {
             </div>
           )}
 
-          {activeView === "settings" && (
-            <SettingsPanel
-              micPermission={micPermission}
-              screenPermission={screenPermission}
-              onRequestMic={requestMicPermission}
-              onRequestScreen={requestScreenPermission}
-              onBack={() => setActiveView("home")}
-            />
-          )}
+          {activeView === "settings" && <SettingsPanel onBack={() => setActiveView("home")} />}
         </section>
       </main>
     </div>

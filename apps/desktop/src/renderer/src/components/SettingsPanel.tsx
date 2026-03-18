@@ -1,32 +1,20 @@
 import { Check, X, ChevronRight } from "lucide-react";
 import { Button } from "./ui/button";
+import { useAudioCapture } from "../hooks/useAudioCapture";
 
 interface SettingsPanelProps {
-  micPermission: "granted" | "denied" | "prompt" | "unknown";
-  screenPermission: "granted" | "denied" | "prompt" | "unknown";
-  onRequestMic: () => Promise<boolean>;
-  onRequestScreen: () => Promise<boolean>;
   onBack: () => void;
 }
 
-export function SettingsPanel({
-  micPermission,
-  screenPermission,
-  onRequestMic,
-  onRequestScreen,
-  onBack,
-}: SettingsPanelProps) {
-  const PermissionRow = ({
-    label,
-    description,
-    granted,
-    onRequest,
-  }: {
-    label: string;
-    description: string;
-    granted: boolean;
-    onRequest: () => void;
-  }) => (
+interface PermissionRowProps {
+  label: string;
+  description: string;
+  granted: boolean;
+  onRequest: () => void;
+}
+
+function PermissionRow({ label, description, granted, onRequest }: PermissionRowProps) {
+  return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0">
       <div className="flex items-center gap-3">
         <div
@@ -49,6 +37,11 @@ export function SettingsPanel({
       {granted && <span className="text-2xs text-muted-foreground">Granted</span>}
     </div>
   );
+}
+
+export function SettingsPanel({ onBack }: SettingsPanelProps) {
+  const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
+    useAudioCapture();
 
   return (
     <div className="w-full max-w-md space-y-4">
@@ -75,13 +68,13 @@ export function SettingsPanel({
           label="Microphone"
           description="Required for voice transcription"
           granted={micPermission === "granted"}
-          onRequest={onRequestMic}
+          onRequest={requestMicPermission}
         />
         <PermissionRow
           label="Screen Recording"
           description="Required for system audio capture"
           granted={screenPermission === "granted"}
-          onRequest={onRequestScreen}
+          onRequest={requestScreenPermission}
         />
       </div>
 

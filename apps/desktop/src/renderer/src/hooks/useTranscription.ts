@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useAudioCapture, type AudioSource } from "./useAudioCapture";
 
 export interface TranscriptionSegment {
@@ -84,17 +84,13 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
   // Partial transcriptions for streaming mode
   const [partials, setPartials] = useState<PartialTranscription[]>([]);
 
-  const chunksRef = useRef<number[][]>([]);
-
   // Audio capture hook with chunk callback
   const audioCapture = useAudioCapture({
     sampleRate: 48000,
     onChunk: useCallback((chunk: Float32Array, isStereo: boolean) => {
       // Convert Float32Array to regular array for IPC
-      chunksRef.current.push(Array.from(chunk));
-
-      // Send chunk to main process
-      window.transcriptionAPI.addChunk(Array.from(chunk), isStereo).catch((err) => {
+      const chunkArray = Array.from(chunk);
+      window.transcriptionAPI.addChunk(chunkArray, isStereo).catch((err) => {
         console.error("Failed to add audio chunk:", err);
       });
     }, []),
@@ -291,7 +287,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           partialText: "",
         }));
         setPartials([]);
-        chunksRef.current = [];
 
         // Start audio capture
         const captureStarted = await audioCapture.startCapture(source);
@@ -352,7 +347,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
   const cancel = useCallback(() => {
     audioCapture.stopCapture();
     window.transcriptionAPI.cancel();
-    chunksRef.current = [];
     setPartials([]);
 
     setState((prev) => ({
