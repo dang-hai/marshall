@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, session } from "electron";
+import { app, BrowserWindow, Tray, session, ipcMain, desktopCapturer } from "electron";
 import { join } from "path";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
@@ -27,22 +27,29 @@ function createWindow() {
       preload: join(__dirname, "../preload/index.mjs"),
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false, // Required for ESM preload scripts
     },
   });
 
-  // Filter out known Chromium DevTools errors
-  mainWindow.webContents.on("console-message", (_event, _level, message) => {
+  // Log renderer console messages to terminal (for debugging)
+  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     // Suppress Autofill.enable error which is a known Chromium/DevTools issue
     if (message.includes("Autofill.enable")) {
       return;
+    }
+    // Log errors and warnings to terminal
+    if (level >= 2) {
+      const logFn = level === 2 ? console.warn : console.error;
+      logFn(`[Renderer] ${message}`);
+      if (sourceId) logFn(`  at ${sourceId}:${line}`);
     }
   });
 
   // electron-vite injects these env vars
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-    // DevTools can be opened manually with Cmd+Option+I
-    // Not opening automatically to avoid Chromium DevTools errors in console
+    // Open DevTools in development
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
@@ -80,6 +87,11 @@ app.whenReady().then(() => {
 
   // Set up settings IPC handlers first (needed by transcription)
   setupSettingsIPC();
+
+  // Desktop capturer IPC handler (required for Electron 30+)
+  ipcMain.handle("desktop-capturer:get-sources", async (_event, options) => {
+    return desktopCapturer.getSources(options);
+  });
 
   createWindow();
   tray = createTray(mainWindow);

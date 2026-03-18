@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, desktopCapturer } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 
 // Electron API
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -11,10 +11,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   close: () => ipcRenderer.send("window:close"),
 });
 
-// Desktop Capturer API for system audio capture
+// Desktop Capturer API for system audio capture (via IPC - required for Electron 30+)
 contextBridge.exposeInMainWorld("electron", {
   desktopCapturer: {
-    getSources: (options: Electron.SourcesOptions) => desktopCapturer.getSources(options),
+    getSources: (options: { types: Array<"screen" | "window"> }) =>
+      ipcRenderer.invoke("desktop-capturer:get-sources", options),
   },
 });
 
