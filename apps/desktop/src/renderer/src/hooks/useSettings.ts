@@ -1,38 +1,20 @@
 import { useState, useCallback, useEffect } from "react";
+import type { AppSettings } from "../../../shared/settings";
 
-export interface AppSettings {
-  transcription: {
-    selectedModel: string;
-    language: string;
-    useGPU: boolean;
-    streamingEnabled: boolean;
-  };
-  audio: {
-    source: "microphone" | "system" | "both";
-    sampleRate: number;
-    vadThreshold: number;
-    vadEnabled: boolean;
-  };
-  ui: {
-    showTimestamps: boolean;
-    autoScroll: boolean;
-    theme: "light" | "dark" | "system";
-  };
-  calendar: {
-    visibleCalendars: {
-      work: boolean;
-      personal: boolean;
-      shared: boolean;
-    };
-    showDeclinedEvents: boolean;
-    showWeekends: boolean;
-    compactView: boolean;
-  };
-  app: {
-    startMinimized: boolean;
-    closeToTray: boolean;
-    checkUpdates: boolean;
-  };
+export type { AppSettings } from "../../../shared/settings";
+
+export function buildSectionUpdate<K extends keyof AppSettings>(
+  settings: AppSettings | null,
+  key: K,
+  updates: Partial<AppSettings[K]>
+): Pick<AppSettings, K> | null {
+  if (!settings) {
+    return null;
+  }
+
+  return {
+    [key]: { ...settings[key], ...updates },
+  } as Pick<AppSettings, K>;
 }
 
 export function useSettings() {
@@ -72,52 +54,14 @@ export function useSettings() {
     }
   }, []);
 
-  const updateTranscription = useCallback(
-    async (updates: Partial<AppSettings["transcription"]>) => {
-      if (!settings) return false;
-      return updateSettings({
-        transcription: { ...settings.transcription, ...updates },
-      });
-    },
-    [settings, updateSettings]
-  );
+  const updateSection = useCallback(
+    async <K extends keyof AppSettings>(key: K, updates: Partial<AppSettings[K]>) => {
+      const nextUpdate = buildSectionUpdate(settings, key, updates);
+      if (!nextUpdate) {
+        return false;
+      }
 
-  const updateAudio = useCallback(
-    async (updates: Partial<AppSettings["audio"]>) => {
-      if (!settings) return false;
-      return updateSettings({
-        audio: { ...settings.audio, ...updates },
-      });
-    },
-    [settings, updateSettings]
-  );
-
-  const updateUI = useCallback(
-    async (updates: Partial<AppSettings["ui"]>) => {
-      if (!settings) return false;
-      return updateSettings({
-        ui: { ...settings.ui, ...updates },
-      });
-    },
-    [settings, updateSettings]
-  );
-
-  const updateApp = useCallback(
-    async (updates: Partial<AppSettings["app"]>) => {
-      if (!settings) return false;
-      return updateSettings({
-        app: { ...settings.app, ...updates },
-      });
-    },
-    [settings, updateSettings]
-  );
-
-  const updateCalendar = useCallback(
-    async (updates: Partial<AppSettings["calendar"]>) => {
-      if (!settings) return false;
-      return updateSettings({
-        calendar: { ...settings.calendar, ...updates },
-      });
+      return updateSettings(nextUpdate);
     },
     [settings, updateSettings]
   );
@@ -141,11 +85,7 @@ export function useSettings() {
     error,
     loadSettings,
     updateSettings,
-    updateTranscription,
-    updateAudio,
-    updateUI,
-    updateApp,
-    updateCalendar,
+    updateSection,
     resetSettings,
   };
 }

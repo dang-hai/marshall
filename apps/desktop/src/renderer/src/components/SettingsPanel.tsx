@@ -1,20 +1,12 @@
 import { Check, ChevronRight, X } from "lucide-react";
+import { defaultAppSettings, type AppSettings } from "../../../shared/settings";
 import { useAudioCapture } from "../hooks/useAudioCapture";
-import { type AppSettings, useSettings } from "../hooks/useSettings";
+import { useSettings } from "../hooks/useSettings";
 import { cn, getInitial } from "../lib/utils";
 import { fallbackUser, type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
 
-const defaultCalendarSettings: AppSettings["calendar"] = {
-  visibleCalendars: {
-    work: true,
-    personal: true,
-    shared: false,
-  },
-  showDeclinedEvents: true,
-  showWeekends: false,
-  compactView: false,
-};
+const defaultCalendarSettings: AppSettings["calendar"] = defaultAppSettings.calendar;
 
 const calendarVisibilityOptions: Array<{
   description: string;
@@ -134,12 +126,12 @@ function PreferenceRow({
 export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
   const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
     useAudioCapture();
-  const { error, loading, settings, updateCalendar } = useSettings();
+  const { error, loading, settings, updateSection } = useSettings();
   const calendarSettings = settings?.calendar ?? defaultCalendarSettings;
   const calendarReady = !loading && Boolean(settings);
 
   const toggleCalendarVisibility = (key: keyof AppSettings["calendar"]["visibleCalendars"]) => {
-    void updateCalendar({
+    void updateSection("calendar", {
       visibleCalendars: {
         ...calendarSettings.visibleCalendars,
         [key]: !calendarSettings.visibleCalendars[key],
@@ -150,7 +142,7 @@ export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
   const toggleCalendarDisplay = (
     key: Exclude<keyof AppSettings["calendar"], "visibleCalendars">
   ) => {
-    void updateCalendar({
+    void updateSection("calendar", {
       [key]: !calendarSettings[key],
     } as Partial<AppSettings["calendar"]>);
   };

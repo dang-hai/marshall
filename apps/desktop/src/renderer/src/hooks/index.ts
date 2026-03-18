@@ -13,4 +13,4 @@ export type {
 } from "./useTranscription";
 
 export { useSettings } from "./useSettings";
-export type { AppSettings } from "./useSettings";
+export type { AppSettings } from "../../../shared/settings";

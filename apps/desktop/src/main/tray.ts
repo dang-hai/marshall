@@ -1,5 +1,6 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app } from "electron";
 import { join } from "path";
+import { DESKTOP_NAVIGATION_ROUTES } from "../shared/navigation";
 
 export function createTray(mainWindow: BrowserWindow | null): Tray {
   // Load the tray icon
@@ -35,7 +36,7 @@ export function createTray(mainWindow: BrowserWindow | null): Tray {
       click: () => {
         if (mainWindow) {
           mainWindow.show();
-          mainWindow.webContents.send("navigate", "/settings");
+          mainWindow.webContents.send("navigate", DESKTOP_NAVIGATION_ROUTES.settings);
         }
       },
     },

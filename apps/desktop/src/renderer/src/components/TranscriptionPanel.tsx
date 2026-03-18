@@ -11,7 +11,7 @@ const DEFAULT_MODEL = "large-v3-turbo";
 const DEFAULT_MODEL_SIZE = "~1.5 GB";
 
 export function TranscriptionPanel() {
-  const { settings, updateAudio } = useSettings();
+  const { settings, updateSection } = useSettings();
 
   const {
     isInitialized,
@@ -79,9 +79,9 @@ export function TranscriptionPanel() {
   // Update settings when audio source changes
   useEffect(() => {
     if (settings && audioSource !== settings.audio.source) {
-      updateAudio({ source: audioSource });
+      void updateSection("audio", { source: audioSource });
     }
-  }, [audioSource, settings, updateAudio]);
+  }, [audioSource, settings, updateSection]);
 
   const handleDownloadModel = async () => {
     setIsDownloadingModel(true);
