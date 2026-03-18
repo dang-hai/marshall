@@ -1,0 +1,136 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS Sonoma-style background -->
+  <rect width="1600" height="1000" rx="52" fill="url(#sonoma-base-6)"/>
+
+  <!-- Organic flowing shapes -->
+  <ellipse cx="200" cy="800" rx="550" ry="400" fill="url(#blob-sunset)" opacity="0.7"/>
+  <ellipse cx="1400" cy="200" rx="500" ry="350" fill="url(#blob-ocean)" opacity="0.6"/>
+  <ellipse cx="600" cy="300" rx="600" ry="320" fill="url(#blob-dawn)" opacity="0.45"/>
+  <ellipse cx="1100" cy="700" rx="450" ry="300" fill="url(#blob-twilight)" opacity="0.5"/>
+
+  <!-- Inner frame -->
+  <rect x="56" y="56" width="1488" height="888" rx="42" fill="rgba(255,255,255,0.08)"/>
+  <rect x="56" y="56" width="1488" height="888" rx="42" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+  <!-- Main summary panel -->
+  <rect x="180" y="148" width="820" height="704" rx="20" fill="rgba(255,255,255,0.93)" filter="url(#main-shadow-6)"/>
+  <rect x="180" y="148" width="820" height="704" rx="20" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+
+  <text x="238" y="212" fill="#FF9500" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="13" font-weight="600" letter-spacing="0.8">POST-CALL SUMMARY</text>
+  <text x="238" y="268" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="38" font-weight="700" letter-spacing="-0.02em">What was decided?</text>
+
+  <!-- Decisions card -->
+  <rect x="238" y="316" width="704" height="140" rx="16" fill="rgba(52,199,89,0.08)"/>
+  <rect x="274" y="352" width="36" height="36" rx="8" fill="#34C759"/>
+  <text x="285" y="378" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18" font-weight="700">✓</text>
+  <text x="326" y="378" fill="#34C759" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">DECISIONS</text>
+  <text x="274" y="420" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18">Renewal keeps premium support.</text>
+  <text x="274" y="450" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18">Security review gets a dedicated follow-up with legal.</text>
+
+  <!-- Owners card -->
+  <rect x="238" y="480" width="336" height="240" rx="16" fill="rgba(0,122,255,0.06)"/>
+  <text x="274" y="524" fill="#007AFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">OWNERS</text>
+
+  <rect x="274" y="556" width="260" height="48" rx="10" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>
+  <circle cx="302" cy="580" r="14" fill="#5856D6"/>
+  <text x="296" y="586" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">M</text>
+  <text x="328" y="586" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Marcus - pricing proposal</text>
+
+  <rect x="274" y="616" width="260" height="48" rx="10" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>
+  <circle cx="302" cy="640" r="14" fill="#FF2D55"/>
+  <text x="298" y="646" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">A</text>
+  <text x="328" y="646" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Alicia - legal timeline</text>
+
+  <rect x="274" y="676" width="260" height="48" rx="10" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>
+  <circle cx="302" cy="700" r="14" fill="#34C759"/>
+  <text x="296" y="706" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">P</text>
+  <text x="328" y="706" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Priya - stakeholder comms</text>
+
+  <!-- Open risk card (dark) -->
+  <rect x="606" y="480" width="336" height="240" rx="16" fill="#1d1d1f"/>
+  <rect x="642" y="520" width="32" height="32" rx="8" fill="#FF3B30"/>
+  <text x="651" y="544" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="16" font-weight="700">!</text>
+  <text x="690" y="544" fill="rgba(255,255,255,0.6)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">OPEN RISK</text>
+
+  <text x="642" y="596" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="600" letter-spacing="-0.01em">Security questionnaire</text>
+  <text x="642" y="628" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="600" letter-spacing="-0.01em">turnaround is still unknown.</text>
+
+  <text x="642" y="680" fill="rgba(255,255,255,0.5)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="14">Escalate if not resolved by Friday.</text>
+
+  <!-- Share panel -->
+  <rect x="1070" y="234" width="348" height="480" rx="20" fill="rgba(255,255,255,0.95)" filter="url(#share-shadow-6)"/>
+  <rect x="1070" y="234" width="348" height="480" rx="20" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+
+  <text x="1110" y="282" fill="#FF9500" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">SHARE TO</text>
+
+  <!-- Share options -->
+  <rect x="1110" y="314" width="268" height="54" rx="12" fill="rgba(0,122,255,0.06)" stroke="rgba(0,122,255,0.2)" stroke-width="1"/>
+  <circle cx="1142" cy="341" r="12" fill="#007AFF"/>
+  <text x="1136" y="347" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">SL</text>
+  <text x="1166" y="347" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Sales leadership</text>
+  <circle cx="1352" cy="341" r="10" fill="#34C759"/>
+  <text x="1348" y="346" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="700">✓</text>
+
+  <rect x="1110" y="384" width="268" height="54" rx="12" fill="rgba(88,86,214,0.06)" stroke="rgba(88,86,214,0.2)" stroke-width="1"/>
+  <circle cx="1142" cy="411" r="12" fill="#5856D6"/>
+  <text x="1136" y="417" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">PM</text>
+  <text x="1166" y="417" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Product manager</text>
+  <circle cx="1352" cy="411" r="10" fill="#34C759"/>
+  <text x="1348" y="416" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="700">✓</text>
+
+  <rect x="1110" y="454" width="268" height="54" rx="12" fill="rgba(52,199,89,0.06)" stroke="rgba(52,199,89,0.2)" stroke-width="1"/>
+  <circle cx="1142" cy="481" r="12" fill="#34C759"/>
+  <text x="1135" y="487" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">CS</text>
+  <text x="1166" y="487" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Customer success</text>
+  <circle cx="1352" cy="481" r="10" fill="#34C759"/>
+  <text x="1348" y="486" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="700">✓</text>
+
+  <rect x="1110" y="524" width="268" height="54" rx="12" fill="rgba(0,0,0,0.03)"/>
+  <circle cx="1142" cy="551" r="12" fill="rgba(0,0,0,0.1)"/>
+  <text x="1136" y="557" fill="rgba(0,0,0,0.4)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600">EX</text>
+  <text x="1166" y="557" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Executive team</text>
+
+  <!-- Share button -->
+  <rect x="1110" y="620" width="268" height="52" rx="26" fill="#FF9500"/>
+  <text x="1200" y="652" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="16" font-weight="600">Share recap</text>
+
+  <defs>
+    <linearGradient id="sonoma-base-6" x1="0" y1="0" x2="1600" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0c1445"/>
+      <stop offset="0.3" stop-color="#1a237e"/>
+      <stop offset="0.6" stop-color="#283593"/>
+      <stop offset="1" stop-color="#0c1445"/>
+    </linearGradient>
+
+    <radialGradient id="blob-sunset" cx="0.3" cy="0.5" r="0.8">
+      <stop offset="0" stop-color="#ff7e5f"/>
+      <stop offset="0.5" stop-color="#feb47b"/>
+      <stop offset="1" stop-color="#ff6b35" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-ocean" cx="0.5" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#4facfe"/>
+      <stop offset="0.4" stop-color="#00f2fe"/>
+      <stop offset="1" stop-color="#0099ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-dawn" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#f093fb"/>
+      <stop offset="0.5" stop-color="#f5576c"/>
+      <stop offset="1" stop-color="#f093fb" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-twilight" cx="0.4" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#667eea"/>
+      <stop offset="0.6" stop-color="#764ba2"/>
+      <stop offset="1" stop-color="#f093fb" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="main-shadow-6" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="32" flood-color="rgba(0,0,0,0.35)"/>
+    </filter>
+    <filter id="share-shadow-6" x="-15%" y="-10%" width="130%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="rgba(0,0,0,0.25)"/>
+    </filter>
+  </defs>
+</svg>

@@ -1,0 +1,100 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS Sonoma-style background -->
+  <rect width="1600" height="1000" rx="52" fill="url(#sonoma-base-3)"/>
+
+  <!-- Organic flowing shapes -->
+  <ellipse cx="1300" cy="150" rx="500" ry="350" fill="url(#blob-orange-3)" opacity="0.7"/>
+  <ellipse cx="200" cy="850" rx="550" ry="380" fill="url(#blob-teal-3)" opacity="0.6"/>
+  <ellipse cx="700" cy="400" rx="600" ry="300" fill="url(#blob-coral-3)" opacity="0.45"/>
+  <ellipse cx="1400" cy="700" rx="350" ry="250" fill="url(#blob-gold-3)" opacity="0.5"/>
+
+  <!-- Inner frame -->
+  <rect x="56" y="56" width="1488" height="888" rx="42" fill="rgba(255,255,255,0.07)"/>
+  <rect x="56" y="56" width="1488" height="888" rx="42" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+  <!-- Video call window (dark) -->
+  <rect x="140" y="150" width="980" height="700" rx="16" fill="rgba(0,0,0,0.85)" filter="url(#window-shadow-3)"/>
+  <rect x="140" y="150" width="980" height="700" rx="16" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+
+  <!-- Window controls -->
+  <rect x="140" y="150" width="980" height="48" rx="16" fill="rgba(40,40,40,0.95)"/>
+  <rect x="140" y="182" width="980" height="16" fill="rgba(40,40,40,0.95)"/>
+  <circle cx="170" cy="174" r="6" fill="#FF5F56"/>
+  <circle cx="192" cy="174" r="6" fill="#FFBD2E"/>
+  <circle cx="214" cy="174" r="6" fill="#27CA40"/>
+
+  <!-- Video participants -->
+  <rect x="180" y="230" width="400" height="280" rx="12" fill="rgba(60,60,60,0.7)"/>
+  <rect x="600" y="230" width="400" height="280" rx="12" fill="rgba(55,55,55,0.7)"/>
+  <rect x="180" y="530" width="400" height="280" rx="12" fill="rgba(50,50,50,0.7)"/>
+  <rect x="600" y="530" width="400" height="280" rx="12" fill="rgba(58,58,58,0.7)"/>
+
+  <!-- Focus nudge panel -->
+  <rect x="1188" y="208" width="320" height="290" rx="20" fill="rgba(255,255,255,0.95)" filter="url(#panel-shadow-3)"/>
+  <rect x="1188" y="208" width="320" height="290" rx="20" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+
+  <!-- Warning indicator -->
+  <rect x="1224" y="244" width="72" height="24" rx="12" fill="#FF9500"/>
+  <text x="1234" y="260" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="700">ALERT</text>
+
+  <text x="1224" y="300" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="24" font-weight="700" letter-spacing="-0.02em">The call has drifted.</text>
+  <text x="1224" y="332" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="14">You are 4 minutes into</text>
+  <text x="1224" y="352" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="14">procurement policy.</text>
+
+  <!-- Action buttons -->
+  <rect x="1224" y="390" width="140" height="44" rx="22" fill="#FF9500"/>
+  <text x="1250" y="418" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="14" font-weight="600">Park this topic</text>
+
+  <rect x="1380" y="390" width="100" height="44" rx="22" fill="rgba(0,0,0,0.05)" stroke="rgba(0,0,0,0.1)" stroke-width="1"/>
+  <text x="1404" y="418" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="14" font-weight="500">Dismiss</text>
+
+  <!-- Script overlay -->
+  <rect x="680" y="640" width="380" height="140" rx="16" fill="rgba(255,255,255,0.97)" filter="url(#overlay-shadow-3)"/>
+  <text x="712" y="680" fill="#007AFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="11" font-weight="600" letter-spacing="0.5">SUGGESTED SCRIPT</text>
+  <text x="712" y="712" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15" font-weight="500">"Let us book a separate thread for</text>
+  <text x="712" y="734" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15" font-weight="500">procurement and come back to</text>
+  <text x="712" y="756" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15" font-weight="500">onboarding blockers."</text>
+
+  <defs>
+    <linearGradient id="sonoma-base-3" x1="0" y1="0" x2="1600" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0d1b2a"/>
+      <stop offset="0.35" stop-color="#1b263b"/>
+      <stop offset="0.65" stop-color="#415a77"/>
+      <stop offset="1" stop-color="#0d1b2a"/>
+    </linearGradient>
+
+    <radialGradient id="blob-orange-3" cx="0.4" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#ff8c42"/>
+      <stop offset="0.5" stop-color="#ff6b35"/>
+      <stop offset="1" stop-color="#e85d04" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-teal-3" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#2ec4b6"/>
+      <stop offset="0.4" stop-color="#20a4f3"/>
+      <stop offset="1" stop-color="#1a759f" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-coral-3" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#ffb5a7"/>
+      <stop offset="0.5" stop-color="#f08080"/>
+      <stop offset="1" stop-color="#e76f51" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-gold-3" cx="0.4" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#ffc300"/>
+      <stop offset="0.6" stop-color="#ffaa00"/>
+      <stop offset="1" stop-color="#ff8500" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="window-shadow-3" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="rgba(0,0,0,0.5)"/>
+    </filter>
+    <filter id="panel-shadow-3" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+    <filter id="overlay-shadow-3" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="rgba(0,0,0,0.2)"/>
+    </filter>
+  </defs>
+</svg>

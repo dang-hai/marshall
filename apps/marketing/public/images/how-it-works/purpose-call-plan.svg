@@ -1,0 +1,92 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS Sonoma-style background -->
+  <rect width="1600" height="1000" rx="52" fill="url(#sonoma-base-2)"/>
+
+  <!-- Organic flowing shapes -->
+  <ellipse cx="300" cy="200" rx="550" ry="380" fill="url(#blob-magenta)" opacity="0.65"/>
+  <ellipse cx="1350" cy="750" rx="480" ry="320" fill="url(#blob-cyan)" opacity="0.55"/>
+  <ellipse cx="900" cy="500" rx="650" ry="280" fill="url(#blob-purple)" opacity="0.4"/>
+  <ellipse cx="100" cy="800" rx="400" ry="300" fill="url(#blob-pink)" opacity="0.5"/>
+
+  <!-- Inner frame with subtle glass -->
+  <rect x="56" y="56" width="1488" height="888" rx="42" fill="rgba(255,255,255,0.08)"/>
+  <rect x="56" y="56" width="1488" height="888" rx="42" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Main content panel -->
+  <rect x="158" y="152" width="1284" height="696" rx="20" fill="rgba(255,255,255,0.92)" filter="url(#main-shadow-2)"/>
+  <rect x="158" y="152" width="1284" height="696" rx="20" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+
+  <text x="210" y="220" fill="#007AFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="13" font-weight="600" letter-spacing="0.8">PRE-CALL PLAN</text>
+  <text x="210" y="272" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="38" font-weight="700" letter-spacing="-0.02em">Renewal strategy sync</text>
+  <text x="210" y="312" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18">The AI sets the goal before the call starts.</text>
+
+  <!-- Primary goal card -->
+  <rect x="210" y="360" width="520" height="400" rx="16" fill="rgba(0,122,255,0.06)"/>
+  <text x="246" y="404" fill="#007AFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">PRIMARY GOAL</text>
+  <text x="246" y="450" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="26" font-weight="700" letter-spacing="-0.01em">Align on renewal blockers</text>
+  <text x="246" y="488" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="16">Clarify pricing risk, customer concerns, and the next owner.</text>
+
+  <!-- Decision items -->
+  <rect x="246" y="536" width="440" height="52" rx="12" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+  <circle cx="274" cy="562" r="8" fill="#34C759"/>
+  <text x="296" y="568" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="16">Decision needed: pilot pricing owner</text>
+
+  <rect x="246" y="604" width="440" height="52" rx="12" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+  <circle cx="274" cy="630" r="8" fill="#FF9500"/>
+  <text x="296" y="636" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="16">Question: legal review timeline</text>
+
+  <rect x="246" y="672" width="440" height="52" rx="12" fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.06)" stroke-width="1"/>
+  <circle cx="274" cy="698" r="8" fill="#5856D6"/>
+  <text x="296" y="704" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="16">Risk: security questionnaire delay</text>
+
+  <!-- Context to pull -->
+  <rect x="780" y="360" width="452" height="190" rx="16" fill="rgba(88,86,214,0.06)"/>
+  <text x="816" y="404" fill="#5856D6" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">CONTEXT TO PULL</text>
+  <rect x="816" y="432" width="380" height="1" fill="rgba(0,0,0,0.06)"/>
+  <text x="816" y="466" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="17">Q2 packaging memo</text>
+  <text x="816" y="498" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="17">Last renewal postmortem</text>
+  <text x="816" y="530" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="17">Customer health notes</text>
+
+  <!-- Suggested opening -->
+  <rect x="780" y="570" width="452" height="190" rx="16" fill="#1d1d1f"/>
+  <text x="816" y="614" fill="rgba(255,255,255,0.7)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">SUGGESTED OPENING</text>
+  <text x="816" y="670" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="22" font-weight="600" letter-spacing="-0.01em">"Let us leave with one owner</text>
+  <text x="816" y="702" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="22" font-weight="600" letter-spacing="-0.01em">for pricing and one date for legal."</text>
+
+  <defs>
+    <linearGradient id="sonoma-base-2" x1="0" y1="0" x2="1600" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a0a2e"/>
+      <stop offset="0.4" stop-color="#2d1b4e"/>
+      <stop offset="0.7" stop-color="#1e3a5f"/>
+      <stop offset="1" stop-color="#0d1b2a"/>
+    </linearGradient>
+
+    <radialGradient id="blob-magenta" cx="0.3" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#ff006e"/>
+      <stop offset="0.5" stop-color="#8338ec"/>
+      <stop offset="1" stop-color="#3a0ca3" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-cyan" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#00f5d4"/>
+      <stop offset="0.4" stop-color="#00bbf9"/>
+      <stop offset="1" stop-color="#0077b6" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-purple" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#9d4edd"/>
+      <stop offset="0.5" stop-color="#7209b7"/>
+      <stop offset="1" stop-color="#560bad" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-pink" cx="0.4" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#f72585"/>
+      <stop offset="0.6" stop-color="#b5179e"/>
+      <stop offset="1" stop-color="#7209b7" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="main-shadow-2" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="32" flood-color="rgba(0,0,0,0.35)"/>
+    </filter>
+  </defs>
+</svg>

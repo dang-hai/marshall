@@ -1,0 +1,109 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS Sonoma-style background -->
+  <rect width="1600" height="1000" rx="52" fill="url(#sonoma-base-4)"/>
+
+  <!-- Organic flowing shapes -->
+  <ellipse cx="150" cy="300" rx="500" ry="400" fill="url(#blob-emerald)" opacity="0.65"/>
+  <ellipse cx="1450" cy="700" rx="480" ry="350" fill="url(#blob-sapphire)" opacity="0.6"/>
+  <ellipse cx="800" cy="200" rx="600" ry="280" fill="url(#blob-jade)" opacity="0.4"/>
+  <ellipse cx="1200" cy="400" rx="400" ry="300" fill="url(#blob-aqua)" opacity="0.5"/>
+
+  <!-- Inner frame -->
+  <rect x="56" y="56" width="1488" height="888" rx="42" fill="rgba(255,255,255,0.08)"/>
+  <rect x="56" y="56" width="1488" height="888" rx="42" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+  <!-- Main panel -->
+  <rect x="136" y="148" width="1328" height="704" rx="20" fill="rgba(255,255,255,0.93)" filter="url(#main-shadow-4)"/>
+  <rect x="136" y="148" width="1328" height="704" rx="20" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+
+  <text x="196" y="212" fill="#34C759" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="13" font-weight="600" letter-spacing="0.8">IN-CALL RESEARCH</text>
+  <text x="196" y="268" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="38" font-weight="700" letter-spacing="-0.02em">What was referenced on the call?</text>
+  <text x="196" y="308" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18">Marshall can pull internal and external context without leaving the meeting.</text>
+
+  <!-- Company docs card -->
+  <rect x="196" y="360" width="340" height="380" rx="16" fill="rgba(52,199,89,0.08)"/>
+  <rect x="232" y="396" width="40" height="40" rx="10" fill="#34C759"/>
+  <text x="234" y="424" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18" font-weight="700">D</text>
+  <text x="286" y="424" fill="#34C759" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">COMPANY DOCS</text>
+
+  <text x="232" y="480" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="22" font-weight="700" letter-spacing="-0.01em">Q2 packaging memo</text>
+  <text x="232" y="512" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Pricing exception expires June 30.</text>
+
+  <rect x="232" y="546" width="268" height="1" fill="rgba(0,0,0,0.06)"/>
+
+  <text x="232" y="590" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="600" letter-spacing="-0.01em">Renewal postmortem</text>
+  <text x="232" y="622" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Top risk was delayed security review.</text>
+
+  <rect x="232" y="656" width="268" height="1" fill="rgba(0,0,0,0.06)"/>
+
+  <text x="232" y="700" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="600" letter-spacing="-0.01em">Customer health notes</text>
+  <text x="232" y="732" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Engagement score: 78 (moderate).</text>
+
+  <!-- Channels card -->
+  <rect x="576" y="360" width="340" height="380" rx="16" fill="rgba(88,86,214,0.08)"/>
+  <rect x="612" y="396" width="40" height="40" rx="10" fill="#5856D6"/>
+  <text x="622" y="424" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18" font-weight="700">#</text>
+  <text x="666" y="424" fill="#5856D6" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">CHANNELS</text>
+
+  <text x="612" y="480" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="22" font-weight="700" letter-spacing="-0.01em">#sales-escalations</text>
+  <text x="612" y="512" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Legal sign-off slowed three</text>
+  <text x="612" y="534" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">enterprise renewals.</text>
+
+  <rect x="612" y="568" width="268" height="1" fill="rgba(0,0,0,0.06)"/>
+
+  <text x="612" y="612" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="600" letter-spacing="-0.01em">CS handoff thread</text>
+  <text x="612" y="644" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Ops asked for a new stakeholder map.</text>
+
+  <!-- Web card (dark) -->
+  <rect x="956" y="360" width="300" height="380" rx="16" fill="#1d1d1f"/>
+  <rect x="992" y="396" width="40" height="40" rx="10" fill="rgba(255,255,255,0.15)"/>
+  <text x="1001" y="424" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="18" font-weight="700">W</text>
+  <text x="1046" y="424" fill="rgba(255,255,255,0.6)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">WEB</text>
+
+  <text x="992" y="480" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="700" letter-spacing="-0.01em">Competitor price update</text>
+  <text x="992" y="520" fill="rgba(255,255,255,0.65)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Two rivals introduced annual</text>
+  <text x="992" y="544" fill="rgba(255,255,255,0.65)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">flexibility for enterprise accounts.</text>
+
+  <rect x="992" y="580" width="228" height="1" fill="rgba(255,255,255,0.1)"/>
+
+  <text x="992" y="624" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="18" font-weight="600" letter-spacing="-0.01em">Industry analyst report</text>
+  <text x="992" y="660" fill="rgba(255,255,255,0.65)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Market trend: bundled SaaS</text>
+  <text x="992" y="684" fill="rgba(255,255,255,0.65)" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">discounts increasing 12% YoY.</text>
+
+  <defs>
+    <linearGradient id="sonoma-base-4" x1="0" y1="0" x2="1600" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0a192f"/>
+      <stop offset="0.35" stop-color="#112240"/>
+      <stop offset="0.7" stop-color="#1d3557"/>
+      <stop offset="1" stop-color="#0a192f"/>
+    </linearGradient>
+
+    <radialGradient id="blob-emerald" cx="0.3" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#00b894"/>
+      <stop offset="0.5" stop-color="#00cec9"/>
+      <stop offset="1" stop-color="#0984e3" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-sapphire" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#6c5ce7"/>
+      <stop offset="0.4" stop-color="#a29bfe"/>
+      <stop offset="1" stop-color="#74b9ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-jade" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#55efc4"/>
+      <stop offset="0.5" stop-color="#81ecec"/>
+      <stop offset="1" stop-color="#74b9ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="blob-aqua" cx="0.4" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#00d2d3"/>
+      <stop offset="0.6" stop-color="#54a0ff"/>
+      <stop offset="1" stop-color="#5f27cd" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="main-shadow-4" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="32" flood-color="rgba(0,0,0,0.35)"/>
+    </filter>
+  </defs>
+</svg>

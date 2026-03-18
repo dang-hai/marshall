@@ -1,4 +1,5 @@
 {
+  "files": [],
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -18,6 +19,7 @@
     { "path": "./packages/auth" },
     { "path": "./packages/api" },
     { "path": "./packages/transcription" },
-    { "path": "./apps/desktop" }
+    { "path": "./apps/desktop" },
+    { "path": "./apps/marketing" }
   ]
 }

@@ -53,6 +53,21 @@
         "vite": "^5.2.0",
       },
     },
+    "apps/marketing": {
+      "name": "@marshall/marketing",
+      "version": "0.0.1",
+      "dependencies": {
+        "react": "^18.3.0",
+        "react-dom": "^18.3.0",
+      },
+      "devDependencies": {
+        "@types/react": "^18.3.0",
+        "@types/react-dom": "^18.3.0",
+        "@vitejs/plugin-react": "^4.3.0",
+        "typescript": "^5.4.0",
+        "vite": "^5.2.0",
+      },
+    },
     "packages/api": {
       "name": "@marshall/api",
       "version": "0.0.1",
@@ -318,6 +333,8 @@
     "@marshall/database": ["@marshall/database@workspace:packages/database"],
 
     "@marshall/desktop": ["@marshall/desktop@workspace:apps/desktop"],
+
+    "@marshall/marketing": ["@marshall/marketing@workspace:apps/marketing"],
 
     "@marshall/shared": ["@marshall/shared@workspace:packages/shared"],
 

@@ -1,0 +1,116 @@
+<svg width="1600" height="1000" viewBox="0 0 1600 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- macOS Sonoma-style background -->
+  <rect width="1600" height="1000" rx="52" fill="url(#sonoma-base)"/>
+
+  <!-- Organic flowing shapes for depth -->
+  <ellipse cx="200" cy="150" rx="600" ry="400" fill="url(#blob-warm)" opacity="0.7"/>
+  <ellipse cx="1400" cy="800" rx="500" ry="350" fill="url(#blob-cool)" opacity="0.6"/>
+  <ellipse cx="800" cy="600" rx="700" ry="300" fill="url(#blob-mid)" opacity="0.4"/>
+  <ellipse cx="1200" cy="200" rx="400" ry="250" fill="url(#blob-accent)" opacity="0.5"/>
+
+  <!-- Inner frame with glass effect -->
+  <rect x="56" y="56" width="1488" height="888" rx="42" fill="url(#glass-bg)" fill-opacity="0.15"/>
+  <rect x="56" y="56" width="1488" height="888" rx="42" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+
+  <!-- Menu bar notification -->
+  <rect x="1180" y="120" width="260" height="26" rx="13" fill="rgba(255,255,255,0.2)"/>
+
+  <!-- Marshall notification panel with glass morphism -->
+  <rect x="1240" y="190" width="252" height="208" rx="28" fill="rgba(255,255,255,0.85)" filter="url(#panel-shadow)"/>
+  <rect x="1240" y="190" width="252" height="208" rx="28" stroke="rgba(255,255,255,0.6)" stroke-width="1"/>
+  <text x="1276" y="232" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="14" font-weight="600" letter-spacing="-0.01em">Marshall</text>
+  <text x="1276" y="266" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="24" font-weight="700" letter-spacing="-0.02em">Customer sync</text>
+  <text x="1276" y="298" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15">Starts in 2 minutes</text>
+  <rect x="1276" y="324" width="180" height="1" fill="rgba(0,0,0,0.08)"/>
+  <rect x="1276" y="348" width="180" height="44" rx="22" fill="#007AFF"/>
+  <text x="1330" y="376" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="15" font-weight="600">Start call</text>
+
+  <!-- App icon placeholder -->
+  <rect x="1408" y="214" width="48" height="48" rx="12" fill="url(#icon-gradient)"/>
+
+  <!-- Main app window with glass effect -->
+  <rect x="118" y="164" width="922" height="612" rx="16" fill="rgba(30,30,30,0.75)" filter="url(#window-shadow)"/>
+  <rect x="118" y="164" width="922" height="612" rx="16" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/>
+
+  <!-- Window title bar -->
+  <rect x="118" y="164" width="922" height="52" rx="16" fill="rgba(60,60,60,0.9)"/>
+  <rect x="118" y="200" width="922" height="16" fill="rgba(60,60,60,0.9)"/>
+  <circle cx="150" cy="190" r="6" fill="#FF5F56"/>
+  <circle cx="172" cy="190" r="6" fill="#FFBD2E"/>
+  <circle cx="194" cy="190" r="6" fill="#27CA40"/>
+
+  <!-- Video call participants -->
+  <rect x="156" y="254" width="260" height="186" rx="12" fill="rgba(80,80,80,0.6)"/>
+  <rect x="436" y="254" width="260" height="186" rx="12" fill="rgba(75,75,75,0.6)"/>
+  <rect x="716" y="254" width="260" height="186" rx="12" fill="rgba(70,70,70,0.6)"/>
+  <rect x="156" y="460" width="260" height="186" rx="12" fill="rgba(68,68,68,0.6)"/>
+  <rect x="436" y="460" width="260" height="186" rx="12" fill="rgba(72,72,72,0.6)"/>
+  <rect x="716" y="460" width="260" height="186" rx="12" fill="rgba(66,66,66,0.6)"/>
+
+  <!-- Marshall ready overlay -->
+  <rect x="764" y="540" width="240" height="160" rx="16" fill="rgba(255,255,255,0.95)" filter="url(#overlay-shadow)"/>
+  <text x="796" y="578" fill="#007AFF" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.5">UP NEXT</text>
+  <text x="796" y="612" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" font-size="20" font-weight="700" letter-spacing="-0.02em">Marshall is ready</text>
+  <text x="796" y="644" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" font-size="14">Click start when the room is ready.</text>
+
+  <defs>
+    <!-- Sonoma gradient base -->
+    <linearGradient id="sonoma-base" x1="0" y1="0" x2="1600" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a1a2e"/>
+      <stop offset="0.3" stop-color="#16213e"/>
+      <stop offset="0.6" stop-color="#0f3460"/>
+      <stop offset="1" stop-color="#1a1a2e"/>
+    </linearGradient>
+
+    <!-- Warm blob gradient (orange/coral) -->
+    <radialGradient id="blob-warm" cx="0.3" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ff6b35"/>
+      <stop offset="0.5" stop-color="#f7931e"/>
+      <stop offset="1" stop-color="#ff6b35" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Cool blob gradient (teal/blue) -->
+    <radialGradient id="blob-cool" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#00d4aa"/>
+      <stop offset="0.4" stop-color="#0099cc"/>
+      <stop offset="1" stop-color="#006699" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Mid tone blob -->
+    <radialGradient id="blob-mid" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0" stop-color="#ff9a56"/>
+      <stop offset="0.5" stop-color="#ee6b3b"/>
+      <stop offset="1" stop-color="#c14c3b" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Accent blob -->
+    <radialGradient id="blob-accent" cx="0.4" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#ffd93d"/>
+      <stop offset="0.6" stop-color="#ff9a56"/>
+      <stop offset="1" stop-color="#ff6b35" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Glass background -->
+    <linearGradient id="glass-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- Icon gradient -->
+    <linearGradient id="icon-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#007AFF"/>
+      <stop offset="1" stop-color="#5856D6"/>
+    </linearGradient>
+
+    <!-- Shadows -->
+    <filter id="panel-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="rgba(0,0,0,0.25)"/>
+    </filter>
+    <filter id="window-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="24" flood-color="rgba(0,0,0,0.4)"/>
+    </filter>
+    <filter id="overlay-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.15)"/>
+    </filter>
+  </defs>
+</svg>
