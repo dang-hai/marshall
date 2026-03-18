@@ -13,6 +13,7 @@ jobs:
   prepare-release:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     steps:
       - name: Check out repository
@@ -68,6 +69,12 @@ jobs:
       - name: Push release branch
         if: env.HAS_RELEASE_CHANGES == 'true'
         run: git push origin HEAD:release
+
+      - name: Trigger marketing deploy
+        if: env.HAS_RELEASE_CHANGES == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run "Deploy Marketing To Vercel" --ref release
 
       - name: No releasable commits
         if: env.HAS_RELEASE_CHANGES == 'false'
