@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+out/
+*.tsbuildinfo
+
+# Generated TypeScript declaration files for config
+**/*.config.d.ts
+**/*.config.d.ts.map
+# Exclude specific generated JS files, but not all config.js
+apps/**/electron.vite.config.js
+packages/**/drizzle.config.js
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Electron
+release/
+
+# Bun
+bun.lockb
