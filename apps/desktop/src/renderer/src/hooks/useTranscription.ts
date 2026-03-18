@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAudioCapture, type AudioSource } from "./useAudioCapture";
 
 export interface TranscriptionSegment {
@@ -58,6 +58,7 @@ export interface UseTranscriptionOptions {
 
 export function useTranscription(options: UseTranscriptionOptions = {}) {
   const { streamingEnabled = true, vadEnabled = true, vadThreshold = 0.015 } = options;
+  const initializedRef = useRef(false);
 
   const [state, setState] = useState<TranscriptionState>({
     isInitialized: false,
@@ -110,9 +111,8 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       }));
     });
 
-    const unsubSegment = window.transcriptionAPI.onSegment((data) => {
+    const unsubSegment = window.transcriptionAPI.onSegment((_data) => {
       // Segment completed - could add to a segments array if needed
-      console.log("Segment completed:", data);
     });
 
     const unsubComplete = window.transcriptionAPI.onComplete((result) => {
@@ -252,6 +252,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           vadThreshold,
         });
 
+        initializedRef.current = true;
         setState((prev) => ({
           ...prev,
           isInitialized: true,
@@ -271,7 +272,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
 
   const startRecording = useCallback(
     async (source: AudioSource = "microphone") => {
-      if (!state.isInitialized) {
+      if (!initializedRef.current) {
         setState((prev) => ({
           ...prev,
           error: "Transcription not initialized. Call initialize() first.",
@@ -306,7 +307,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
         return false;
       }
     },
-    [state.isInitialized, audioCapture]
+    [audioCapture]
   );
 
   const stopRecording = useCallback(async (): Promise<TranscriptionResult | null> => {
