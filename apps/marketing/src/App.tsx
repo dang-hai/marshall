@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import {
   getStoredPrivacyPreferences,
@@ -547,7 +548,7 @@ export default function App() {
             <h2>Marshall watches your calls so you can focus on the conversation.</h2>
           </div>
 
-          {/* Navigation tabs with capability names */}
+          {/* Navigation tabs with animated pill indicator */}
           <nav className="slideshow-nav" aria-label="Capability steps">
             {storySections.map((section) => (
               <button
@@ -556,19 +557,20 @@ export default function App() {
                 onClick={() => handleCardClick(section.id)}
                 aria-current={section.id === activeSection.id ? "step" : undefined}
               >
-                <span className="tab-dot" />
+                {section.id === activeSection.id && (
+                  <motion.span
+                    layoutId="tab-indicator"
+                    className="tab-indicator"
+                    transition={{
+                      type: "spring",
+                      bounce: 0.2,
+                      duration: 0.6,
+                    }}
+                  />
+                )}
                 <span className="tab-label">{section.eyebrow}</span>
               </button>
             ))}
-            {/* Progress bar */}
-            <div className="slideshow-progress">
-              <div
-                className="slideshow-progress-fill"
-                style={{
-                  width: `${((storySections.findIndex((s) => s.id === activeSection.id) + 1) / storySections.length) * 100}%`,
-                }}
-              />
-            </div>
           </nav>
 
           {/* Single slide view: illustration left, context right */}
