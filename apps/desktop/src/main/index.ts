@@ -15,6 +15,7 @@ app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let isQuitting = false;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -59,7 +60,7 @@ function createWindow() {
   });
 
   mainWindow.on("close", (event) => {
-    if (process.platform === "darwin") {
+    if (process.platform === "darwin" && !isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
     }
@@ -117,6 +118,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  isQuitting = true;
   if (tray) {
     tray.destroy();
   }
