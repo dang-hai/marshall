@@ -1,30 +1,22 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Marshall Docs",
+  "theme": "maple",
+  "name": "Marshall",
   "colors": {
     "primary": "#1a1a1a",
-    "light": "#6b6b6b",
-    "dark": "#1a1a1a",
-    "background": {
-      "light": "#fafafa",
-      "dark": "#0a0a0a"
-    }
+    "light": "#1a1a1a",
+    "dark": "#fafafa"
   },
-  "font": {
-    "family": "Manrope"
+  "modeToggle": {
+    "default": "light",
+    "isHidden": true
   },
   "favicon": "/favicon.svg",
   "navigation": {
-    "tabs": [
+    "groups": [
       {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Getting Started",
-            "pages": ["index", "quickstart"]
-          }
-        ]
+        "group": "Getting Started",
+        "pages": ["index", "quickstart"]
       }
     ]
   },
@@ -41,9 +33,6 @@
   },
   "contextual": {
     "options": ["copy", "claude", "cursor", "vscode", "mcp"]
-  },
-  "search": {
-    "enabled": true
   },
   "feedback": {
     "thumbsRating": true
