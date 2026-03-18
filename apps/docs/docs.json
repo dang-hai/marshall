@@ -1,0 +1,59 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Marshall Docs",
+  "colors": {
+    "primary": "#1a1a1a",
+    "light": "#6b6b6b",
+    "dark": "#1a1a1a",
+    "background": {
+      "light": "#fafafa",
+      "dark": "#0a0a0a"
+    }
+  },
+  "font": {
+    "family": "Manrope"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": ["index", "quickstart"]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "Download",
+      "href": "https://github.com/dang-hai/marshall/releases"
+    }
+  },
+  "contextual": {
+    "options": ["copy", "claude", "cursor", "vscode", "mcp"]
+  },
+  "search": {
+    "enabled": true
+  },
+  "feedback": {
+    "thumbsRating": true
+  },
+  "seo": {
+    "indexing": "navigable"
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/dang-hai/marshall"
+    }
+  }
+}

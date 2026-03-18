@@ -1,0 +1,12 @@
+{
+  "name": "@marshall/docs",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "mint dev",
+    "build": "mint build"
+  },
+  "devDependencies": {
+    "mint": "^4.0.0"
+  }
+}
