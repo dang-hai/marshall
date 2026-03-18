@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, desktopCapturer } from "electron";
 
 // Electron API
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   minimize: () => ipcRenderer.send("window:minimize"),
   maximize: () => ipcRenderer.send("window:maximize"),
   close: () => ipcRenderer.send("window:close"),
+});
+
+// Desktop Capturer API for system audio capture
+contextBridge.exposeInMainWorld("electron", {
+  desktopCapturer: {
+    getSources: (options: Electron.SourcesOptions) => desktopCapturer.getSources(options),
+  },
 });
 
 // Transcription API
@@ -61,6 +68,23 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
 // Type declarations
 declare global {
   interface Window {
+    electron: {
+      desktopCapturer: {
+        getSources: (options: {
+          types: Array<"screen" | "window">;
+          thumbnailSize?: { width: number; height: number };
+          fetchWindowIcons?: boolean;
+        }) => Promise<
+          Array<{
+            id: string;
+            name: string;
+            thumbnail: unknown;
+            display_id: string;
+            appIcon: unknown;
+          }>
+        >;
+      };
+    };
     electronAPI: {
       platform: string;
       onNavigate: (callback: (path: string) => void) => void;

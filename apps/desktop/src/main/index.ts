@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray } from "electron";
+import { app, BrowserWindow, Tray, session } from "electron";
 import { join } from "path";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
@@ -8,6 +8,9 @@ process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 
 // Disable Chromium features that cause DevTools errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
+
+// Enable audio loopback for system audio capture (macOS 14.2+)
+app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -56,6 +59,24 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Set up permission handlers for media access
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    // Allow media permissions (microphone, screen capture)
+    const allowedPermissions = ["media", "microphone", "screen"];
+    if (allowedPermissions.includes(permission)) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+
+  // Handle display media request (for system audio capture)
+  session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    // Allow the request and let the user select the source
+    // For system audio, we typically want the entire screen
+    callback({ video: request.frame, audio: "loopback" });
+  });
+
   createWindow();
   tray = createTray(mainWindow);
 
