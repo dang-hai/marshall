@@ -16,3 +16,10 @@ When building features for Marshall, follow this order:
 
 - Feature worktrees must use their matching Neon preview branch instead of the shared production `DATABASE_URL`.
 - Use `bun run db:url` to inspect the effective database URL for the current worktree when needed.
+
+## External APIs
+
+When working with external libraries or APIs, always use these MCP servers to fetch up-to-date documentation:
+
+- **context7** — Query library documentation (e.g., React, Electron, tRPC)
+- **deepwiki** — Query GitHub repository documentation
