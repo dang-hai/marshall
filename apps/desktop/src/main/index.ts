@@ -2,6 +2,7 @@ import { app, BrowserWindow, Tray, session } from "electron";
 import { join } from "path";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
+import { setupSettingsIPC } from "./settings";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -76,6 +77,9 @@ app.whenReady().then(() => {
     // For system audio, we typically want the entire screen
     callback({ video: request.frame, audio: "loopback" });
   });
+
+  // Set up settings IPC handlers first (needed by transcription)
+  setupSettingsIPC();
 
   createWindow();
   tray = createTray(mainWindow);

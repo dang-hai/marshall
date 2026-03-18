@@ -17,3 +17,5 @@ export type {
   SystemAudioCapability,
   AudioChunk,
 } from "./types.js";
+export { VoiceActivityDetector, detectVoiceActivity, estimateSNR } from "./vad.js";
+export type { VADConfig, VADState, VADResult } from "./vad.js";

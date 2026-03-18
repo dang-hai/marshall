@@ -14,6 +14,13 @@ export interface TranscriptionResult {
   duration: number;
 }
 
+export interface PartialTranscription {
+  text: string;
+  isFinal: boolean;
+  segmentIndex: number;
+  timestamp: number;
+}
+
 export interface ModelInfo {
   name: string;
   size: string;
@@ -21,34 +28,61 @@ export interface ModelInfo {
   path: string;
 }
 
+export interface StorageInfo {
+  totalSize: number;
+  modelSizes: Record<string, number>;
+  modelsDir: string;
+}
+
 export interface TranscriptionState {
   isInitialized: boolean;
   isRecording: boolean;
   isTranscribing: boolean;
   currentModel: string | null;
+  mode: "streaming" | "batch" | null;
   transcript: TranscriptionResult | null;
+  partialText: string;
   error: string | null;
   progress: number;
   recordingDuration: number;
+  // VAD state
+  isSpeaking: boolean;
+  vadLevel: number;
 }
 
-export function useTranscription() {
+export interface UseTranscriptionOptions {
+  streamingEnabled?: boolean;
+  vadEnabled?: boolean;
+  vadThreshold?: number;
+}
+
+export function useTranscription(options: UseTranscriptionOptions = {}) {
+  const { streamingEnabled = true, vadEnabled = true, vadThreshold = 0.015 } = options;
+
   const [state, setState] = useState<TranscriptionState>({
     isInitialized: false,
     isRecording: false,
     isTranscribing: false,
     currentModel: null,
+    mode: null,
     transcript: null,
+    partialText: "",
     error: null,
     progress: 0,
     recordingDuration: 0,
+    isSpeaking: false,
+    vadLevel: 0,
   });
 
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{
     modelName: string;
     percent: number;
   } | null>(null);
+
+  // Partial transcriptions for streaming mode
+  const [partials, setPartials] = useState<PartialTranscription[]>([]);
 
   const chunksRef = useRef<number[][]>([]);
 
@@ -70,6 +104,19 @@ export function useTranscription() {
   useEffect(() => {
     const unsubProgress = window.transcriptionAPI.onProgress((percent) => {
       setState((prev) => ({ ...prev, progress: percent }));
+    });
+
+    const unsubPartial = window.transcriptionAPI.onPartial((partial) => {
+      setPartials((prev) => [...prev, partial]);
+      setState((prev) => ({
+        ...prev,
+        partialText: prev.partialText + " " + partial.text,
+      }));
+    });
+
+    const unsubSegment = window.transcriptionAPI.onSegment((data) => {
+      // Segment completed - could add to a segments array if needed
+      console.log("Segment completed:", data);
     });
 
     const unsubComplete = window.transcriptionAPI.onComplete((result) => {
@@ -96,17 +143,36 @@ export function useTranscription() {
       });
     });
 
+    // VAD events
+    const unsubVADStart = window.transcriptionAPI.onVADSpeechStart(() => {
+      setState((prev) => ({ ...prev, isSpeaking: true }));
+    });
+
+    const unsubVADEnd = window.transcriptionAPI.onVADSpeechEnd(() => {
+      setState((prev) => ({ ...prev, isSpeaking: false }));
+    });
+
+    const unsubVADLevel = window.transcriptionAPI.onVADLevel((rms) => {
+      setState((prev) => ({ ...prev, vadLevel: rms }));
+    });
+
     return () => {
       unsubProgress();
+      unsubPartial();
+      unsubSegment();
       unsubComplete();
       unsubError();
       unsubDownload();
+      unsubVADStart();
+      unsubVADEnd();
+      unsubVADLevel();
     };
   }, []);
 
   // Load models on mount
   useEffect(() => {
     loadModels();
+    loadStorageInfo();
   }, []);
 
   const loadModels = useCallback(async () => {
@@ -115,6 +181,15 @@ export function useTranscription() {
       setModels(modelList);
     } catch (err) {
       console.error("Failed to load models:", err);
+    }
+  }, []);
+
+  const loadStorageInfo = useCallback(async () => {
+    try {
+      const info = await window.transcriptionAPI.getStorageInfo();
+      setStorageInfo(info);
+    } catch (err) {
+      console.error("Failed to load storage info:", err);
     }
   }, []);
 
@@ -128,6 +203,7 @@ export function useTranscription() {
 
         setDownloadProgress(null);
         await loadModels();
+        await loadStorageInfo();
         return true;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to download model";
@@ -136,38 +212,66 @@ export function useTranscription() {
         return false;
       }
     },
-    [loadModels]
+    [loadModels, loadStorageInfo]
   );
 
-  const initialize = useCallback(async (modelName: string, language = "en", useGPU = true) => {
-    try {
-      setState((prev) => ({ ...prev, error: null }));
-
-      // Check if model is downloaded
-      const isDownloaded = await window.transcriptionAPI.isModelDownloaded(modelName);
-      if (!isDownloaded) {
-        setState((prev) => ({
-          ...prev,
-          error: `Model ${modelName} is not downloaded. Please download it first.`,
-        }));
+  const deleteModel = useCallback(
+    async (modelName: string) => {
+      try {
+        setState((prev) => ({ ...prev, error: null }));
+        await window.transcriptionAPI.deleteModel(modelName);
+        await loadModels();
+        await loadStorageInfo();
+        return true;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to delete model";
+        setState((prev) => ({ ...prev, error: message }));
         return false;
       }
+    },
+    [loadModels, loadStorageInfo]
+  );
 
-      await window.transcriptionAPI.init({ modelName, language, useGPU });
+  const initialize = useCallback(
+    async (modelName: string, language = "en", useGPU = true) => {
+      try {
+        setState((prev) => ({ ...prev, error: null }));
 
-      setState((prev) => ({
-        ...prev,
-        isInitialized: true,
-        currentModel: modelName,
-      }));
+        // Check if model is downloaded
+        const isDownloaded = await window.transcriptionAPI.isModelDownloaded(modelName);
+        if (!isDownloaded) {
+          setState((prev) => ({
+            ...prev,
+            error: `Model ${modelName} is not downloaded. Please download it first.`,
+          }));
+          return false;
+        }
 
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to initialize transcription";
-      setState((prev) => ({ ...prev, error: message }));
-      return false;
-    }
-  }, []);
+        const result = await window.transcriptionAPI.init({
+          modelName,
+          language,
+          useGPU,
+          streamingEnabled,
+          vadEnabled,
+          vadThreshold,
+        });
+
+        setState((prev) => ({
+          ...prev,
+          isInitialized: true,
+          currentModel: modelName,
+          mode: result.mode,
+        }));
+
+        return true;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to initialize transcription";
+        setState((prev) => ({ ...prev, error: message }));
+        return false;
+      }
+    },
+    [streamingEnabled, vadEnabled, vadThreshold]
+  );
 
   const startRecording = useCallback(
     async (source: AudioSource = "microphone") => {
@@ -180,7 +284,13 @@ export function useTranscription() {
       }
 
       try {
-        setState((prev) => ({ ...prev, error: null, transcript: null }));
+        setState((prev) => ({
+          ...prev,
+          error: null,
+          transcript: null,
+          partialText: "",
+        }));
+        setPartials([]);
         chunksRef.current = [];
 
         // Start audio capture
@@ -204,7 +314,7 @@ export function useTranscription() {
     [state.isInitialized, audioCapture]
   );
 
-  const stopRecording = useCallback(async () => {
+  const stopRecording = useCallback(async (): Promise<TranscriptionResult | null> => {
     // Stop audio capture
     audioCapture.stopCapture();
 
@@ -223,11 +333,11 @@ export function useTranscription() {
       setState((prev) => ({
         ...prev,
         isTranscribing: false,
-        transcript: result,
+        transcript: result as TranscriptionResult,
         progress: 100,
       }));
 
-      return result;
+      return result as TranscriptionResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Transcription failed";
       setState((prev) => ({
@@ -243,33 +353,56 @@ export function useTranscription() {
     audioCapture.stopCapture();
     window.transcriptionAPI.cancel();
     chunksRef.current = [];
+    setPartials([]);
 
     setState((prev) => ({
       ...prev,
       isRecording: false,
       isTranscribing: false,
       progress: 0,
+      partialText: "",
+      isSpeaking: false,
+      vadLevel: 0,
     }));
   }, [audioCapture]);
 
   const clearTranscript = useCallback(() => {
-    setState((prev) => ({ ...prev, transcript: null, error: null }));
+    setState((prev) => ({
+      ...prev,
+      transcript: null,
+      error: null,
+      partialText: "",
+    }));
+    setPartials([]);
+  }, []);
+
+  const setVADThreshold = useCallback(async (threshold: number) => {
+    try {
+      await window.transcriptionAPI.setVADThreshold(threshold);
+    } catch (err) {
+      console.error("Failed to set VAD threshold:", err);
+    }
   }, []);
 
   return {
     // State
     ...state,
     models,
+    storageInfo,
     downloadProgress,
+    partials,
     audioCapture,
 
     // Actions
     loadModels,
+    loadStorageInfo,
     downloadModel,
+    deleteModel,
     initialize,
     startRecording,
     stopRecording,
     cancel,
     clearTranscript,
+    setVADThreshold,
   };
 }

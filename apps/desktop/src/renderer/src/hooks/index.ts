@@ -5,6 +5,12 @@ export { useTranscription } from "./useTranscription";
 export type {
   TranscriptionSegment,
   TranscriptionResult,
+  PartialTranscription,
   ModelInfo,
+  StorageInfo,
   TranscriptionState,
+  UseTranscriptionOptions,
 } from "./useTranscription";
+
+export { useSettings } from "./useSettings";
+export type { AppSettings } from "./useSettings";

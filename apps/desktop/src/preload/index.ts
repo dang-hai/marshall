@@ -18,12 +18,24 @@ contextBridge.exposeInMainWorld("electron", {
   },
 });
 
+// Settings API
+contextBridge.exposeInMainWorld("settingsAPI", {
+  getAll: () => ipcRenderer.invoke("settings:get-all"),
+  get: (key: string) => ipcRenderer.invoke("settings:get", key),
+  set: (key: string, value: unknown) => ipcRenderer.invoke("settings:set", key, value),
+  update: (updates: Record<string, unknown>) => ipcRenderer.invoke("settings:update", updates),
+  reset: () => ipcRenderer.invoke("settings:reset"),
+  getPath: () => ipcRenderer.invoke("settings:get-path"),
+});
+
 // Transcription API
 contextBridge.exposeInMainWorld("transcriptionAPI", {
   // Models
   getModels: () => ipcRenderer.invoke("transcription:get-models"),
+  getStorageInfo: () => ipcRenderer.invoke("transcription:get-storage-info"),
   downloadModel: (modelName: string) =>
     ipcRenderer.invoke("transcription:download-model", modelName),
+  deleteModel: (modelName: string) => ipcRenderer.invoke("transcription:delete-model", modelName),
   isModelDownloaded: (modelName: string) =>
     ipcRenderer.invoke("transcription:is-model-downloaded", modelName),
 
@@ -34,8 +46,14 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
   checkSystemAudio: () => ipcRenderer.invoke("transcription:check-system-audio"),
 
   // Transcription
-  init: (config: { modelName: string; language?: string; useGPU?: boolean }) =>
-    ipcRenderer.invoke("transcription:init", config),
+  init: (config: {
+    modelName: string;
+    language?: string;
+    useGPU?: boolean;
+    streamingEnabled?: boolean;
+    vadEnabled?: boolean;
+    vadThreshold?: number;
+  }) => ipcRenderer.invoke("transcription:init", config),
   startRecording: (sampleRate?: number) =>
     ipcRenderer.invoke("transcription:start-recording", sampleRate),
   addChunk: (chunkData: number[], isStereo?: boolean) =>
@@ -46,6 +64,11 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
   cancel: () => ipcRenderer.invoke("transcription:cancel"),
   getStatus: () => ipcRenderer.invoke("transcription:get-status"),
 
+  // VAD
+  calibrateVAD: (samples: number[]) => ipcRenderer.invoke("transcription:calibrate-vad", samples),
+  setVADThreshold: (threshold: number) =>
+    ipcRenderer.invoke("transcription:set-vad-threshold", threshold),
+
   // Events
   onDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("transcription:download-progress", (_event, progress) => callback(progress));
@@ -55,6 +78,14 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
     ipcRenderer.on("transcription:progress", (_event, percent) => callback(percent));
     return () => ipcRenderer.removeAllListeners("transcription:progress");
   },
+  onPartial: (callback: (partial: unknown) => void) => {
+    ipcRenderer.on("transcription:partial", (_event, partial) => callback(partial));
+    return () => ipcRenderer.removeAllListeners("transcription:partial");
+  },
+  onSegment: (callback: (data: unknown) => void) => {
+    ipcRenderer.on("transcription:segment", (_event, data) => callback(data));
+    return () => ipcRenderer.removeAllListeners("transcription:segment");
+  },
   onComplete: (callback: (result: unknown) => void) => {
     ipcRenderer.on("transcription:complete", (_event, result) => callback(result));
     return () => ipcRenderer.removeAllListeners("transcription:complete");
@@ -63,9 +94,92 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
     ipcRenderer.on("transcription:error", (_event, error) => callback(error));
     return () => ipcRenderer.removeAllListeners("transcription:error");
   },
+  onVADSpeechStart: (callback: () => void) => {
+    ipcRenderer.on("transcription:vad-speech-start", () => callback());
+    return () => ipcRenderer.removeAllListeners("transcription:vad-speech-start");
+  },
+  onVADSpeechEnd: (callback: (duration: number) => void) => {
+    ipcRenderer.on("transcription:vad-speech-end", (_event, duration) => callback(duration));
+    return () => ipcRenderer.removeAllListeners("transcription:vad-speech-end");
+  },
+  onVADLevel: (callback: (rms: number) => void) => {
+    ipcRenderer.on("transcription:vad-level", (_event, rms) => callback(rms));
+    return () => ipcRenderer.removeAllListeners("transcription:vad-level");
+  },
 });
 
 // Type declarations
+interface TranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+interface TranscriptionResult {
+  text: string;
+  language: string;
+  segments: TranscriptionSegment[];
+  duration: number;
+}
+
+interface PartialTranscription {
+  text: string;
+  isFinal: boolean;
+  segmentIndex: number;
+  timestamp: number;
+}
+
+interface SegmentData {
+  result: TranscriptionResult;
+  segmentIndex: number;
+}
+
+interface DownloadProgress {
+  modelName: string;
+  bytesDownloaded: number;
+  totalBytes: number;
+  percent: number;
+}
+
+interface ModelInfo {
+  name: string;
+  size: string;
+  downloaded: boolean;
+  path: string;
+}
+
+interface StorageInfo {
+  totalSize: number;
+  modelSizes: Record<string, number>;
+  modelsDir: string;
+  availableModels: Record<string, { size: string; url: string; bytes: number }>;
+}
+
+interface AppSettings {
+  transcription: {
+    selectedModel: string;
+    language: string;
+    useGPU: boolean;
+    streamingEnabled: boolean;
+  };
+  audio: {
+    source: "microphone" | "system" | "both";
+    sampleRate: number;
+    vadThreshold: number;
+    vadEnabled: boolean;
+  };
+  ui: {
+    showTimestamps: boolean;
+    autoScroll: boolean;
+    theme: "light" | "dark" | "system";
+  };
+  app: {
+    startMinimized: boolean;
+    closeToTray: boolean;
+    checkUpdates: boolean;
+  };
+}
+
 declare global {
   interface Window {
     electron: {
@@ -92,12 +206,20 @@ declare global {
       maximize: () => void;
       close: () => void;
     };
+    settingsAPI: {
+      getAll: () => Promise<AppSettings>;
+      get: <K extends keyof AppSettings>(key: K) => Promise<AppSettings[K]>;
+      set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<boolean>;
+      update: (updates: Partial<AppSettings>) => Promise<AppSettings>;
+      reset: () => Promise<AppSettings>;
+      getPath: () => Promise<string>;
+    };
     transcriptionAPI: {
       // Models
-      getModels: () => Promise<
-        Array<{ name: string; size: string; downloaded: boolean; path: string }>
-      >;
+      getModels: () => Promise<ModelInfo[]>;
+      getStorageInfo: () => Promise<StorageInfo>;
       downloadModel: (modelName: string) => Promise<string>;
+      deleteModel: (modelName: string) => Promise<{ status: string }>;
       isModelDownloaded: (modelName: string) => Promise<boolean>;
 
       // Permissions
@@ -116,47 +238,40 @@ declare global {
         modelName: string;
         language?: string;
         useGPU?: boolean;
-      }) => Promise<{ status: string }>;
-      startRecording: (sampleRate?: number) => Promise<{ status: string }>;
+        streamingEnabled?: boolean;
+        vadEnabled?: boolean;
+        vadThreshold?: number;
+      }) => Promise<{ status: string; mode: "streaming" | "batch" }>;
+      startRecording: (sampleRate?: number) => Promise<{
+        status: string;
+        mode: "streaming" | "batch";
+      }>;
       addChunk: (chunkData: number[], isStereo?: boolean) => Promise<{ status: string }>;
-      stopAndTranscribe: () => Promise<{
-        text: string;
-        language: string;
-        segments: Array<{ start: number; end: number; text: string }>;
-        duration: number;
-      }>;
-      transcribeFile: (filePath: string) => Promise<{
-        text: string;
-        language: string;
-        segments: Array<{ start: number; end: number; text: string }>;
-        duration: number;
-      }>;
+      stopAndTranscribe: () => Promise<TranscriptionResult>;
+      transcribeFile: (filePath: string) => Promise<TranscriptionResult>;
       cancel: () => Promise<{ status: string }>;
       getStatus: () => Promise<{
         initialized: boolean;
         recording: boolean;
         duration: number;
+        mode: "streaming" | "batch" | null;
+        partialText?: string;
       }>;
 
+      // VAD
+      calibrateVAD: (samples: number[]) => Promise<{ threshold: number }>;
+      setVADThreshold: (threshold: number) => Promise<{ status: string }>;
+
       // Events
-      onDownloadProgress: (
-        callback: (progress: {
-          modelName: string;
-          bytesDownloaded: number;
-          totalBytes: number;
-          percent: number;
-        }) => void
-      ) => () => void;
+      onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void;
       onProgress: (callback: (percent: number) => void) => () => void;
-      onComplete: (
-        callback: (result: {
-          text: string;
-          language: string;
-          segments: Array<{ start: number; end: number; text: string }>;
-          duration: number;
-        }) => void
-      ) => () => void;
+      onPartial: (callback: (partial: PartialTranscription) => void) => () => void;
+      onSegment: (callback: (data: SegmentData) => void) => () => void;
+      onComplete: (callback: (result: TranscriptionResult) => void) => () => void;
       onError: (callback: (error: string) => void) => () => void;
+      onVADSpeechStart: (callback: () => void) => () => void;
+      onVADSpeechEnd: (callback: (duration: number) => void) => () => void;
+      onVADLevel: (callback: (rms: number) => void) => () => void;
     };
   }
 }
