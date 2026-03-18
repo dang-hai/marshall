@@ -11,3 +11,8 @@ When building features for Marshall, follow this order:
 1. Plan the feature.
 2. Implement the feature.
 3. Write tests.
+
+## Database Branching
+
+- Feature worktrees must use their matching Neon preview branch instead of the shared production `DATABASE_URL`.
+- Use `bun run db:url` to inspect the effective database URL for the current worktree when needed.
