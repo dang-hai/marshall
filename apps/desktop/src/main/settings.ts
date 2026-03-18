@@ -23,6 +23,17 @@ export interface AppSettings {
     autoScroll: boolean;
     theme: "light" | "dark" | "system";
   };
+  // Calendar settings
+  calendar: {
+    visibleCalendars: {
+      work: boolean;
+      personal: boolean;
+      shared: boolean;
+    };
+    showDeclinedEvents: boolean;
+    showWeekends: boolean;
+    compactView: boolean;
+  };
   // App settings
   app: {
     startMinimized: boolean;
@@ -48,6 +59,16 @@ const defaults: AppSettings = {
     showTimestamps: true,
     autoScroll: true,
     theme: "system",
+  },
+  calendar: {
+    visibleCalendars: {
+      work: true,
+      personal: true,
+      shared: false,
+    },
+    showDeclinedEvents: true,
+    showWeekends: false,
+    compactView: false,
   },
   app: {
     startMinimized: false,
@@ -88,6 +109,24 @@ const store = new Store<AppSettings>({
         theme: { type: "string", enum: ["light", "dark", "system"] },
       },
       required: ["showTimestamps", "autoScroll", "theme"],
+    },
+    calendar: {
+      type: "object",
+      properties: {
+        visibleCalendars: {
+          type: "object",
+          properties: {
+            work: { type: "boolean" },
+            personal: { type: "boolean" },
+            shared: { type: "boolean" },
+          },
+          required: ["work", "personal", "shared"],
+        },
+        showDeclinedEvents: { type: "boolean" },
+        showWeekends: { type: "boolean" },
+        compactView: { type: "boolean" },
+      },
+      required: ["visibleCalendars", "showDeclinedEvents", "showWeekends", "compactView"],
     },
     app: {
       type: "object",

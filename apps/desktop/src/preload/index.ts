@@ -174,6 +174,16 @@ interface AppSettings {
     autoScroll: boolean;
     theme: "light" | "dark" | "system";
   };
+  calendar: {
+    visibleCalendars: {
+      work: boolean;
+      personal: boolean;
+      shared: boolean;
+    };
+    showDeclinedEvents: boolean;
+    showWeekends: boolean;
+    compactView: boolean;
+  };
   app: {
     startMinimized: boolean;
     closeToTray: boolean;

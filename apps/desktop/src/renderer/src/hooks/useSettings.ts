@@ -18,6 +18,16 @@ export interface AppSettings {
     autoScroll: boolean;
     theme: "light" | "dark" | "system";
   };
+  calendar: {
+    visibleCalendars: {
+      work: boolean;
+      personal: boolean;
+      shared: boolean;
+    };
+    showDeclinedEvents: boolean;
+    showWeekends: boolean;
+    compactView: boolean;
+  };
   app: {
     startMinimized: boolean;
     closeToTray: boolean;
@@ -102,6 +112,16 @@ export function useSettings() {
     [settings, updateSettings]
   );
 
+  const updateCalendar = useCallback(
+    async (updates: Partial<AppSettings["calendar"]>) => {
+      if (!settings) return false;
+      return updateSettings({
+        calendar: { ...settings.calendar, ...updates },
+      });
+    },
+    [settings, updateSettings]
+  );
+
   const resetSettings = useCallback(async () => {
     try {
       setError(null);
@@ -125,6 +145,7 @@ export function useSettings() {
     updateAudio,
     updateUI,
     updateApp,
+    updateCalendar,
     resetSettings,
   };
 }
