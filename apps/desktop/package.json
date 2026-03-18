@@ -45,18 +45,35 @@
   "build": {
     "appId": "com.marshall.app",
     "productName": "Marshall",
+    "directories": {
+      "output": "dist"
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
       ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "${env.APPLE_TEAM_ID}"
+      },
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Marshall needs microphone access to transcribe your voice during meetings.",
         "NSScreenCaptureUsageDescription": "Marshall needs screen capture access to transcribe audio from meeting applications."
       }
+    },
+    "dmg": {
+      "sign": false
     },
     "extraResources": [
       {
