@@ -1,0 +1,74 @@
+name: Prepare Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: Branch to release from
+        required: true
+        default: main
+        type: string
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_branch }}
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch source and release branches
+        run: |
+          git fetch origin ${{ inputs.source_branch }}
+          git fetch origin release || true
+
+      - name: Prepare release branch
+        env:
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+        run: |
+          if git show-ref --verify --quiet refs/remotes/origin/release; then
+            git checkout -B release origin/release
+            COMMIT_RANGE="origin/release..origin/${SOURCE_BRANCH}"
+            git merge --no-edit origin/${SOURCE_BRANCH}
+          else
+            git checkout -B release origin/${SOURCE_BRANCH}
+            COMMIT_RANGE="origin/${SOURCE_BRANCH}"
+          fi
+
+          NEXT_VERSION=$(node scripts/prepare-release.mjs --commit-range="${COMMIT_RANGE}")
+
+          if [ -z "${NEXT_VERSION}" ]; then
+            echo "HAS_RELEASE_CHANGES=false" >> "${GITHUB_ENV}"
+            exit 0
+          fi
+
+          echo "HAS_RELEASE_CHANGES=true" >> "${GITHUB_ENV}"
+          echo "NEXT_VERSION=${NEXT_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Commit release updates
+        if: env.HAS_RELEASE_CHANGES == 'true'
+        run: |
+          git add CHANGELOG.md apps/*/package.json packages/*/package.json
+          git commit -m "chore(release): v${NEXT_VERSION}"
+
+      - name: Push release branch
+        if: env.HAS_RELEASE_CHANGES == 'true'
+        run: git push origin HEAD:release
+
+      - name: No releasable commits
+        if: env.HAS_RELEASE_CHANGES == 'false'
+        run: echo "No releasable conventional commits found in ${{ inputs.source_branch }}."
