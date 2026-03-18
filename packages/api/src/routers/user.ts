@@ -6,7 +6,7 @@ export const userRouter = router({
     return ctx.session.user;
   }),
 
-  getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+  getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ input }) => {
     // Placeholder - implement with actual database query
     return { id: input.id, email: "", name: null };
   }),

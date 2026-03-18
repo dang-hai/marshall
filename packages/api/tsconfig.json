@@ -5,9 +5,5 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*"],
-  "references": [
-    { "path": "../shared" },
-    { "path": "../database" },
-    { "path": "../auth" }
-  ]
+  "references": [{ "path": "../shared" }, { "path": "../database" }, { "path": "../auth" }]
 }

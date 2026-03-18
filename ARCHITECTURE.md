@@ -6,20 +6,20 @@ Marshall is a macOS desktop application built with Electron, featuring a tray ic
 
 ## Tech Stack
 
-| Category | Technology | Purpose |
-|----------|------------|---------|
-| **Runtime** | Bun | Package manager, script runner, fast JavaScript runtime |
-| **Language** | TypeScript | Type-safe development across all packages |
-| **Desktop** | Electron | Cross-platform desktop application framework |
-| **Build** | electron-vite | Fast Electron bundler with Vite |
-| **Frontend** | React 18 | UI library for renderer process |
-| **Styling** | Tailwind CSS | Utility-first CSS framework |
-| **UI Components** | shadcn/ui | Accessible, customizable component library |
-| **API Layer** | tRPC | End-to-end typesafe APIs |
-| **State** | TanStack Query | Server state management |
-| **Database** | Neon (PostgreSQL) | Serverless Postgres database |
-| **ORM** | Drizzle ORM | TypeScript-first SQL ORM |
-| **Authentication** | better-auth | Authentication library |
+| Category           | Technology        | Purpose                                                 |
+| ------------------ | ----------------- | ------------------------------------------------------- |
+| **Runtime**        | Bun               | Package manager, script runner, fast JavaScript runtime |
+| **Language**       | TypeScript        | Type-safe development across all packages               |
+| **Desktop**        | Electron          | Cross-platform desktop application framework            |
+| **Build**          | electron-vite     | Fast Electron bundler with Vite                         |
+| **Frontend**       | React 18          | UI library for renderer process                         |
+| **Styling**        | Tailwind CSS      | Utility-first CSS framework                             |
+| **UI Components**  | shadcn/ui         | Accessible, customizable component library              |
+| **API Layer**      | tRPC              | End-to-end typesafe APIs                                |
+| **State**          | TanStack Query    | Server state management                                 |
+| **Database**       | Neon (PostgreSQL) | Serverless Postgres database                            |
+| **ORM**            | Drizzle ORM       | TypeScript-first SQL ORM                                |
+| **Authentication** | better-auth       | Authentication library                                  |
 
 ## Project Structure
 
@@ -71,6 +71,7 @@ marshall/
 ## Key Features
 
 ### Tray Icon
+
 - Template image that adapts to macOS dark/light mode
 - Click to show/hide main window
 - Context menu with:
@@ -79,11 +80,13 @@ marshall/
   - Quit
 
 ### Window Management
+
 - Hidden title bar with draggable region
 - Stays running in background on close (macOS behavior)
 - Re-activates on dock icon click
 
 ### Type Safety
+
 - End-to-end types via tRPC
 - Shared types across all packages
 - TypeScript project references for incremental builds
@@ -91,12 +94,16 @@ marshall/
 ## External Dependencies
 
 ### Neon Database
+
 Serverless PostgreSQL database. Requires:
+
 - `DATABASE_URL` environment variable
 - Drizzle migrations for schema management
 
 ### better-auth
+
 Authentication system with:
+
 - Email/password authentication
 - Session management
 - Database adapter for Drizzle
@@ -119,8 +126,8 @@ bun run --filter @marshall/desktop package
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Neon PostgreSQL connection string |
+| Variable             | Description                       |
+| -------------------- | --------------------------------- |
+| `DATABASE_URL`       | Neon PostgreSQL connection string |
 | `BETTER_AUTH_SECRET` | Secret key for auth token signing |
-| `BETTER_AUTH_URL` | Base URL for auth callbacks |
+| `BETTER_AUTH_URL`    | Base URL for auth callbacks       |

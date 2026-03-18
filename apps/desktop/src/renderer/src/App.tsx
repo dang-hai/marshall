@@ -20,9 +20,7 @@ export default function App() {
       <main className="container mx-auto p-6">
         <Card className="max-w-lg mx-auto mt-12">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold text-center">
-              {APP_NAME}
-            </CardTitle>
+            <CardTitle className="text-2xl font-bold text-center">{APP_NAME}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground text-center">
