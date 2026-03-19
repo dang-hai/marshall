@@ -1,0 +1,5 @@
+procs:
+  desktop:
+    cmd: ["bun", "run", "--filter", "@marshall/desktop", "dev"]
+  backend:
+    cmd: ["bun", "run", "--filter", "@marshall/backend", "dev"]
