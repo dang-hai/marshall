@@ -1,4 +1,13 @@
-import { app, BrowserWindow, Tray, session, ipcMain, desktopCapturer, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  session,
+  ipcMain,
+  desktopCapturer,
+  shell,
+  screen,
+} from "electron";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type {
@@ -21,6 +30,7 @@ app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
 app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
 
 let mainWindow: BrowserWindow | null = null;
+let overlayWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
@@ -196,6 +206,94 @@ function createWindow() {
   });
 }
 
+const OVERLAY_WINDOW_SIZE = {
+  height: 100,
+  width: 44,
+};
+const OVERLAY_EDGE_MARGIN = 24;
+const OVERLAY_TOP_FRACTION = 1 / 3;
+
+function getOpenWindows() {
+  return [mainWindow, overlayWindow].filter((window): window is BrowserWindow => window !== null);
+}
+
+function positionOverlayWindow() {
+  if (!overlayWindow) {
+    return;
+  }
+
+  const display = screen.getPrimaryDisplay();
+  const { workArea } = display;
+  const x = Math.round(
+    workArea.x + workArea.width - OVERLAY_WINDOW_SIZE.width - OVERLAY_EDGE_MARGIN
+  );
+  const preferredY =
+    workArea.y + workArea.height * OVERLAY_TOP_FRACTION - OVERLAY_WINDOW_SIZE.height / 2;
+  const maxY = workArea.y + workArea.height - OVERLAY_WINDOW_SIZE.height - OVERLAY_EDGE_MARGIN;
+  const y = Math.round(Math.min(Math.max(workArea.y + OVERLAY_EDGE_MARGIN, preferredY), maxY));
+
+  overlayWindow.setBounds({
+    x,
+    y,
+    width: OVERLAY_WINDOW_SIZE.width,
+    height: OVERLAY_WINDOW_SIZE.height,
+  });
+}
+
+function createOverlayWindow() {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  overlayWindow = new BrowserWindow({
+    width: OVERLAY_WINDOW_SIZE.width,
+    height: OVERLAY_WINDOW_SIZE.height,
+    x: 0,
+    y: 0,
+    frame: false,
+    transparent: true,
+    show: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: true,
+    fullscreenable: false,
+    roundedCorners: false,
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.mjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+    },
+  });
+
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  overlayWindow.setAlwaysOnTop(true, "floating");
+
+  positionOverlayWindow();
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    overlayWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}?overlay=pill`);
+  } else {
+    overlayWindow.loadFile(join(__dirname, "../renderer/index.html"), {
+      query: {
+        overlay: "pill",
+      },
+    });
+  }
+
+  overlayWindow.once("ready-to-show", () => {
+    overlayWindow?.showInactive();
+  });
+
+  overlayWindow.on("closed", () => {
+    overlayWindow = null;
+  });
+}
+
 app.whenReady().then(() => {
   // Set up permission handlers for media access
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -335,11 +433,12 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  createOverlayWindow();
   tray = createTray(mainWindow);
 
   // Set up transcription IPC handlers
   if (mainWindow) {
-    setupTranscriptionIPC(mainWindow);
+    setupTranscriptionIPC(getOpenWindows);
     setupCallDetectionIPC(mainWindow);
   }
 
@@ -349,7 +448,17 @@ app.whenReady().then(() => {
     } else {
       mainWindow.show();
     }
+
+    if (overlayWindow === null) {
+      createOverlayWindow();
+    } else {
+      overlayWindow.showInactive();
+    }
   });
+
+  screen.on("display-added", positionOverlayWindow);
+  screen.on("display-removed", positionOverlayWindow);
+  screen.on("display-metrics-changed", positionOverlayWindow);
 });
 
 app.on("window-all-closed", () => {
@@ -361,6 +470,12 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   stopCallDetection();
+  screen.removeListener("display-added", positionOverlayWindow);
+  screen.removeListener("display-removed", positionOverlayWindow);
+  screen.removeListener("display-metrics-changed", positionOverlayWindow);
+  if (overlayWindow) {
+    overlayWindow.destroy();
+  }
   if (tray) {
     tray.destroy();
   }
