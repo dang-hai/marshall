@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { detectCallFromProcess } from "../shared/call-detection";
 
 const execAsync = promisify(exec);
 
@@ -17,17 +18,6 @@ interface CallDetectionState {
   detectedCalls: DetectedCall[];
   intervalId: NodeJS.Timeout | null;
 }
-
-const CALL_APP_PATTERNS: Record<string, RegExp> = {
-  Zoom: /zoom\.us/i,
-  "Google Meet": /Google Chrome.*meet\.google\.com|Google Meet/i,
-  "Microsoft Teams": /Microsoft Teams/i,
-  Slack: /Slack.*Huddle|Slack Call/i,
-  Discord: /Discord/i,
-  FaceTime: /FaceTime/i,
-  Webex: /Webex|Cisco Webex/i,
-  Skype: /Skype/i,
-};
 
 const POLLING_INTERVAL_MS = 3000;
 
@@ -157,15 +147,6 @@ async function checkBrowserForMeet(): Promise<{ app: string; url: string } | nul
   }
 }
 
-function detectCallFromProcess(process: string): { appName: string } | null {
-  for (const [appName, pattern] of Object.entries(CALL_APP_PATTERNS)) {
-    if (pattern.test(process)) {
-      return { appName };
-    }
-  }
-  return null;
-}
-
 function generateCallId(appName: string): string {
   return `${appName.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
 }
@@ -220,11 +201,23 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
     }
   }
 
+  const inactiveCalls = state.detectedCalls.filter(
+    (call) => !call.dismissed && !detectedApps.has(call.appName)
+  );
+
+  for (const inactiveCall of inactiveCalls) {
+    mainWindow.webContents.send("call-detection:call-dismissed", inactiveCall.id);
+  }
+
   // Clean up old dismissed calls (older than 5 minutes)
   const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-  state.detectedCalls = state.detectedCalls.filter(
-    (call) => !call.dismissed || call.detectedAt > fiveMinutesAgo
-  );
+  state.detectedCalls = state.detectedCalls.filter((call) => {
+    if (call.dismissed) {
+      return call.detectedAt > fiveMinutesAgo;
+    }
+
+    return detectedApps.has(call.appName);
+  });
 }
 
 export function setupCallDetectionIPC(mainWindow: BrowserWindow): void {
