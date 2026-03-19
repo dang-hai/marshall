@@ -40,6 +40,13 @@ export function AppShell({
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigate((path) => {
+      if (path === DESKTOP_NAVIGATION_ROUTES.settingsAudio) {
+        setActiveView("settings");
+        setActiveSettingsSection("audio");
+        setIsProfileMenuOpen(false);
+        return;
+      }
+
       if (path === DESKTOP_NAVIGATION_ROUTES.settings) {
         setActiveView("settings");
         setActiveSettingsSection("account");

@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Square, X, Settings2 } from "lucide-react";
 import type { WhisperModelName } from "@marshall/transcription";
-import {
-  defaultAppSettings,
-  type TranscriptionProvider,
-  type AppSettings,
-} from "../../../shared/settings";
+import { defaultAppSettings } from "../../../shared/settings";
+import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
 import { useSettings } from "../hooks/useSettings";
 import {
   useTranscription,
@@ -36,7 +33,6 @@ export interface RecorderResolvedModel {
 }
 
 export interface FloatingTranscriptionRecorderViewProps {
-  audioSource: AppSettings["audio"]["source"];
   downloadProgressPercent: number;
   error: string | null;
   isBootstrapping: boolean;
@@ -44,20 +40,16 @@ export interface FloatingTranscriptionRecorderViewProps {
   isExpanded: boolean;
   isModelDialogOpen: boolean;
   isRecording: boolean;
-  isSettingsOpen: boolean;
   isTranscribing: boolean;
-  onAudioSourceChange: (source: AppSettings["audio"]["source"]) => void;
   onClose: () => void;
   onDismissModelDialog: () => void;
   onDownloadModel: () => void;
   onOpen: () => void;
-  onProviderChange: (provider: TranscriptionProvider) => void;
+  onOpenSettings: () => void;
   onRecordAgain: () => void;
-  onSettingsToggle: () => void;
   onStopRecording: () => void;
   partialText: string;
   progress: number;
-  provider: TranscriptionProvider;
   resolvedModel: RecorderResolvedModel;
   selectedModelSize: string;
   transcript: TranscriptionResult | null;
@@ -113,7 +105,6 @@ function AnimatedSoundWave({
 }
 
 export function FloatingTranscriptionRecorderView({
-  audioSource,
   downloadProgressPercent,
   error,
   isBootstrapping,
@@ -121,20 +112,16 @@ export function FloatingTranscriptionRecorderView({
   isExpanded,
   isModelDialogOpen,
   isRecording,
-  isSettingsOpen,
   isTranscribing,
-  onAudioSourceChange,
   onClose,
   onDismissModelDialog,
   onDownloadModel,
   onOpen,
-  onProviderChange,
+  onOpenSettings,
   onRecordAgain,
-  onSettingsToggle,
   onStopRecording,
   partialText,
   progress,
-  provider,
   resolvedModel,
   selectedModelSize,
   transcript,
@@ -192,77 +179,14 @@ export function FloatingTranscriptionRecorderView({
             ) : (
               <div className="flex max-h-[70vh] flex-col">
                 <div className="flex items-center justify-between px-3 pt-2">
-                  <div className="relative">
-                    <button
-                      aria-label="Audio settings"
-                      className={cn(
-                        "rounded-full p-1 transition-colors",
-                        isSettingsOpen
-                          ? "text-stone-600 bg-stone-200"
-                          : "text-stone-300 hover:text-stone-500"
-                      )}
-                      onClick={onSettingsToggle}
-                      type="button"
-                    >
-                      <Settings2 className="h-3.5 w-3.5" />
-                    </button>
-
-                    {isSettingsOpen && (
-                      <div className="absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-stone-200 bg-white p-3 shadow-lg">
-                        <div className="space-y-3">
-                          <div>
-                            <label className="text-2xs font-medium uppercase tracking-wide text-stone-400">
-                              Provider
-                            </label>
-                            <div className="mt-1.5 flex gap-1">
-                              {(["local", "deepgram"] as const).map((p) => (
-                                <button
-                                  key={p}
-                                  className={cn(
-                                    "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors",
-                                    provider === p
-                                      ? "bg-stone-800 text-white"
-                                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                                  )}
-                                  onClick={() => onProviderChange(p)}
-                                  type="button"
-                                >
-                                  {p === "local" ? "Local" : "Deepgram"}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-2xs font-medium uppercase tracking-wide text-stone-400">
-                              Audio Source
-                            </label>
-                            <div className="mt-1.5 flex gap-1">
-                              {(["microphone", "system", "both"] as const).map((src) => (
-                                <button
-                                  key={src}
-                                  className={cn(
-                                    "flex-1 rounded px-2 py-1 text-xs font-medium transition-colors capitalize",
-                                    audioSource === src
-                                      ? "bg-stone-800 text-white"
-                                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                                  )}
-                                  onClick={() => onAudioSourceChange(src)}
-                                  type="button"
-                                >
-                                  {src === "microphone"
-                                    ? "Mic"
-                                    : src === "system"
-                                      ? "System"
-                                      : "Both"}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    aria-label="Audio settings"
+                    className="rounded-full p-1 text-stone-300 transition-colors hover:text-stone-500"
+                    onClick={onOpenSettings}
+                    type="button"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                  </button>
 
                   <button
                     aria-label="Close recorder"
@@ -362,7 +286,7 @@ export function FloatingTranscriptionRecorderView({
 }
 
 export function FloatingTranscriptionRecorder() {
-  const { settings, updateSection } = useSettings();
+  const { settings } = useSettings();
   const {
     currentModel,
     error,
@@ -389,19 +313,7 @@ export function FloatingTranscriptionRecorder() {
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isDownloadingModel, setIsDownloadingModel] = useState(false);
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const launchSessionRef = useRef(0);
-
-  const provider = settings?.transcription.provider ?? "local";
-  const audioSource = settings?.audio.source ?? "microphone";
-
-  const handleProviderChange = (newProvider: TranscriptionProvider) => {
-    void updateSection("transcription", { provider: newProvider });
-  };
-
-  const handleAudioSourceChange = (newSource: AppSettings["audio"]["source"]) => {
-    void updateSection("audio", { source: newSource });
-  };
 
   const selectedModelName = (settings?.transcription.selectedModel ??
     FALLBACK_MODEL) as WhisperModelName;
@@ -411,6 +323,7 @@ export function FloatingTranscriptionRecorder() {
   );
   const language = settings?.transcription.language ?? "en";
   const useGPU = settings?.transcription.useGPU ?? true;
+  const audioSource = settings?.audio.source ?? "microphone";
 
   const ensureInitialized = async () => {
     if (!resolvedModel.model) {
@@ -464,10 +377,14 @@ export function FloatingTranscriptionRecorder() {
 
     setIsBootstrapping(false);
     setIsDownloadingModel(false);
-    setIsSettingsOpen(false);
     clearTranscript();
     setIsExpanded(false);
     setIsModelDialogOpen(false);
+  };
+
+  const handleOpenSettings = () => {
+    handleClose();
+    window.electronAPI.navigate(DESKTOP_NAVIGATION_ROUTES.settingsAudio);
   };
 
   const handleDownloadModel = async () => {
@@ -504,7 +421,6 @@ export function FloatingTranscriptionRecorder() {
 
   return (
     <FloatingTranscriptionRecorderView
-      audioSource={audioSource}
       downloadProgressPercent={downloadProgress?.percent ?? 0}
       error={error}
       isBootstrapping={isBootstrapping}
@@ -512,20 +428,16 @@ export function FloatingTranscriptionRecorder() {
       isExpanded={isExpanded}
       isModelDialogOpen={isModelDialogOpen}
       isRecording={isRecording}
-      isSettingsOpen={isSettingsOpen}
       isTranscribing={isTranscribing}
-      onAudioSourceChange={handleAudioSourceChange}
       onClose={handleClose}
       onDismissModelDialog={() => setIsModelDialogOpen(false)}
       onDownloadModel={handleDownloadModel}
       onOpen={handleOpen}
-      onProviderChange={handleProviderChange}
+      onOpenSettings={handleOpenSettings}
       onRecordAgain={startLiveRecording}
-      onSettingsToggle={() => setIsSettingsOpen((prev) => !prev)}
       onStopRecording={handleStopRecording}
       partialText={partialText}
       progress={progress}
-      provider={provider}
       resolvedModel={resolvedModel}
       selectedModelSize={resolvedModel.model?.size ?? "Whisper model"}
       transcript={transcript}

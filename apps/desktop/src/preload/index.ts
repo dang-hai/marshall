@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("navigate", handler);
     return () => ipcRenderer.removeListener("navigate", handler);
   },
+  navigate: (path: DesktopNavigationRoute) => {
+    // Emit navigate event locally to trigger the listener in App.tsx
+    ipcRenderer.emit("navigate", {}, path);
+  },
   minimize: () => ipcRenderer.send("window:minimize"),
   maximize: () => ipcRenderer.send("window:maximize"),
   close: () => ipcRenderer.send("window:close"),
@@ -213,6 +217,7 @@ declare global {
     electronAPI: {
       platform: string;
       onNavigate: (callback: (path: DesktopNavigationRoute) => void) => () => void;
+      navigate: (path: DesktopNavigationRoute) => void;
       minimize: () => void;
       maximize: () => void;
       close: () => void;
