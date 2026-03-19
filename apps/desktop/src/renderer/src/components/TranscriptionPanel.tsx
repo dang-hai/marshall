@@ -227,7 +227,7 @@ export function TranscriptionPanel() {
                 <Button onClick={stopRecording} variant="destructive" className="flex-1">
                   Stop & Transcribe
                 </Button>
-                <Button onClick={cancel} variant="outline">
+                <Button onClick={() => cancel()} variant="outline">
                   Cancel
                 </Button>
               </>

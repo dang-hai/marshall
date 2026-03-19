@@ -278,17 +278,17 @@ export function HomePanel() {
       return [];
     }
 
-    const migratedNotes: NoteRecord[] = [];
-    for (const note of legacyNotes.sort((a, b) => b.updatedAt - a.updatedAt)) {
-      const migratedNote = await window.notesAPI.create({
-        title: note.title,
-        body: note.body,
-        createdAt: new Date(note.createdAt).toISOString(),
-        updatedAt: new Date(note.updatedAt).toISOString(),
-        trashedAt: note.trashedAt ? new Date(note.trashedAt).toISOString() : null,
-      });
-      migratedNotes.push(migratedNote);
-    }
+    const migratedNotes = await Promise.all(
+      legacyNotes.map((note) =>
+        window.notesAPI.create({
+          title: note.title,
+          body: note.body,
+          createdAt: new Date(note.createdAt).toISOString(),
+          updatedAt: new Date(note.updatedAt).toISOString(),
+          trashedAt: note.trashedAt ? new Date(note.trashedAt).toISOString() : null,
+        })
+      )
+    );
 
     window.localStorage.removeItem(QUICK_NOTES_STORAGE_KEY);
     return migratedNotes;

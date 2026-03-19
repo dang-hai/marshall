@@ -10,36 +10,12 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-
-export const NOTE_TRANSCRIPTION_STATUSES = [
-  "draft",
-  "recording",
-  "transcribing",
-  "completed",
-  "failed",
-  "cancelled",
-] as const;
-
-export type NoteTranscriptionStatus = (typeof NOTE_TRANSCRIPTION_STATUSES)[number];
-
-export const NOTE_TRANSCRIPTION_PROVIDERS = [
-  "local",
-  "deepgram",
-  "assemblyAI",
-  "speechmatics",
-] as const;
-
-export type NoteTranscriptionProvider = (typeof NOTE_TRANSCRIPTION_PROVIDERS)[number];
-
-export const NOTE_TRANSCRIPTION_MODES = ["streaming", "batch"] as const;
-
-export type NoteTranscriptionMode = (typeof NOTE_TRANSCRIPTION_MODES)[number];
-
-export interface NoteTranscriptionSegment {
-  start: number;
-  end: number;
-  text: string;
-}
+import type {
+  NoteTranscriptionMode,
+  NoteTranscriptionProvider,
+  NoteTranscriptionSegment,
+  NoteTranscriptionStatus,
+} from "@marshall/shared";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),

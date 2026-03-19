@@ -587,49 +587,38 @@ export function createBackendApp({
           const input = body as SaveNoteTranscriptionInput;
           const now = new Date();
 
+          const transcriptionData = {
+            status: input.status,
+            provider: input.provider,
+            mode: input.mode,
+            language: input.language,
+            model: input.model,
+            transcriptText: input.transcriptText,
+            finalText: input.finalText,
+            interimText: input.interimText,
+            segments: input.segments,
+            lastSegmentIndex: input.lastSegmentIndex,
+            durationSeconds: input.durationSeconds,
+            recordingDurationSeconds: input.recordingDurationSeconds,
+            error: input.error,
+            startedAt: parseDateInput(input.startedAt),
+            completedAt: parseDateInput(input.completedAt),
+            lastPartialAt: parseDateInput(input.lastPartialAt),
+          };
+
           const [savedTranscription] = await db
             .insert(noteTranscription)
             .values({
               id: randomUUID(),
               noteId: ownedNote.id,
-              status: input.status,
-              provider: input.provider,
-              mode: input.mode,
-              language: input.language,
-              model: input.model,
-              transcriptText: input.transcriptText,
-              finalText: input.finalText,
-              interimText: input.interimText,
-              segments: input.segments,
-              lastSegmentIndex: input.lastSegmentIndex,
-              durationSeconds: input.durationSeconds,
-              recordingDurationSeconds: input.recordingDurationSeconds,
-              error: input.error,
-              startedAt: parseDateInput(input.startedAt),
-              completedAt: parseDateInput(input.completedAt),
-              lastPartialAt: parseDateInput(input.lastPartialAt),
+              ...transcriptionData,
               createdAt: now,
               updatedAt: now,
             })
             .onConflictDoUpdate({
               target: noteTranscription.noteId,
               set: {
-                status: input.status,
-                provider: input.provider,
-                mode: input.mode,
-                language: input.language,
-                model: input.model,
-                transcriptText: input.transcriptText,
-                finalText: input.finalText,
-                interimText: input.interimText,
-                segments: input.segments,
-                lastSegmentIndex: input.lastSegmentIndex,
-                durationSeconds: input.durationSeconds,
-                recordingDurationSeconds: input.recordingDurationSeconds,
-                error: input.error,
-                startedAt: parseDateInput(input.startedAt),
-                completedAt: parseDateInput(input.completedAt),
-                lastPartialAt: parseDateInput(input.lastPartialAt),
+                ...transcriptionData,
                 updatedAt: now,
               },
             })

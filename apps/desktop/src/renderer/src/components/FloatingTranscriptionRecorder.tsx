@@ -386,7 +386,7 @@ export function FloatingTranscriptionRecorder({
   }, [isRecording, isTranscribing, transcript]);
 
   const buildSnapshot = useCallback(() => {
-    const hasSegments = transcript?.segments.length ? transcript.segments : [];
+    const segments = transcript?.segments.length ? transcript.segments : [];
     const transcriptText = transcript?.text?.trim() || partialText.trim();
     const hasAnyText = Boolean(transcriptText || finalText.trim() || interimText.trim());
 
@@ -412,7 +412,7 @@ export function FloatingTranscriptionRecorder({
       transcriptText,
       finalText,
       interimText,
-      segments: hasSegments,
+      segments,
       lastSegmentIndex,
       durationSeconds: transcript?.duration ?? 0,
       recordingDurationSeconds: Math.max(audioCapture.duration, transcript?.duration ?? 0),
@@ -438,11 +438,9 @@ export function FloatingTranscriptionRecorder({
   ]);
 
   useEffect(() => {
-    latestSnapshotRef.current = buildSnapshot();
-  }, [buildSnapshot]);
-
-  useEffect(() => {
     const snapshot = buildSnapshot();
+    latestSnapshotRef.current = snapshot;
+
     if (
       snapshot.status === "draft" &&
       !snapshot.startedAt &&
