@@ -87,6 +87,25 @@ async function getActiveWindowInfo(): Promise<string | null> {
   }
 }
 
+// Google Meet meeting URLs have a code pattern like: xxx-xxxx-xxx
+const GOOGLE_MEET_MEETING_PATTERN = /meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}/i;
+
+function isActualMeetingUrl(url: string): boolean {
+  // Exclude landing pages, settings, etc.
+  const excludePatterns = [
+    /meet\.google\.com\/landing/i,
+    /meet\.google\.com\/?$/,
+    /meet\.google\.com\/\?/,
+  ];
+
+  if (excludePatterns.some((pattern) => pattern.test(url))) {
+    return false;
+  }
+
+  // Check for actual meeting code pattern
+  return GOOGLE_MEET_MEETING_PATTERN.test(url);
+}
+
 async function checkBrowserForMeet(): Promise<{ app: string; url: string } | null> {
   try {
     if (process.platform === "darwin") {
@@ -108,9 +127,10 @@ async function checkBrowserForMeet(): Promise<{ app: string; url: string } | nul
         end tell' 2>/dev/null || echo ""
       `);
 
-      if (chromeUrl.trim() && chromeUrl.includes("meet.google.com")) {
-        console.log("[CallDetection] Found Google Meet in Chrome:", chromeUrl.trim());
-        return { app: "Google Chrome", url: chromeUrl.trim() };
+      const chromeUrlTrimmed = chromeUrl.trim();
+      if (chromeUrlTrimmed && isActualMeetingUrl(chromeUrlTrimmed)) {
+        console.log("[CallDetection] Found Google Meet call in Chrome:", chromeUrlTrimmed);
+        return { app: "Google Chrome", url: chromeUrlTrimmed };
       }
 
       // Check Safari for Google Meet
@@ -130,9 +150,10 @@ async function checkBrowserForMeet(): Promise<{ app: string; url: string } | nul
         end tell' 2>/dev/null || echo ""
       `);
 
-      if (safariUrl.trim() && safariUrl.includes("meet.google.com")) {
-        console.log("[CallDetection] Found Google Meet in Safari:", safariUrl.trim());
-        return { app: "Safari", url: safariUrl.trim() };
+      const safariUrlTrimmed = safariUrl.trim();
+      if (safariUrlTrimmed && isActualMeetingUrl(safariUrlTrimmed)) {
+        console.log("[CallDetection] Found Google Meet call in Safari:", safariUrlTrimmed);
+        return { app: "Safari", url: safariUrlTrimmed };
       }
     }
     return null;
