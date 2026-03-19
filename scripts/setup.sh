@@ -15,9 +15,17 @@ fi
 echo "Installing workspace dependencies..."
 bun install --frozen-lockfile
 
-if [[ ! -f .env && -f .env.example ]]; then
-  echo "Creating .env from .env.example..."
-  cp .env.example .env
+if [[ ! -f .env ]]; then
+  if [[ -z "${SUPERSET_ROOT_PATH:-}" ]]; then
+    echo "SUPERSET_ROOT_PATH is not set. Cannot copy .env." >&2
+    exit 1
+  fi
+  if [[ ! -f "$SUPERSET_ROOT_PATH/.env" ]]; then
+    echo "No .env found at $SUPERSET_ROOT_PATH/.env" >&2
+    exit 1
+  fi
+  echo "Creating .env from $SUPERSET_ROOT_PATH/.env..."
+  cp "$SUPERSET_ROOT_PATH/.env" .env
 fi
 
 if ! command -v node >/dev/null 2>&1; then
