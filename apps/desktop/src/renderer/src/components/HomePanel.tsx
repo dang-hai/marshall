@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   CalendarDays,
+  CalendarPlus,
   ChevronLeft,
   Ellipsis,
   FolderPlus,
@@ -19,6 +20,7 @@ import {
 import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
+import { PlanMeetingModal } from "./PlanMeetingModal";
 import { MARSHALL_EVENTS } from "../App";
 
 interface LegacyQuickNote {
@@ -251,6 +253,7 @@ export function HomePanel() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [showPlanMeetingModal, setShowPlanMeetingModal] = useState(false);
   const titleRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const pendingNoteUpdatesRef = useRef<Record<string, { title?: string; body?: string }>>({});
@@ -469,6 +472,28 @@ export function HomePanel() {
     };
   }, [createNote]);
 
+  const handlePlanGenerated = useCallback(
+    async (plan: string, title: string) => {
+      setShowPlanMeetingModal(false);
+      setIsCreatingNote(true);
+      setNotesError(null);
+
+      try {
+        const note = await window.notesAPI.create({
+          title,
+          body: textToParagraphHtml(plan),
+        });
+        applySavedNote(note);
+        setActiveNoteId(note.id);
+      } catch (error) {
+        setNotesError(error instanceof Error ? error.message : "Failed to create note");
+      } finally {
+        setIsCreatingNote(false);
+      }
+    },
+    [applySavedNote]
+  );
+
   const moveNoteToTrash = async (noteId: string) => {
     const trashedAt = new Date().toISOString();
     setNotes((currentNotes) =>
@@ -686,6 +711,14 @@ export function HomePanel() {
                   <FolderPlus className="h-3 w-3" />
                   <span>Add Folder</span>
                 </button>
+                <button
+                  type="button"
+                  className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
+                  onClick={() => setShowPlanMeetingModal(true)}
+                >
+                  <CalendarPlus className="h-3 w-3" />
+                  <span>+ Plan Meeting</span>
+                </button>
               </div>
 
               <div className="relative mt-10 min-h-[20rem] flex-1">
@@ -714,6 +747,12 @@ export function HomePanel() {
           persistedSnapshot={activeNote.transcription}
           onSnapshotChange={handleSnapshotChange}
         />
+        {showPlanMeetingModal && (
+          <PlanMeetingModal
+            onClose={() => setShowPlanMeetingModal(false)}
+            onPlanGenerated={handlePlanGenerated}
+          />
+        )}
       </>
     );
   }
