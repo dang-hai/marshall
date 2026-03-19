@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAudioCapture, type AudioSource } from "./useAudioCapture";
 
 export interface TranscriptionSegment {
@@ -58,6 +58,7 @@ export interface UseTranscriptionOptions {
 
 export function useTranscription(options: UseTranscriptionOptions = {}) {
   const { streamingEnabled = true, vadEnabled = true, vadThreshold = 0.015 } = options;
+  const initializedRef = useRef(false);
 
   const [state, setState] = useState<TranscriptionState>({
     isInitialized: false,
@@ -81,9 +82,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     percent: number;
   } | null>(null);
 
-  // Partial transcriptions for streaming mode
-  const [partials, setPartials] = useState<PartialTranscription[]>([]);
-
   // Audio capture hook with chunk callback
   const audioCapture = useAudioCapture({
     sampleRate: 48000,
@@ -103,16 +101,14 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     });
 
     const unsubPartial = window.transcriptionAPI.onPartial((partial) => {
-      setPartials((prev) => [...prev, partial]);
       setState((prev) => ({
         ...prev,
         partialText: prev.partialText + " " + partial.text,
       }));
     });
 
-    const unsubSegment = window.transcriptionAPI.onSegment((data) => {
+    const unsubSegment = window.transcriptionAPI.onSegment((_data) => {
       // Segment completed - could add to a segments array if needed
-      console.log("Segment completed:", data);
     });
 
     const unsubComplete = window.transcriptionAPI.onComplete((result) => {
@@ -252,6 +248,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           vadThreshold,
         });
 
+        initializedRef.current = true;
         setState((prev) => ({
           ...prev,
           isInitialized: true,
@@ -271,7 +268,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
 
   const startRecording = useCallback(
     async (source: AudioSource = "microphone") => {
-      if (!state.isInitialized) {
+      if (!initializedRef.current) {
         setState((prev) => ({
           ...prev,
           error: "Transcription not initialized. Call initialize() first.",
@@ -286,7 +283,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           transcript: null,
           partialText: "",
         }));
-        setPartials([]);
 
         // Start audio capture
         const captureStarted = await audioCapture.startCapture(source);
@@ -306,7 +302,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
         return false;
       }
     },
-    [state.isInitialized, audioCapture]
+    [audioCapture]
   );
 
   const stopRecording = useCallback(async (): Promise<TranscriptionResult | null> => {
@@ -347,7 +343,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
   const cancel = useCallback(() => {
     audioCapture.stopCapture();
     window.transcriptionAPI.cancel();
-    setPartials([]);
 
     setState((prev) => ({
       ...prev,
@@ -367,7 +362,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       error: null,
       partialText: "",
     }));
-    setPartials([]);
   }, []);
 
   const setVADThreshold = useCallback(async (threshold: number) => {
@@ -384,7 +378,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     models,
     storageInfo,
     downloadProgress,
-    partials,
     audioCapture,
 
     // Actions

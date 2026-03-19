@@ -15,9 +15,17 @@ fi
 echo "Installing workspace dependencies..."
 bun install --frozen-lockfile
 
-if [[ ! -f .env && -f .env.example ]]; then
-  echo "Creating .env from .env.example..."
-  cp .env.example .env
+if [[ ! -f .env ]]; then
+  if [[ -z "${SUPERSET_ROOT_PATH:-}" ]]; then
+    echo "SUPERSET_ROOT_PATH is not set. Cannot copy .env." >&2
+    exit 1
+  fi
+  if [[ ! -f "$SUPERSET_ROOT_PATH/.env" ]]; then
+    echo "No .env found at $SUPERSET_ROOT_PATH/.env" >&2
+    exit 1
+  fi
+  echo "Creating .env from $SUPERSET_ROOT_PATH/.env..."
+  cp "$SUPERSET_ROOT_PATH/.env" .env
 fi
 
 if ! command -v node >/dev/null 2>&1; then
@@ -58,10 +66,19 @@ if (existsSync(neonContextFile)) {
 writeFileSync(envFile, current);
 EOF
 
-echo "Building whisper binary..."
+echo "Building whisper binary with CoreML support..."
 bun run --filter @marshall/transcription build:whisper
+
+echo "Generating CoreML model for base.en (for ANE acceleration)..."
+echo "This enables ~3x faster transcription on Apple Silicon."
+bun run --filter @marshall/transcription generate:coreml base.en
 
 echo "Running typecheck..."
 bun run typecheck
 
 echo "Setup complete."
+echo ""
+echo "CoreML acceleration is now enabled for the base.en model."
+echo "To generate CoreML models for other sizes, run:"
+echo "  bun run --filter @marshall/transcription generate:coreml <model-name>"
+echo "Available models: tiny.en, base.en, small.en, medium.en, large-v3, large-v3-turbo"

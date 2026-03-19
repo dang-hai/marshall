@@ -6,7 +6,7 @@ PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PACKAGE_DIR/.whisper-build"
 BIN_DIR="$PACKAGE_DIR/bin"
 
-echo "Building whisper.cpp with Metal support..."
+echo "Building whisper.cpp with Metal and CoreML support..."
 echo "Package directory: $PACKAGE_DIR"
 
 # Check for required tools
@@ -39,12 +39,12 @@ fi
 
 cd whisper.cpp
 
-# Build with Metal support (automatically enabled on macOS with Apple Silicon)
-echo "Configuring with Metal support..."
+# Build with Metal and CoreML support (Apple Silicon)
+echo "Configuring with Metal and CoreML support..."
 cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DWHISPER_METAL=ON \
-    -DWHISPER_COREML=OFF \
+    -DWHISPER_COREML=ON \
     -DBUILD_SHARED_LIBS=OFF
 
 echo "Building..."
@@ -61,16 +61,18 @@ echo ""
 echo "Build complete!"
 echo "Binary location: $BIN_DIR/whisper-cli"
 
-# Verify Metal support
+# Verify build
 echo ""
 echo "Verifying build..."
 "$BIN_DIR/whisper-cli" --help | head -5
 
-# Check if Metal is available
+# Check if CoreML/Metal is available
 if [ -f build/bin/whisper-cli ]; then
     echo ""
     echo "Metal acceleration: Enabled (Apple Silicon)"
+    echo "CoreML acceleration: Enabled (Apple Neural Engine)"
     echo ""
-    echo "To download a model, run:"
-    echo "  bun run download:model tiny.en"
+    echo "To download a model and generate CoreML encoder, run:"
+    echo "  bun run download:model base.en"
+    echo "  bun run generate:coreml base.en"
 fi

@@ -28,6 +28,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Run database migrations
+        run: bun run db:migrate
+        working-directory: packages/database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
       - name: Build packages
         run: bun run typecheck
 

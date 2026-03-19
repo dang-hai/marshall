@@ -260,6 +260,11 @@ app.whenReady().then(() => {
     return true;
   });
 
+  // Shell IPC handlers
+  ipcMain.handle("shell:open-path", async (_event, path: string) => {
+    return shell.openPath(path);
+  });
+
   createWindow();
   tray = createTray(mainWindow);
 

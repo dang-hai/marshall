@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   minimize: () => ipcRenderer.send("window:minimize"),
   maximize: () => ipcRenderer.send("window:maximize"),
   close: () => ipcRenderer.send("window:close"),
+  openPath: (path: string) => ipcRenderer.invoke("shell:open-path", path),
 });
 
 // Auth API (custom desktop auth flow)
@@ -215,6 +216,7 @@ declare global {
       minimize: () => void;
       maximize: () => void;
       close: () => void;
+      openPath: (path: string) => Promise<string>;
     };
     settingsAPI: {
       getAll: () => Promise<AppSettings>;

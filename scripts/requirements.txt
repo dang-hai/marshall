@@ -1,2 +1,0 @@
-# Google Generative AI SDK for Gemini, Imagen 3, and Veo 2
-google-genai>=1.0.0
