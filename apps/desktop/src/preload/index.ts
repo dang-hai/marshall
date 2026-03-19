@@ -13,6 +13,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   close: () => ipcRenderer.send("window:close"),
 });
 
+// Auth API (custom desktop auth flow)
+contextBridge.exposeInMainWorld("authAPI", {
+  // Request authentication (opens browser)
+  requestAuth: (options?: { provider?: string }) => ipcRenderer.invoke("auth:request", options),
+  // Get stored auth token
+  getToken: () => ipcRenderer.invoke("auth:get-token"),
+  // Get current user from server
+  getUser: () => ipcRenderer.invoke("auth:get-user"),
+  // Sign out
+  signOut: () => ipcRenderer.invoke("auth:sign-out"),
+});
+
 // Desktop Capturer API for system audio capture (via IPC - required for Electron 30+)
 contextBridge.exposeInMainWorld("electron", {
   desktopCapturer: {
@@ -158,8 +170,24 @@ interface StorageInfo {
   availableModels: Record<string, { size: string; url: string; bytes: number }>;
 }
 
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+  emailVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 declare global {
   interface Window {
+    authAPI: {
+      requestAuth: (options?: { provider?: string }) => Promise<string>;
+      getToken: () => Promise<string | null>;
+      getUser: () => Promise<AuthUser | null>;
+      signOut: () => Promise<boolean>;
+    };
     electron: {
       desktopCapturer: {
         getSources: (options: {

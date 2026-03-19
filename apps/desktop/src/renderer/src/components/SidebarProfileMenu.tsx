@@ -1,7 +1,14 @@
 import type { Ref } from "react";
-import { ChevronUp, Settings } from "lucide-react";
+import { ChevronUp, Settings, LogOut } from "lucide-react";
 import { cn, getInitial } from "../lib/utils";
 import { fallbackUser } from "./settings-config";
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+}
 
 interface SidebarProfileMenuProps {
   active: boolean;
@@ -9,6 +16,8 @@ interface SidebarProfileMenuProps {
   isOpen: boolean;
   onOpenSettings: () => void;
   onToggle: () => void;
+  user?: User | null;
+  onSignOut?: () => Promise<void>;
 }
 
 export function SidebarProfileMenu({
@@ -17,7 +26,12 @@ export function SidebarProfileMenu({
   isOpen,
   onOpenSettings,
   onToggle,
+  user,
+  onSignOut,
 }: SidebarProfileMenuProps) {
+  const displayUser = user || fallbackUser;
+  const displayName = displayUser.name || displayUser.email || "User";
+
   return (
     <div className="relative mt-auto" ref={containerRef}>
       {isOpen && (
@@ -27,10 +41,8 @@ export function SidebarProfileMenu({
           className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-lg border border-border/70 bg-popover shadow-lifted"
         >
           <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
-            <p className="truncate text-xs font-medium text-popover-foreground">
-              {fallbackUser.name}
-            </p>
-            <p className="text-2xs text-muted-foreground">Signed in placeholder</p>
+            <p className="truncate text-xs font-medium text-popover-foreground">{displayName}</p>
+            <p className="truncate text-2xs text-muted-foreground">{user?.email || "Signed in"}</p>
           </div>
 
           <button
@@ -45,6 +57,21 @@ export function SidebarProfileMenu({
               <p className="text-2xs text-muted-foreground">Open account and app preferences</p>
             </div>
           </button>
+
+          {onSignOut && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={onSignOut}
+              className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-accent"
+            >
+              <LogOut className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+              <div>
+                <p className="text-xs font-medium text-popover-foreground">Sign out</p>
+                <p className="text-2xs text-muted-foreground">Log out of your account</p>
+              </div>
+            </button>
+          )}
         </div>
       )}
 
@@ -61,11 +88,15 @@ export function SidebarProfileMenu({
         )}
       >
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground">
-            {getInitial(fallbackUser.name)}
-          </div>
+          {user?.image ? (
+            <img src={user.image} alt={displayName} className="h-8 w-8 rounded-md object-cover" />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-sm font-medium text-muted-foreground">
+              {getInitial(displayName)}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-foreground">{fallbackUser.name}</p>
+            <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
             <p className="text-2xs text-muted-foreground">Profile & Settings</p>
           </div>
           <ChevronUp

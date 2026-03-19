@@ -1,0 +1,23 @@
+{
+  "name": "@marshall/backend",
+  "version": "0.0.2",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "bun --env-file=../../.env --watch src/index.ts",
+    "start": "bun --env-file=../../.env src/index.ts",
+    "test": "bun --env-file=../../.env test test"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "1.4.1",
+    "@marshall/auth": "workspace:*",
+    "@marshall/database": "workspace:*",
+    "elysia": "1.4.28"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

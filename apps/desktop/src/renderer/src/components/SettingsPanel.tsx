@@ -3,8 +3,15 @@ import { defaultAppSettings, type AppSettings } from "../../../shared/settings";
 import { useAudioCapture } from "../hooks/useAudioCapture";
 import { useSettings } from "../hooks/useSettings";
 import { cn, getInitial } from "../lib/utils";
-import { fallbackUser, type SettingsSectionId } from "./settings-config";
+import { type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+}
 
 const defaultCalendarSettings: AppSettings["calendar"] = defaultAppSettings.calendar;
 
@@ -55,6 +62,8 @@ const calendarDisplayOptions: Array<{
 interface SettingsPanelProps {
   onBack: () => void;
   section: SettingsSectionId;
+  user?: User | null;
+  onSignOut?: () => Promise<void>;
 }
 
 interface PermissionRowProps {
@@ -123,12 +132,13 @@ function PreferenceRow({
   );
 }
 
-export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPanelProps) {
   const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
     useAudioCapture();
   const { error, loading, settings, updateSection } = useSettings();
   const calendarSettings = settings?.calendar ?? defaultCalendarSettings;
   const calendarReady = !loading && Boolean(settings);
+  const displayName = user?.name || user?.email || "User";
 
   const toggleCalendarVisibility = (key: keyof AppSettings["calendar"]["visibleCalendars"]) => {
     void updateSection("calendar", {
@@ -173,21 +183,29 @@ export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
               Current user
             </p>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-muted-foreground">
-                {getInitial(fallbackUser.name)}
-              </div>
+              {user?.image ? (
+                <img
+                  src={user.image}
+                  alt={displayName}
+                  className="h-10 w-10 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-muted-foreground">
+                  {getInitial(displayName)}
+                </div>
+              )}
               <div>
-                <h3 className="text-sm font-medium text-foreground">{fallbackUser.name}</h3>
-                <p className="text-xs text-muted-foreground">{fallbackUser.email}</p>
+                <h3 className="text-sm font-medium text-foreground">{displayName}</h3>
+                <p className="text-xs text-muted-foreground">{user?.email || "Not signed in"}</p>
               </div>
             </div>
-            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/30 p-3">
-              <p className="text-xs font-medium text-foreground">{fallbackUser.status}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Authentication is not wired in yet. This section is the placeholder for the
-                currently logged in user and account actions.
-              </p>
-            </div>
+            {onSignOut && (
+              <div className="mt-4">
+                <Button variant="outline" size="sm" onClick={onSignOut}>
+                  Sign out
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
