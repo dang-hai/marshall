@@ -11,7 +11,7 @@
     "setup": "./scripts/setup.sh",
     "dev": "bun run --filter @marshall/desktop dev & bun run --filter @marshall/backend dev",
     "dev:backend": "bun run --filter @marshall/backend dev",
-    "build": "bun run --filter @marshall/desktop build",
+    "build": "bun run --filter @marshall/shared build && bun run --filter @marshall/desktop build",
     "build:backend": "bun run --filter @marshall/backend build",
     "dev:marketing": "bun run --filter @marshall/marketing dev",
     "build:marketing": "bun run --filter @marshall/marketing build",
