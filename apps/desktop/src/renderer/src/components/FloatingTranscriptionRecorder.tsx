@@ -12,7 +12,7 @@ import {
 } from "../hooks/useTranscription";
 import { cn } from "../lib/utils";
 import { ModelSetupDialog } from "./ModelSetupDialog";
-import { MARSHALL_EVENTS } from "../App";
+import { MARSHALL_EVENTS } from "../constants";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
 

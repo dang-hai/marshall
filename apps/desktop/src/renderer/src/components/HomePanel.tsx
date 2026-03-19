@@ -21,7 +21,7 @@ import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 import { PlanMeetingModal } from "./PlanMeetingModal";
-import { MARSHALL_EVENTS } from "../App";
+import { MARSHALL_EVENTS } from "../constants";
 
 interface LegacyQuickNote {
   id: number;

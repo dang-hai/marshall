@@ -10,6 +10,7 @@ import { LoginScreen } from "./components/LoginScreen";
 import { CallNotificationStack } from "./components/CallNotification";
 import { useAuth, useCallDetection } from "./hooks";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
+import { MARSHALL_EVENTS } from "./constants";
 
 const sidebarItems = [
   { id: "home", label: "Home", icon: Home },
@@ -248,12 +249,6 @@ export function AppShell({
     </div>
   );
 }
-
-// Custom event names for cross-component communication
-export const MARSHALL_EVENTS = {
-  CREATE_NOTE: "marshall:create-note",
-  START_TRANSCRIPTION: "marshall:start-transcription",
-} as const;
 
 export default function App() {
   const { user, isLoading, isAuthenticated, signOut, signIn } = useAuth();
