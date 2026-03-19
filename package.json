@@ -1,6 +1,6 @@
 {
   "name": "marshall",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "setup": "./scripts/setup.sh",
-    "dev": "bun run --filter @marshall/desktop dev & bun run --filter @marshall/backend dev",
+    "dev": "mprocs",
+    "dev:all": "bun run --filter @marshall/desktop dev & bun run --filter @marshall/backend dev",
     "dev:clean": "./scripts/electron-protocol.sh reset && bun run dev",
     "electron:status": "./scripts/electron-protocol.sh status",
     "electron:clean": "./scripts/electron-protocol.sh clean",

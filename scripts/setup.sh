@@ -12,6 +12,12 @@ if ! command -v bun >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v mprocs >/dev/null 2>&1; then
+  echo "mprocs is required but not installed." >&2
+  echo "Install via: brew install mprocs" >&2
+  exit 1
+fi
+
 echo "Installing workspace dependencies..."
 bun install --frozen-lockfile
 
