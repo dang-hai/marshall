@@ -20,7 +20,7 @@ export function createConfiguredBackendApp(env: BackendEnv = process.env) {
   const db = createDb(requireEnv(env, "DATABASE_URL"));
   const auth = createAuthFromEnv(db, env);
 
-  return createBackendApp({ auth, baseUrl, electronProtocol });
+  return createBackendApp({ auth, db, baseUrl, electronProtocol });
 }
 
 const app = createConfiguredBackendApp();
