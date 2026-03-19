@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.4](https://github.com/dang-hai/marshall/compare/v0.0.3...v0.0.4) (2026-03-19)
+
+
+### Features
+
+* add floating call notification with quick note and transcription ([#33](https://github.com/dang-hai/marshall/issues/33)) ([0e53b3d](https://github.com/dang-hai/marshall/commit/0e53b3d79a1ea7248eb8a62860090100f6e6a848))
+* **transcription:** auto-generate coreml encoder after model download ([5d9af3b](https://github.com/dang-hai/marshall/commit/5d9af3b0397cfa5e04259f39d343c2ccb7154f72))
+
 ## [0.0.3](https://github.com/dang-hai/marshall/compare/v0.0.2...v0.0.3) (2026-03-19)
 
 
