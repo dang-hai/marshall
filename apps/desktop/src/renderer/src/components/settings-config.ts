@@ -1,4 +1,4 @@
-import { CalendarDays, Shield, UserRound, type LucideIcon } from "lucide-react";
+import { CalendarDays, Mic, Shield, UserRound, type LucideIcon } from "lucide-react";
 
 export const fallbackUser = {
   name: "Hai Dang",
@@ -11,6 +11,11 @@ export const SETTINGS_SECTIONS = {
     label: fallbackUser.name,
     description: "Current user placeholder",
     icon: UserRound,
+  },
+  audio: {
+    label: "Audio",
+    description: "Transcription provider and settings",
+    icon: Mic,
   },
   calendar: {
     label: "Calendar",

@@ -29,6 +29,15 @@ export function getModelPath(modelName: WhisperModelName): string {
   return join(getModelsDirectory(), `ggml-${modelName}.bin`);
 }
 
+export function getCoreMLEncoderPath(modelName: WhisperModelName): string {
+  return join(getModelsDirectory(), `ggml-${modelName}-encoder.mlmodelc`);
+}
+
+export function isCoreMLEncoderAvailable(modelName: WhisperModelName): boolean {
+  const encoderPath = getCoreMLEncoderPath(modelName);
+  return existsSync(encoderPath);
+}
+
 export function isModelDownloaded(modelName: WhisperModelName): boolean {
   const modelPath = getModelPath(modelName);
   if (!existsSync(modelPath)) return false;
@@ -44,12 +53,14 @@ export function listAvailableModels(): Array<{
   name: WhisperModelName;
   size: string;
   downloaded: boolean;
+  coremlAvailable: boolean;
   path: string;
 }> {
   return (Object.keys(WHISPER_MODELS) as WhisperModelName[]).map((name) => ({
     name,
     size: WHISPER_MODELS[name].size,
     downloaded: isModelDownloaded(name),
+    coremlAvailable: isCoreMLEncoderAvailable(name),
     path: getModelPath(name),
   }));
 }

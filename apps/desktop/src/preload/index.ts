@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   minimize: () => ipcRenderer.send("window:minimize"),
   maximize: () => ipcRenderer.send("window:maximize"),
   close: () => ipcRenderer.send("window:close"),
+  openPath: (path: string) => ipcRenderer.invoke("shell:open-path", path),
 });
 
 // Desktop Capturer API for system audio capture (via IPC - required for Electron 30+)
@@ -183,6 +184,7 @@ declare global {
       minimize: () => void;
       maximize: () => void;
       close: () => void;
+      openPath: (path: string) => Promise<string>;
     };
     settingsAPI: {
       getAll: () => Promise<AppSettings>;

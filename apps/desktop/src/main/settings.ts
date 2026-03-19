@@ -5,6 +5,22 @@ import { defaultAppSettings, type AppSettings } from "../shared/settings";
 const store = new Store<AppSettings>({
   name: "marshall-settings",
   defaults: defaultAppSettings,
+  migrations: {
+    "1.0.0": (store) => {
+      // Add provider field to transcription settings if it doesn't exist
+      const transcription = store.get("transcription");
+      if (
+        transcription &&
+        typeof transcription === "object" &&
+        !("provider" in (transcription as object))
+      ) {
+        const updated = Object.assign({}, transcription, {
+          provider: "local",
+        }) as AppSettings["transcription"];
+        store.set("transcription", updated);
+      }
+    },
+  },
   schema: {
     transcription: {
       type: "object",
@@ -13,6 +29,11 @@ const store = new Store<AppSettings>({
         language: { type: "string" },
         useGPU: { type: "boolean" },
         streamingEnabled: { type: "boolean" },
+        provider: {
+          type: "string",
+          enum: ["local", "assemblyAI", "speechmatics"],
+          default: "local",
+        },
       },
       required: ["selectedModel", "language", "useGPU", "streamingEnabled"],
     },

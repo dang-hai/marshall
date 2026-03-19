@@ -1,7 +1,26 @@
-import { Check, ChevronRight, X } from "lucide-react";
-import { defaultAppSettings, type AppSettings } from "../../../shared/settings";
+import { Check, ChevronRight, FolderOpen, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  defaultAppSettings,
+  type AppSettings,
+  type TranscriptionProvider,
+} from "../../../shared/settings";
 import { useAudioCapture } from "../hooks/useAudioCapture";
 import { useSettings } from "../hooks/useSettings";
+
+interface ModelStorageInfo {
+  modelsDir: string;
+  selectedModelSize: number | null;
+  selectedModelPath: string | null;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
 import { cn, getInitial } from "../lib/utils";
 import { fallbackUser, type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
@@ -52,6 +71,31 @@ const calendarDisplayOptions: Array<{
   },
 ];
 
+const transcriptionProviderOptions: Array<{
+  description: string;
+  disabled?: boolean;
+  key: TranscriptionProvider;
+  label: string;
+}> = [
+  {
+    key: "local",
+    label: "Local (Whisper)",
+    description: "Process audio locally using the Whisper model. Private and offline.",
+  },
+  {
+    key: "assemblyAI",
+    label: "AssemblyAI",
+    description: "Cloud-based transcription with high accuracy. Coming soon.",
+    disabled: true,
+  },
+  {
+    key: "speechmatics",
+    label: "Speechmatics",
+    description: "Enterprise-grade cloud transcription. Coming soon.",
+    disabled: true,
+  },
+];
+
 interface SettingsPanelProps {
   onBack: () => void;
   section: SettingsSectionId;
@@ -70,6 +114,16 @@ interface PreferenceRowProps {
   disabled?: boolean;
   label: string;
   onToggle: () => void;
+}
+
+interface ProviderRowProps {
+  children?: React.ReactNode;
+  description: string;
+  disabled?: boolean;
+  label: string;
+  name: string;
+  onSelect: () => void;
+  selected: boolean;
 }
 
 function PermissionRow({ label, description, granted, onRequest }: PermissionRowProps) {
@@ -123,12 +177,80 @@ function PreferenceRow({
   );
 }
 
+function ProviderRow({
+  children,
+  description,
+  disabled = false,
+  label,
+  name,
+  onSelect,
+  selected,
+}: ProviderRowProps) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer items-start gap-3 rounded-lg border border-border/40 p-3 transition-all duration-200",
+        selected && "border-primary/50 bg-primary/5",
+        disabled && "cursor-not-allowed opacity-50"
+      )}
+    >
+      <input
+        type="radio"
+        name={name}
+        checked={selected}
+        disabled={disabled}
+        onChange={onSelect}
+        className="mt-0.5 h-4 w-4 border-border bg-background text-primary disabled:cursor-not-allowed"
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-foreground">{label}</p>
+        <p className="text-2xs text-muted-foreground">{description}</p>
+        {selected && children && (
+          <div className="mt-2 pt-2 border-t border-border/30">{children}</div>
+        )}
+      </div>
+    </label>
+  );
+}
+
+const defaultTranscriptionSettings: AppSettings["transcription"] = defaultAppSettings.transcription;
+
 export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
   const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
     useAudioCapture();
   const { error, loading, settings, updateSection } = useSettings();
   const calendarSettings = settings?.calendar ?? defaultCalendarSettings;
+  const transcriptionSettings = settings?.transcription ?? defaultTranscriptionSettings;
   const calendarReady = !loading && Boolean(settings);
+  const transcriptionReady = !loading && Boolean(settings);
+
+  const [modelStorageInfo, setModelStorageInfo] = useState<ModelStorageInfo | null>(null);
+
+  useEffect(() => {
+    if (section === "audio") {
+      const fetchModelInfo = async () => {
+        try {
+          const [storageInfo, models] = await Promise.all([
+            window.transcriptionAPI.getStorageInfo(),
+            window.transcriptionAPI.getModels(),
+          ]);
+
+          const selectedModel = transcriptionSettings.selectedModel;
+          const modelInfo = models.find((m) => m.name === selectedModel);
+
+          setModelStorageInfo({
+            modelsDir: storageInfo.modelsDir,
+            selectedModelSize: storageInfo.modelSizes[selectedModel] ?? null,
+            selectedModelPath: modelInfo?.path ?? null,
+          });
+        } catch {
+          // Ignore errors - info is optional
+        }
+      };
+
+      void fetchModelInfo();
+    }
+  }, [section, transcriptionSettings.selectedModel]);
 
   const toggleCalendarVisibility = (key: keyof AppSettings["calendar"]["visibleCalendars"]) => {
     void updateSection("calendar", {
@@ -145,6 +267,10 @@ export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
     void updateSection("calendar", {
       [key]: !calendarSettings[key],
     } as Partial<AppSettings["calendar"]>);
+  };
+
+  const setTranscriptionProvider = (provider: TranscriptionProvider) => {
+    void updateSection("transcription", { provider });
   };
 
   return (
@@ -187,6 +313,55 @@ export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
                 Authentication is not wired in yet. This section is the placeholder for the
                 currently logged in user and account actions.
               </p>
+            </div>
+          </div>
+        )}
+
+        {section === "audio" && (
+          <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
+            <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Transcription provider
+            </p>
+            <h3 className="text-sm font-medium text-foreground">Choose how audio is transcribed</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Select between local processing or cloud-based transcription services.
+            </p>
+            <div className="mt-4 space-y-2">
+              {transcriptionProviderOptions.map((option) => (
+                <ProviderRow
+                  key={option.key}
+                  description={option.description}
+                  disabled={!transcriptionReady || option.disabled}
+                  label={option.label}
+                  name="transcription-provider"
+                  onSelect={() => setTranscriptionProvider(option.key)}
+                  selected={transcriptionSettings.provider === option.key}
+                >
+                  {option.key === "local" && modelStorageInfo && (
+                    <div className="flex items-center gap-4 text-2xs">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void window.electronAPI.openPath(modelStorageInfo.modelsDir);
+                        }}
+                        className="flex items-center gap-1.5 min-w-0 flex-1 rounded px-1 -mx-1 hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <FolderOpen className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+                        <span className="truncate text-muted-foreground font-mono hover:text-foreground transition-colors">
+                          {modelStorageInfo.modelsDir}
+                        </span>
+                      </button>
+                      {modelStorageInfo.selectedModelSize !== null && (
+                        <span className="shrink-0 rounded bg-muted/50 px-1.5 py-0.5 font-medium text-muted-foreground">
+                          {formatBytes(modelStorageInfo.selectedModelSize)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </ProviderRow>
+              ))}
             </div>
           </div>
         )}
