@@ -44,9 +44,7 @@ async function getRunningProcesses(): Promise<string[]> {
       const { stdout } = await execAsync(
         "ps -eo comm | grep -iE 'zoom|meet|teams|slack|discord|facetime|webex|skype|chrome|firefox|safari|edge' || true"
       );
-      const processes = stdout.split("\n").filter(Boolean);
-      console.log("[CallDetection] Running processes:", processes);
-      return processes;
+      return stdout.split("\n").filter(Boolean);
     }
 
     if (process.platform === "win32") {
@@ -76,9 +74,7 @@ async function getActiveWindowInfo(): Promise<string | null> {
           return frontApp
         end tell'
       `);
-      const activeApp = stdout.trim();
-      console.log("[CallDetection] Active app:", activeApp);
-      return activeApp;
+      return stdout.trim();
     }
     return null;
   } catch (error) {
@@ -129,7 +125,6 @@ async function checkBrowserForMeet(): Promise<{ app: string; url: string } | nul
 
       const chromeUrlTrimmed = chromeUrl.trim();
       if (chromeUrlTrimmed && isActualMeetingUrl(chromeUrlTrimmed)) {
-        console.log("[CallDetection] Found Google Meet call in Chrome:", chromeUrlTrimmed);
         return { app: "Google Chrome", url: chromeUrlTrimmed };
       }
 
@@ -152,7 +147,6 @@ async function checkBrowserForMeet(): Promise<{ app: string; url: string } | nul
 
       const safariUrlTrimmed = safariUrl.trim();
       if (safariUrlTrimmed && isActualMeetingUrl(safariUrlTrimmed)) {
-        console.log("[CallDetection] Found Google Meet call in Safari:", safariUrlTrimmed);
         return { app: "Safari", url: safariUrlTrimmed };
       }
     }
@@ -177,11 +171,12 @@ function generateCallId(appName: string): string {
 }
 
 async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
-  console.log("[CallDetection] Checking for calls...");
-
-  const processes = await getRunningProcesses();
-  const activeWindow = await getActiveWindowInfo();
-  const browserMeet = await checkBrowserForMeet();
+  // Run all detection checks concurrently for better performance
+  const [processes, activeWindow, browserMeet] = await Promise.all([
+    getRunningProcesses(),
+    getActiveWindowInfo(),
+    checkBrowserForMeet(),
+  ]);
 
   const detectedApps = new Set<string>();
 
@@ -189,7 +184,6 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
   for (const proc of processes) {
     const detected = detectCallFromProcess(proc);
     if (detected) {
-      console.log("[CallDetection] Detected from process:", detected.appName);
       detectedApps.add(detected.appName);
     }
   }
@@ -198,18 +192,14 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
   if (activeWindow) {
     const detected = detectCallFromProcess(activeWindow);
     if (detected) {
-      console.log("[CallDetection] Detected from active window:", detected.appName);
       detectedApps.add(detected.appName);
     }
   }
 
   // Check browser tabs for Google Meet
   if (browserMeet) {
-    console.log("[CallDetection] Detected Google Meet in browser");
     detectedApps.add("Google Meet");
   }
-
-  console.log("[CallDetection] Total detected apps:", Array.from(detectedApps));
 
   // Check for new calls
   for (const appName of detectedApps) {
@@ -225,7 +215,6 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
         dismissed: false,
       };
 
-      console.log("[CallDetection] New call detected!", newCall);
       state.detectedCalls.push(newCall);
       mainWindow.webContents.send("call-detection:call-detected", newCall);
     }
@@ -239,15 +228,11 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
 }
 
 export function setupCallDetectionIPC(mainWindow: BrowserWindow): void {
-  console.log("[CallDetection] Setting up IPC handlers");
-
   ipcMain.handle("call-detection:start-monitoring", () => {
     if (state.isMonitoring) {
-      console.log("[CallDetection] Already monitoring");
       return { status: "already-monitoring" };
     }
 
-    console.log("[CallDetection] Starting monitoring (polling every", POLLING_INTERVAL_MS, "ms)");
     state.isMonitoring = true;
     state.intervalId = setInterval(() => {
       checkForCalls(mainWindow);

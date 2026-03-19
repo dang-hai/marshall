@@ -30,14 +30,10 @@ export function useCallDetection(): UseCallDetectionResult {
 
   useEffect(() => {
     if (!window.callDetectionAPI) {
-      console.warn("[useCallDetection] callDetectionAPI not available");
       return;
     }
 
-    console.log("[useCallDetection] Setting up event listeners");
-
     const cleanupCallDetected = window.callDetectionAPI.onCallDetected((call) => {
-      console.log("[useCallDetection] Call detected:", call);
       setDetectedCalls((current) => {
         // Check if call already exists
         if (current.some((c) => c.id === call.id)) {
@@ -48,8 +44,7 @@ export function useCallDetection(): UseCallDetectionResult {
     });
 
     const cleanupCallDismissed = window.callDetectionAPI.onCallDismissed((callId) => {
-      console.log("[useCallDetection] Call dismissed:", callId);
-      setDetectedCalls((current) => current.filter((call) => call.id !== callId));
+      setDetectedCalls((current) => current.filter((c) => c.id !== callId));
     });
 
     return () => {
@@ -59,9 +54,7 @@ export function useCallDetection(): UseCallDetectionResult {
   }, []);
 
   const startMonitoring = useCallback(async () => {
-    console.log("[useCallDetection] Starting monitoring...");
-    const result = await window.callDetectionAPI?.startMonitoring();
-    console.log("[useCallDetection] Start monitoring result:", result);
+    await window.callDetectionAPI?.startMonitoring();
     setIsMonitoring(true);
   }, []);
 
