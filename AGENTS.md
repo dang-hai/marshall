@@ -23,3 +23,22 @@ When working with external libraries or APIs, always use these MCP servers to fe
 
 - **context7** — Query library documentation (e.g., React, Electron, tRPC)
 - **deepwiki** — Query GitHub repository documentation
+
+## Electron Protocol Management
+
+Marshall uses `marshall://` custom protocol for OAuth callbacks. When working with multiple worktrees, protocol conflicts can cause auth issues.
+
+**If auth redirects fail or go to the wrong app:**
+
+```bash
+bun run electron:reset   # Clean and register current worktree
+bun run dev              # Start fresh
+```
+
+**Or use the combined command:**
+
+```bash
+bun run dev:clean        # Reset + start dev in one command
+```
+
+See `.claude/skills/electron-protocol.md` for full documentation.

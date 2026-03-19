@@ -19,6 +19,7 @@ import {
 import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
+import { MARSHALL_EVENTS } from "../App";
 
 interface LegacyQuickNote {
   id: number;
@@ -436,21 +437,37 @@ export function HomePanel() {
     };
   }, [flushPendingNoteUpdate]);
 
-  const createNote = async () => {
-    setIsCreatingNote(true);
-    setNotesError(null);
+  const createNote = useCallback(
+    async (title?: string) => {
+      setIsCreatingNote(true);
+      setNotesError(null);
 
-    try {
-      const note = await window.notesAPI.create();
-      setOpenMenuId(null);
-      applySavedNote(note);
-      setActiveNoteId(note.id);
-    } catch (error) {
-      setNotesError(error instanceof Error ? error.message : "Failed to create note");
-    } finally {
-      setIsCreatingNote(false);
-    }
-  };
+      try {
+        const note = await window.notesAPI.create(title ? { title } : undefined);
+        setOpenMenuId(null);
+        applySavedNote(note);
+        setActiveNoteId(note.id);
+      } catch (error) {
+        setNotesError(error instanceof Error ? error.message : "Failed to create note");
+      } finally {
+        setIsCreatingNote(false);
+      }
+    },
+    [applySavedNote]
+  );
+
+  // Listen for create note events from call notifications
+  useEffect(() => {
+    const handleCreateNote = (event: CustomEvent<{ title: string }>) => {
+      createNote(event.detail.title);
+    };
+
+    window.addEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
+
+    return () => {
+      window.removeEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
+    };
+  }, [createNote]);
 
   const moveNoteToTrash = async (noteId: string) => {
     const trashedAt = new Date().toISOString();
@@ -719,7 +736,7 @@ export function HomePanel() {
           </div>
         </div>
 
-        <Button type="button" className="shrink-0" onClick={createNote}>
+        <Button type="button" className="shrink-0" onClick={() => createNote()}>
           <span>{isCreatingNote ? "Creating..." : "+ Quick Note"}</span>
         </Button>
       </div>

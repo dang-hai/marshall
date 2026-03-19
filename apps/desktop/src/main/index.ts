@@ -9,6 +9,7 @@ import type {
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
 import { setupSettingsIPC } from "./settings";
+import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -330,6 +331,7 @@ app.whenReady().then(() => {
   // Set up transcription IPC handlers
   if (mainWindow) {
     setupTranscriptionIPC(mainWindow);
+    setupCallDetectionIPC(mainWindow);
   }
 
   app.on("activate", () => {
@@ -349,6 +351,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   isQuitting = true;
+  stopCallDetection();
   if (tray) {
     tray.destroy();
   }

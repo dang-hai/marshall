@@ -10,6 +10,10 @@
   "scripts": {
     "setup": "./scripts/setup.sh",
     "dev": "bun run --filter @marshall/desktop dev & bun run --filter @marshall/backend dev",
+    "dev:clean": "./scripts/electron-protocol.sh reset && bun run dev",
+    "electron:status": "./scripts/electron-protocol.sh status",
+    "electron:clean": "./scripts/electron-protocol.sh clean",
+    "electron:reset": "./scripts/electron-protocol.sh reset",
     "dev:backend": "bun run --filter @marshall/backend dev",
     "build": "bun run --filter @marshall/shared build && bun run --filter @marshall/desktop build",
     "build:backend": "bun run --filter @marshall/backend build",
