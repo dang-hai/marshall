@@ -73,6 +73,6 @@ if [ -f build/bin/whisper-cli ]; then
     echo "CoreML acceleration: Enabled (Apple Neural Engine)"
     echo ""
     echo "To download a model and generate CoreML encoder, run:"
-    echo "  bun run download:model base.en"
-    echo "  bun run generate:coreml base.en"
+    echo "  bun run download:model tiny.en"
+    echo "  bun run generate:coreml tiny.en"
 fi

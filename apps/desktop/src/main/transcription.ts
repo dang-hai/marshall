@@ -7,6 +7,8 @@ import {
   downloadModel,
   deleteModel,
   isModelDownloaded,
+  isCoreMLEncoderAvailable,
+  generateCoreMLEncoder,
   getModelPath,
   getModelsDirectory,
   checkSystemAudioCapability,
@@ -16,6 +18,7 @@ import {
   type PartialTranscription,
   type DeepgramPartialTranscription,
   type DeepgramTranscriptionResult,
+  type CoreMLGenerationProgress,
 } from "@marshall/transcription";
 import {
   getPermissions,
@@ -70,11 +73,44 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
     };
   });
 
-  // Download a model
+  // Download a model (and auto-generate CoreML encoder on macOS)
   ipcMain.handle("transcription:download-model", async (_event, modelName: WhisperModelName) => {
-    return downloadModel(modelName, (progress) => {
+    const modelPath = await downloadModel(modelName, (progress) => {
       mainWindow.webContents.send("transcription:download-progress", progress);
     });
+
+    // Auto-generate CoreML encoder on macOS if not already available
+    if (process.platform === "darwin" && !isCoreMLEncoderAvailable(modelName)) {
+      // Run CoreML generation in background (don't await - let it complete async)
+      generateCoreMLEncoder(modelName, (progress: CoreMLGenerationProgress) => {
+        mainWindow.webContents.send("transcription:coreml-progress", progress);
+      }).catch((err) => {
+        console.error(`[CoreML] Failed to generate encoder for ${modelName}:`, err);
+        mainWindow.webContents.send("transcription:coreml-progress", {
+          modelName,
+          stage: "error",
+          message: `Failed to generate CoreML encoder: ${err.message}`,
+        });
+      });
+    }
+
+    return modelPath;
+  });
+
+  // Manually trigger CoreML encoder generation
+  ipcMain.handle("transcription:generate-coreml", async (_event, modelName: WhisperModelName) => {
+    if (process.platform !== "darwin") {
+      throw new Error("CoreML is only available on macOS");
+    }
+
+    return generateCoreMLEncoder(modelName, (progress: CoreMLGenerationProgress) => {
+      mainWindow.webContents.send("transcription:coreml-progress", progress);
+    });
+  });
+
+  // Check CoreML encoder availability
+  ipcMain.handle("transcription:is-coreml-available", (_event, modelName: WhisperModelName) => {
+    return isCoreMLEncoderAvailable(modelName);
   });
 
   // Delete a model
