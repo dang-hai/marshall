@@ -207,7 +207,9 @@ export function AppShell({
         </aside>
 
         <section className="app-no-drag flex flex-1 flex-col overflow-auto p-5">
-          {activeView === "home" && <HomePanel />}
+          <div className={cn("flex flex-1 flex-col", activeView !== "home" && "hidden")}>
+            <HomePanel isVisible={activeView === "home"} />
+          </div>
 
           {activeView === "chat" && (
             <div className="flex flex-1 items-center justify-center">
