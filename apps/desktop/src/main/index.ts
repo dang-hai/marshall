@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, session, ipcMain, desktopCapturer } from "electron";
+import { app, BrowserWindow, Tray, session, ipcMain, desktopCapturer, shell } from "electron";
 import { join } from "path";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
@@ -92,6 +92,11 @@ app.whenReady().then(() => {
   // Desktop capturer IPC handler (required for Electron 30+)
   ipcMain.handle("desktop-capturer:get-sources", async (_event, options) => {
     return desktopCapturer.getSources(options);
+  });
+
+  // Shell IPC handlers
+  ipcMain.handle("shell:open-path", async (_event, path: string) => {
+    return shell.openPath(path);
   });
 
   createWindow();

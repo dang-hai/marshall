@@ -1,11 +1,14 @@
 import type { WhisperModelName } from "@marshall/transcription";
 
+export type TranscriptionProvider = "local" | "assemblyAI" | "speechmatics";
+
 export interface AppSettings {
   transcription: {
     selectedModel: WhisperModelName;
     language: string;
     useGPU: boolean;
     streamingEnabled: boolean;
+    provider: TranscriptionProvider;
   };
   audio: {
     source: "microphone" | "system" | "both";
@@ -41,6 +44,7 @@ export const defaultAppSettings: AppSettings = {
     language: "en",
     useGPU: true,
     streamingEnabled: true,
+    provider: "local",
   },
   audio: {
     source: "microphone",
