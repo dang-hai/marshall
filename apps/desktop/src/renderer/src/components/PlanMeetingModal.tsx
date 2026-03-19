@@ -1,4 +1,4 @@
-import { useState, useCallback, KeyboardEvent, useRef, useEffect } from "react";
+import { useState, useCallback, KeyboardEvent, useRef, useEffect, useMemo } from "react";
 import { ArrowUp, Clock, Loader2, X } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -27,12 +27,12 @@ Keep the entire plan to ONE PAGE maximum. Be direct and practical. No fluff.`;
 function buildPrompt(purpose: string, goalsAndGuardrails: string, duration: number): string {
   const parts = [];
 
-  if (purpose.trim()) {
-    parts.push(`Meeting Purpose: ${purpose.trim()}`);
+  if (purpose) {
+    parts.push(`Meeting Purpose: ${purpose}`);
   }
 
   parts.push(`Duration: ${duration} minutes`);
-  parts.push(`\nGoals and Guardrails:\n${goalsAndGuardrails.trim()}`);
+  parts.push(`\nGoals and Guardrails:\n${goalsAndGuardrails}`);
 
   return parts.join("\n");
 }
@@ -44,33 +44,38 @@ export function PlanMeetingModal({ onClose, onPlanGenerated }: PlanMeetingModalP
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
   const handleGenerate = useCallback(async () => {
-    if (!goalsAndGuardrails.trim()) {
+    const trimmedGoals = goalsAndGuardrails.trim();
+    if (!trimmedGoals) {
       setError("Please describe the goals and guardrails for your meeting.");
       return;
     }
 
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsGenerating(true);
     setError(null);
 
     try {
-      const prompt = buildPrompt(purpose, goalsAndGuardrails, duration);
+      const trimmedPurpose = purpose.trim();
+      const prompt = buildPrompt(trimmedPurpose, trimmedGoals, duration);
       const { text } = await window.aiAPI.completion({
         prompt,
         system: SYSTEM_PROMPT,
       });
 
-      const title = purpose.trim() || "Meeting Plan";
-      onPlanGenerated(text, title);
+      onPlanGenerated(text, trimmedPurpose || "Meeting Plan");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate plan");
     } finally {
       setIsGenerating(false);
+      isSubmittingRef.current = false;
     }
   }, [purpose, goalsAndGuardrails, duration, onPlanGenerated]);
 
@@ -88,7 +93,10 @@ export function PlanMeetingModal({ onClose, onPlanGenerated }: PlanMeetingModalP
     [handleGenerate, onClose]
   );
 
-  const canGenerate = goalsAndGuardrails.trim().length > 0 && !isGenerating;
+  const canGenerate = useMemo(
+    () => goalsAndGuardrails.trim().length > 0 && !isGenerating,
+    [goalsAndGuardrails, isGenerating]
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onKeyDown={handleKeyDown}>

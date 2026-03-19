@@ -441,12 +441,12 @@ export function HomePanel() {
   }, [flushPendingNoteUpdate]);
 
   const createNote = useCallback(
-    async (title?: string) => {
+    async (options?: { title?: string; body?: string }) => {
       setIsCreatingNote(true);
       setNotesError(null);
 
       try {
-        const note = await window.notesAPI.create(title ? { title } : undefined);
+        const note = await window.notesAPI.create(options);
         setOpenMenuId(null);
         applySavedNote(note);
         setActiveNoteId(note.id);
@@ -462,7 +462,7 @@ export function HomePanel() {
   // Listen for create note events from call notifications
   useEffect(() => {
     const handleCreateNote = (event: CustomEvent<{ title: string }>) => {
-      createNote(event.detail.title);
+      createNote({ title: event.detail.title });
     };
 
     window.addEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
@@ -473,25 +473,11 @@ export function HomePanel() {
   }, [createNote]);
 
   const handlePlanGenerated = useCallback(
-    async (plan: string, title: string) => {
+    (plan: string, title: string) => {
       setShowPlanMeetingModal(false);
-      setIsCreatingNote(true);
-      setNotesError(null);
-
-      try {
-        const note = await window.notesAPI.create({
-          title,
-          body: textToParagraphHtml(plan),
-        });
-        applySavedNote(note);
-        setActiveNoteId(note.id);
-      } catch (error) {
-        setNotesError(error instanceof Error ? error.message : "Failed to create note");
-      } finally {
-        setIsCreatingNote(false);
-      }
+      createNote({ title, body: textToParagraphHtml(plan) });
     },
-    [applySavedNote]
+    [createNote]
   );
 
   const moveNoteToTrash = async (noteId: string) => {
