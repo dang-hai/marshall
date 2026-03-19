@@ -1,6 +1,7 @@
 import { ClipboardEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, Ellipsis, FolderPlus, Trash2, UserRound } from "lucide-react";
 import { Button } from "./ui/button";
+import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 
 interface QuickNote {
   id: number;
@@ -439,79 +440,82 @@ export function HomePanel() {
 
   if (activeNote) {
     return (
-      <div className="flex min-h-full flex-1 flex-col overflow-hidden">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <Button type="button" variant="ghost" onClick={() => setActiveNoteId(null)}>
-            <ChevronLeft className="mr-1 h-3.5 w-3.5" />
-            Back
-          </Button>
-          <p className="text-2xs tracking-wide text-muted-foreground/70">
-            Updated {formatTimestamp(activeNote.updatedAt)}
-          </p>
-        </div>
+      <>
+        <div className="flex min-h-full flex-1 flex-col overflow-hidden">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <Button type="button" variant="ghost" onClick={() => setActiveNoteId(null)}>
+              <ChevronLeft className="mr-1 h-3.5 w-3.5" />
+              Back
+            </Button>
+            <p className="text-2xs tracking-wide text-muted-foreground/70">
+              Updated {formatTimestamp(activeNote.updatedAt)}
+            </p>
+          </div>
 
-        <div className="flex-1 overflow-auto rounded-2xl bg-card/70 px-12 py-10 shadow-soft">
-          <div className="mx-auto flex h-full w-full max-w-2xl flex-col">
-            <div className="relative min-h-[2.75rem]">
-              {!activeNote.title.trim() && (
-                <div className="pointer-events-none absolute inset-0 font-serif text-[1.75rem] font-medium leading-tight text-muted-foreground/30">
-                  New note
-                </div>
-              )}
-              <div
-                ref={titleRef}
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                aria-label="Note title"
-                className="relative min-h-[2.75rem] font-serif text-[1.75rem] font-medium leading-tight tracking-[-0.01em] text-foreground outline-none"
-                onInput={(event) =>
-                  updateActiveNote("title", event.currentTarget.textContent ?? "")
-                }
-              />
-            </div>
+          <div className="flex-1 overflow-auto rounded-2xl bg-card/70 px-12 py-10 shadow-soft">
+            <div className="mx-auto flex h-full w-full max-w-2xl flex-col">
+              <div className="relative min-h-[2.75rem]">
+                {!activeNote.title.trim() && (
+                  <div className="pointer-events-none absolute inset-0 font-serif text-[1.75rem] font-medium leading-tight text-muted-foreground/30">
+                    New note
+                  </div>
+                )}
+                <div
+                  ref={titleRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  aria-label="Note title"
+                  className="relative min-h-[2.75rem] font-serif text-[1.75rem] font-medium leading-tight tracking-[-0.01em] text-foreground outline-none"
+                  onInput={(event) =>
+                    updateActiveNote("title", event.currentTarget.textContent ?? "")
+                  }
+                />
+              </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <button type="button" className={METADATA_CHIP_CLASS}>
-                <CalendarDays className="h-3 w-3" />
-                <span>Date</span>
-                <span className="font-medium text-foreground">Today</span>
-              </button>
-              <button type="button" className={METADATA_CHIP_CLASS}>
-                <UserRound className="h-3 w-3" />
-                <span>Attendees</span>
-                <span className="font-medium text-foreground">Me</span>
-              </button>
-              <button
-                type="button"
-                className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
-              >
-                <FolderPlus className="h-3 w-3" />
-                <span>Add Folder</span>
-              </button>
-            </div>
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <button type="button" className={METADATA_CHIP_CLASS}>
+                  <CalendarDays className="h-3 w-3" />
+                  <span>Date</span>
+                  <span className="font-medium text-foreground">Today</span>
+                </button>
+                <button type="button" className={METADATA_CHIP_CLASS}>
+                  <UserRound className="h-3 w-3" />
+                  <span>Attendees</span>
+                  <span className="font-medium text-foreground">Me</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
+                >
+                  <FolderPlus className="h-3 w-3" />
+                  <span>Add Folder</span>
+                </button>
+              </div>
 
-            <div className="relative mt-10 min-h-[20rem] flex-1">
-              {!extractPlainTextFromHtml(activeNote.body).trim() && (
-                <div className="pointer-events-none absolute inset-0 text-[0.9375rem] leading-[1.85] text-muted-foreground/30">
-                  Write notes...
-                </div>
-              )}
-              <div
-                ref={bodyRef}
-                contentEditable
-                suppressContentEditableWarning
-                role="textbox"
-                aria-label="Note body"
-                className="relative min-h-[20rem] whitespace-pre-wrap text-[0.9375rem] leading-[1.85] text-foreground/90 outline-none"
-                onInput={syncBodyHtml}
-                onKeyDown={handleBodyKeyDown}
-                onPaste={handleBodyPaste}
-              />
+              <div className="relative mt-10 min-h-[20rem] flex-1">
+                {!extractPlainTextFromHtml(activeNote.body).trim() && (
+                  <div className="pointer-events-none absolute inset-0 text-[0.9375rem] leading-[1.85] text-muted-foreground/30">
+                    Write notes...
+                  </div>
+                )}
+                <div
+                  ref={bodyRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  aria-label="Note body"
+                  className="relative min-h-[20rem] whitespace-pre-wrap text-[0.9375rem] leading-[1.85] text-foreground/90 outline-none"
+                  onInput={syncBodyHtml}
+                  onKeyDown={handleBodyKeyDown}
+                  onPaste={handleBodyPaste}
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+        <FloatingTranscriptionRecorder />
+      </>
     );
   }
 

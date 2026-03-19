@@ -142,7 +142,8 @@ export function useAudioCapture(options: UseAudioCaptureOptions = {}) {
 
         // Use ScriptProcessorNode for raw audio access
         // Note: This is deprecated but worklet requires more setup
-        const bufferSize = 4096;
+        // Smaller buffers reduce how long we wait before handing audio to VAD/transcription.
+        const bufferSize = 1024;
         processorRef.current = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
 
         processorRef.current.onaudioprocess = (e) => {

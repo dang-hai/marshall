@@ -26,6 +26,11 @@ import { join } from "path";
 let transcriber: Transcriber | null = null;
 let streamingTranscriber: StreamingTranscriber | null = null;
 
+const LIVE_TRANSCRIPTION_MIN_SPEECH_MS = 120;
+const LIVE_TRANSCRIPTION_SILENCE_TIMEOUT_MS = 250;
+const LIVE_TRANSCRIPTION_MIN_SEGMENT_SECONDS = 0.35;
+const LIVE_TRANSCRIPTION_MAX_SEGMENT_SECONDS = 12;
+
 export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
   // Get available models with detailed info
   ipcMain.handle("transcription:get-models", () => {
@@ -137,12 +142,12 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
           vad: vadEnabled
             ? {
                 threshold: vadThreshold,
-                minSpeechDuration: 200,
-                silenceTimeout: 800,
+                minSpeechDuration: LIVE_TRANSCRIPTION_MIN_SPEECH_MS,
+                silenceTimeout: LIVE_TRANSCRIPTION_SILENCE_TIMEOUT_MS,
               }
             : undefined,
-          minSegmentDuration: 1.5,
-          maxSegmentDuration: 30,
+          minSegmentDuration: LIVE_TRANSCRIPTION_MIN_SEGMENT_SECONDS,
+          maxSegmentDuration: LIVE_TRANSCRIPTION_MAX_SEGMENT_SECONDS,
         });
 
         // Forward streaming events to renderer
