@@ -237,7 +237,7 @@ app.whenReady().then(() => {
     try {
       const response = await fetch(`${BETTER_AUTH_URL}/api/user/me`, {
         headers: {
-          Cookie: `better-auth.session_token=${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
       });
 

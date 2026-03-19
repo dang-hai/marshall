@@ -1,7 +1,7 @@
 import { electron } from "@better-auth/electron";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { oAuthProxy, organization } from "better-auth/plugins";
+import { bearer, oAuthProxy, organization } from "better-auth/plugins";
 import type { Database } from "@marshall/database";
 
 export interface ResolvedAuthConfig {
@@ -84,6 +84,7 @@ export function resolveAuthConfig(env: AuthEnv = process.env) {
 export function buildAuthOptions(db: Database, config: ResolvedAuthConfig): BetterAuthOptions {
   const plugins: BetterAuthOptions["plugins"] = [
     organization(),
+    bearer(),
     electron({
       disableOriginOverride: true,
     }),

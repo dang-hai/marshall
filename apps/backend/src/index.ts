@@ -1,16 +1,4 @@
-import { createAuthFromEnv } from "@marshall/auth";
-import { createDb } from "@marshall/database";
-import { createBackendApp } from "./server";
-
-function requireEnv(key: string) {
-  const value = process.env[key]?.trim();
-
-  if (!value) {
-    throw new Error(`${key} is required to start the backend.`);
-  }
-
-  return value;
-}
+import { createConfiguredBackendApp } from "./app";
 
 function resolvePort(value?: string) {
   const port = Number.parseInt(value ?? "3000", 10);
@@ -23,11 +11,7 @@ function resolvePort(value?: string) {
 }
 
 const port = resolvePort(process.env.PORT);
-const baseUrl = requireEnv("BETTER_AUTH_URL");
-const electronProtocol = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
-const db = createDb(requireEnv("DATABASE_URL"));
-const auth = createAuthFromEnv(db);
-const app = createBackendApp({ auth, baseUrl, electronProtocol });
+const app = createConfiguredBackendApp();
 
 app.listen(port);
 
