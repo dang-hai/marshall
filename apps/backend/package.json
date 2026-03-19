@@ -12,10 +12,12 @@
     "test": "bun --env-file=../../.env test test"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "3.0.58",
     "@deepgram/sdk": "5.0.0",
     "@elysiajs/cors": "1.4.1",
     "@marshall/auth": "workspace:*",
     "@marshall/database": "workspace:*",
+    "ai": "6.0.116",
     "elysia": "1.4.28",
     "ws": "8.19.0"
   },
