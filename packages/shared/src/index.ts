@@ -142,13 +142,21 @@ export interface CodexMonitorNotePatch {
   generatedAt: string;
 }
 
+export interface CodexMonitorChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt: string;
+}
+
 export interface CodexMonitorState {
-  status: "idle" | "monitoring" | "analyzing" | "error";
+  status: "idle" | "monitoring" | "analyzing" | "chatting" | "error";
   noteId: string | null;
   noteTitle: string | null;
   nudge: CodexMonitorNudge | null;
   items: CodexMonitorItem[];
   summary: string | null;
+  chatMessages: CodexMonitorChatMessage[];
   lastAnalyzedAt: string | null;
   error: string | null;
   debug: {

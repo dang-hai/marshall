@@ -229,15 +229,19 @@ function createCodexNotificationWindow() {
 
   const { workArea } = screen.getPrimaryDisplay();
   codexNotificationWindow = new BrowserWindow({
-    width: 360,
-    height: 520,
-    x: workArea.x + workArea.width - 380,
+    width: 380,
+    height: 560,
+    minWidth: 320,
+    minHeight: 300,
+    maxWidth: 500,
+    maxHeight: 800,
+    x: workArea.x + workArea.width - 400,
     y: workArea.y + 56,
     show: false,
     frame: false,
     transparent: true,
     hasShadow: false,
-    resizable: false,
+    resizable: true,
     maximizable: false,
     minimizable: false,
     fullscreenable: false,
@@ -397,6 +401,9 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("codex-monitor:get-state", () => codexMonitor.getState());
   ipcMain.handle("codex-monitor:dismiss-window", () => codexMonitor.dismissWindow());
+  ipcMain.handle("codex-monitor:send-chat", async (_event, message: string) =>
+    codexMonitor.sendChat(message)
+  );
   // AI completion handler
   ipcMain.handle("ai:completion", async (_event, input: { prompt: string; system?: string }) => {
     const payload = await authenticatedJsonRequest("/api/ai/completion", {

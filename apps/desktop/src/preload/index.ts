@@ -95,6 +95,7 @@ contextBridge.exposeInMainWorld("codexMonitorAPI", {
   clearSession: (noteId?: string) => ipcRenderer.invoke("codex-monitor:clear-session", noteId),
   getState: () => ipcRenderer.invoke("codex-monitor:get-state"),
   dismissWindow: () => ipcRenderer.invoke("codex-monitor:dismiss-window"),
+  sendChat: (message: string) => ipcRenderer.invoke("codex-monitor:send-chat", message),
   onState: (callback: (state: CodexMonitorState) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, state: CodexMonitorState) =>
       callback(state);
@@ -344,6 +345,7 @@ declare global {
       clearSession: (noteId?: string) => Promise<{ status: string }>;
       getState: () => Promise<CodexMonitorState>;
       dismissWindow: () => Promise<{ status: string }>;
+      sendChat: (message: string) => Promise<{ status: string; response?: string; error?: string }>;
       onState: (callback: (state: CodexMonitorState) => void) => () => void;
       onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => () => void;
     };

@@ -37,6 +37,7 @@ describe("CodexNotificationWindowView", () => {
             },
           ],
           summary: null,
+          chatMessages: [],
           lastAnalyzedAt: new Date().toISOString(),
           error: null,
           debug: {
@@ -56,6 +57,7 @@ describe("CodexNotificationWindowView", () => {
           },
         }}
         onDismiss={() => {}}
+        onSendChat={() => {}}
       />
     );
 
@@ -89,6 +91,7 @@ describe("CodexNotificationWindowView", () => {
             },
           ],
           summary: "The team aligned on ownership and queued a legal follow-up.",
+          chatMessages: [],
           lastAnalyzedAt: new Date().toISOString(),
           error: null,
           debug: {
@@ -108,6 +111,7 @@ describe("CodexNotificationWindowView", () => {
           },
         }}
         onDismiss={() => {}}
+        onSendChat={() => {}}
       />
     );
 
@@ -124,6 +128,7 @@ describe("CodexNotificationWindowView", () => {
           nudge: null,
           items: [],
           summary: null,
+          chatMessages: [],
           lastAnalyzedAt: null,
           error: null,
           debug: {
@@ -143,6 +148,7 @@ describe("CodexNotificationWindowView", () => {
           },
         }}
         onDismiss={() => {}}
+        onSendChat={() => {}}
       />
     );
 

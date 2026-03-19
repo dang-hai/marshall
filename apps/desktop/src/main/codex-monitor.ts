@@ -10,6 +10,7 @@ import type {
   CodexMonitorState,
   CodexMonitorItem,
   CodexMonitorItemStatus,
+  CodexMonitorChatMessage,
 } from "@marshall/shared";
 
 interface CodexMonitorServiceOptions {
@@ -29,6 +30,11 @@ interface CodexMonitorResult {
   items: CodexMonitorResultItem[];
   checkedPlanItems: string[];
   summary: string | null;
+}
+
+interface ChatResult {
+  response: string;
+  items: CodexMonitorResultItem[] | null;
 }
 
 const LIVE_ANALYSIS_DELAY_MS = 4000;
@@ -80,6 +86,32 @@ const RESULT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+const CHAT_RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    response: { type: "string" },
+    items: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              text: { type: "string" },
+              status: { type: "string", enum: ["pending", "done", "attention"] },
+            },
+            required: ["text", "status"],
+            additionalProperties: false,
+          },
+        },
+      ],
+    },
+  },
+  required: ["response", "items"],
+  additionalProperties: false,
+} as const;
+
 function isActiveCall(status: CodexMonitorSessionInput["transcription"]["status"]) {
   return status === "recording" || status === "transcribing";
 }
@@ -120,6 +152,13 @@ async function createSchemaFile() {
   return schemaPath;
 }
 
+async function createChatSchemaFile() {
+  const schemaDirectory = await mkdtemp(join(tmpdir(), "marshall-codex-chat-"));
+  const schemaPath = join(schemaDirectory, "chat-schema.json");
+  await writeFile(schemaPath, JSON.stringify(CHAT_RESULT_SCHEMA), "utf8");
+  return schemaPath;
+}
+
 function truncatePreview(value: string | null | undefined, limit = DEBUG_PREVIEW_LIMIT) {
   if (!value) {
     return null;
@@ -154,6 +193,7 @@ function createEmptyDebugState(): CodexMonitorState["debug"] {
 export class CodexMonitorService {
   private readonly createNotificationWindow: () => BrowserWindow;
   private schemaPathPromise: Promise<string> | null = null;
+  private chatSchemaPathPromise: Promise<string> | null = null;
   private session: CodexMonitorSessionInput | null = null;
   private state: CodexMonitorState = {
     status: "idle",
@@ -162,10 +202,12 @@ export class CodexMonitorService {
     nudge: null,
     items: [],
     summary: null,
+    chatMessages: [],
     lastAnalyzedAt: null,
     error: null,
     debug: createEmptyDebugState(),
   };
+  private chatProcess: ChildProcessWithoutNullStreams | null = null;
   private notificationWindow: BrowserWindow | null = null;
   private analysisTimer: NodeJS.Timeout | null = null;
   private scheduledAnalysisMode: "live" | "final" | null = null;
@@ -257,6 +299,8 @@ export class CodexMonitorService {
     this.clearPendingAnalysis();
     this.analysisProcess?.kill();
     this.analysisProcess = null;
+    this.chatProcess?.kill();
+    this.chatProcess = null;
     this.state = {
       status: "idle",
       noteId: null,
@@ -264,6 +308,7 @@ export class CodexMonitorService {
       nudge: null,
       items: [],
       summary: null,
+      chatMessages: [],
       lastAnalyzedAt: null,
       error: null,
       debug: createEmptyDebugState(),
@@ -280,10 +325,192 @@ export class CodexMonitorService {
     return { status: "dismissed" };
   }
 
+  async sendChat(message: string) {
+    if (!this.session) {
+      return { status: "error", error: "No active session" };
+    }
+
+    if (this.chatProcess) {
+      return { status: "error", error: "Chat already in progress" };
+    }
+
+    const userMessage: CodexMonitorChatMessage = {
+      id: randomUUID(),
+      role: "user",
+      text: message.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    this.state = {
+      ...this.state,
+      status: "chatting",
+      chatMessages: [...this.state.chatMessages, userMessage],
+      error: null,
+    };
+    this.broadcastState();
+    this.syncNotificationWindow();
+
+    try {
+      const result = await this.executeChatQuery(this.session, message);
+
+      const assistantMessage: CodexMonitorChatMessage = {
+        id: randomUUID(),
+        role: "assistant",
+        text: result.response.trim(),
+        createdAt: new Date().toISOString(),
+      };
+
+      // Update items if the chat returned any
+      const updatedItems = result.items ? this.mergeItems(result.items) : this.state.items;
+
+      this.state = {
+        ...this.state,
+        status: isActiveCall(this.session.transcription.status) ? "monitoring" : "idle",
+        chatMessages: [...this.state.chatMessages, assistantMessage],
+        items: updatedItems,
+      };
+      this.broadcastState();
+
+      return { status: "success", response: result.response };
+    } catch (error) {
+      this.state = {
+        ...this.state,
+        status: "error",
+        error: error instanceof Error ? error.message : "Chat failed",
+      };
+      this.broadcastState();
+      return { status: "error", error: this.state.error };
+    } finally {
+      this.chatProcess = null;
+    }
+  }
+
+  private async executeChatQuery(session: CodexMonitorSessionInput, userMessage: string) {
+    const transcriptExcerpt = buildTranscriptExcerpt(session.transcription.transcriptText);
+    const chatHistory = this.state.chatMessages
+      .slice(-6) // Keep last 6 messages for context
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
+      .join("\n");
+
+    const existingItems = this.state.items.map((item) => ({
+      text: item.text,
+      status: item.status,
+    }));
+
+    const prompt = [
+      "You are Marshall, a call assistant helping the user during a live call.",
+      "The user is asking you a question while on a call. Answer concisely so they can glance at it quickly.",
+      "",
+      "## Call Context",
+      `Title: ${session.noteTitle}`,
+      "",
+      "## Meeting Plan/Agenda:",
+      session.noteBodyText.trim().slice(0, 3000) || "(No agenda provided)",
+      "",
+      "## What's Been Discussed (Transcript):",
+      transcriptExcerpt || "(Call just started, no transcript yet)",
+      "",
+      "## Current Tracking:",
+      existingItems.length > 0
+        ? existingItems.map((item) => `- [${item.status}] ${item.text}`).join("\n")
+        : "(No tracked items yet)",
+      "",
+      chatHistory ? `## Previous Questions:\n${chatHistory}\n` : "",
+      `## User's Question:\n${userMessage}`,
+      "",
+      "Answer the question based on the transcript and meeting context.",
+      "Be very concise (1-2 sentences max) - they're in a live call.",
+      "If they ask about something not yet discussed, say so.",
+      "",
+      'Return JSON: {"response": "your answer", "items": null}',
+    ].join("\n");
+
+    const schemaPath = await this.getChatSchemaPath();
+    const args = [
+      "exec",
+      "--json",
+      "--color",
+      "never",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--output-schema",
+      schemaPath,
+      "-",
+    ];
+
+    return await new Promise<ChatResult>((resolve, reject) => {
+      const child = spawn("codex", args, {
+        env: process.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      this.chatProcess = child;
+
+      let lastAgentMessage = "";
+      let stderr = "";
+
+      const handleChunk = (chunk: Buffer) => {
+        const text = chunk.toString("utf8");
+        for (const line of text.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("{")) {
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(trimmed) as {
+              type?: string;
+              item?: { type?: string; text?: string };
+            };
+
+            if (
+              parsed.type === "item.completed" &&
+              parsed.item?.type === "agent_message" &&
+              typeof parsed.item.text === "string"
+            ) {
+              lastAgentMessage = parsed.item.text;
+            }
+          } catch {
+            continue;
+          }
+        }
+      };
+
+      child.stdout.on("data", handleChunk);
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk.toString("utf8");
+      });
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code !== 0) {
+          reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
+          return;
+        }
+
+        if (!lastAgentMessage) {
+          reject(new Error("No response from assistant"));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(lastAgentMessage) as ChatResult);
+        } catch {
+          // If JSON parsing fails, treat the whole message as the response
+          resolve({ response: lastAgentMessage, items: null });
+        }
+      });
+
+      child.stdin.write(prompt);
+      child.stdin.end();
+    });
+  }
+
   private resetSessionState(noteId: string, noteTitle: string) {
     this.clearPendingAnalysis();
     this.analysisProcess?.kill();
     this.analysisProcess = null;
+    this.chatProcess?.kill();
+    this.chatProcess = null;
     this.lastAnalyzedTranscriptLength = 0;
     this.lastFinalizedTranscriptSignature = null;
     this.lastNudgeSignature = null;
@@ -295,6 +522,7 @@ export class CodexMonitorService {
       nudge: null,
       items: [],
       summary: null,
+      chatMessages: [],
       lastAnalyzedAt: null,
       error: null,
       debug: createEmptyDebugState(),
@@ -582,6 +810,11 @@ export class CodexMonitorService {
   private async getSchemaPath() {
     this.schemaPathPromise ??= createSchemaFile();
     return this.schemaPathPromise;
+  }
+
+  private async getChatSchemaPath() {
+    this.chatSchemaPathPromise ??= createChatSchemaFile();
+    return this.chatSchemaPathPromise;
   }
 
   private async executeCodex(

@@ -232,6 +232,7 @@ export function HomePanel() {
     nudge: null,
     items: [],
     summary: null,
+    chatMessages: [],
     lastAnalyzedAt: null,
     error: null,
     debug: {
