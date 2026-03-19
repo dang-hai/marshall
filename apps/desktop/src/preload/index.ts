@@ -1,4 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type {
+  CreateNoteInput,
+  NoteRecord,
+  NoteTranscriptionSnapshot,
+  SaveNoteTranscriptionInput,
+  UpdateNoteInput,
+} from "@marshall/shared";
 import type { DesktopNavigationRoute } from "../shared/navigation";
 import type { AppSettings } from "../shared/settings";
 
@@ -51,6 +58,15 @@ contextBridge.exposeInMainWorld("settingsAPI", {
   getPath: () => ipcRenderer.invoke("settings:get-path"),
 });
 
+contextBridge.exposeInMainWorld("notesAPI", {
+  list: () => ipcRenderer.invoke("notes:list"),
+  create: (input?: CreateNoteInput) => ipcRenderer.invoke("notes:create", input),
+  update: (noteId: string, input: UpdateNoteInput) =>
+    ipcRenderer.invoke("notes:update", noteId, input),
+  saveTranscription: (noteId: string, input: SaveNoteTranscriptionInput) =>
+    ipcRenderer.invoke("notes:save-transcription", noteId, input),
+});
+
 // Transcription API
 contextBridge.exposeInMainWorld("transcriptionAPI", {
   // Models
@@ -61,6 +77,12 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
   deleteModel: (modelName: string) => ipcRenderer.invoke("transcription:delete-model", modelName),
   isModelDownloaded: (modelName: string) =>
     ipcRenderer.invoke("transcription:is-model-downloaded", modelName),
+
+  // CoreML (macOS only)
+  generateCoreML: (modelName: string) =>
+    ipcRenderer.invoke("transcription:generate-coreml", modelName),
+  isCoreMLAvailable: (modelName: string) =>
+    ipcRenderer.invoke("transcription:is-coreml-available", modelName),
 
   // Permissions
   getPermissions: () => ipcRenderer.invoke("transcription:get-permissions"),
@@ -96,6 +118,10 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
   onDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("transcription:download-progress", (_event, progress) => callback(progress));
     return () => ipcRenderer.removeAllListeners("transcription:download-progress");
+  },
+  onCoreMLProgress: (callback: (progress: unknown) => void) => {
+    ipcRenderer.on("transcription:coreml-progress", (_event, progress) => callback(progress));
+    return () => ipcRenderer.removeAllListeners("transcription:coreml-progress");
   },
   onProgress: (callback: (percent: number) => void) => {
     ipcRenderer.on("transcription:progress", (_event, percent) => callback(percent));
@@ -164,10 +190,17 @@ interface DownloadProgress {
   percent: number;
 }
 
+interface CoreMLProgress {
+  modelName: string;
+  stage: "starting" | "installing-deps" | "generating" | "complete" | "error";
+  message: string;
+}
+
 interface ModelInfo {
   name: string;
   size: string;
   downloaded: boolean;
+  coremlAvailable: boolean;
   path: string;
 }
 
@@ -231,6 +264,15 @@ declare global {
       reset: () => Promise<AppSettings>;
       getPath: () => Promise<string>;
     };
+    notesAPI: {
+      list: () => Promise<NoteRecord[]>;
+      create: (input?: CreateNoteInput) => Promise<NoteRecord>;
+      update: (noteId: string, input: UpdateNoteInput) => Promise<NoteRecord>;
+      saveTranscription: (
+        noteId: string,
+        input: SaveNoteTranscriptionInput
+      ) => Promise<NoteTranscriptionSnapshot>;
+    };
     transcriptionAPI: {
       // Models
       getModels: () => Promise<ModelInfo[]>;
@@ -238,6 +280,10 @@ declare global {
       downloadModel: (modelName: string) => Promise<string>;
       deleteModel: (modelName: string) => Promise<{ status: string }>;
       isModelDownloaded: (modelName: string) => Promise<boolean>;
+
+      // CoreML (macOS only)
+      generateCoreML: (modelName: string) => Promise<string>;
+      isCoreMLAvailable: (modelName: string) => Promise<boolean>;
 
       // Permissions
       getPermissions: () => Promise<{ microphone: string; screen: string }>;
@@ -281,6 +327,7 @@ declare global {
 
       // Events
       onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void;
+      onCoreMLProgress: (callback: (progress: CoreMLProgress) => void) => () => void;
       onProgress: (callback: (percent: number) => void) => () => void;
       onPartial: (callback: (partial: PartialTranscription) => void) => () => void;
       onSegment: (callback: (data: SegmentData) => void) => () => void;

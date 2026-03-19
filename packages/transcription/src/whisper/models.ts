@@ -2,7 +2,12 @@ import { createWriteStream, existsSync, mkdirSync, statSync, unlinkSync } from "
 import { join, dirname } from "path";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
 import { WHISPER_MODELS, type WhisperModelName } from "./types.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export interface DownloadProgress {
   modelName: WhisperModelName;
@@ -145,4 +150,118 @@ export async function deleteModel(modelName: WhisperModelName): Promise<void> {
   if (existsSync(modelPath)) {
     unlinkSync(modelPath);
   }
+}
+
+export interface CoreMLGenerationProgress {
+  modelName: WhisperModelName;
+  stage: "starting" | "installing-deps" | "generating" | "complete" | "error";
+  message: string;
+}
+
+export type CoreMLProgressCallback = (progress: CoreMLGenerationProgress) => void;
+
+export async function generateCoreMLEncoder(
+  modelName: WhisperModelName,
+  onProgress?: CoreMLProgressCallback
+): Promise<string> {
+  // Check if already available
+  if (isCoreMLEncoderAvailable(modelName)) {
+    const encoderPath = getCoreMLEncoderPath(modelName);
+    onProgress?.({
+      modelName,
+      stage: "complete",
+      message: "CoreML encoder already exists",
+    });
+    return encoderPath;
+  }
+
+  // Check if model is downloaded first
+  if (!isModelDownloaded(modelName)) {
+    throw new Error(`Model ${modelName} must be downloaded before generating CoreML encoder`);
+  }
+
+  // Find the generate-coreml.sh script
+  // Go from dist/whisper/ to scripts/
+  const scriptPath = join(__dirname, "..", "..", "scripts", "generate-coreml.sh");
+
+  // For development, the script is relative to src
+  const devScriptPath = join(__dirname, "..", "..", "..", "scripts", "generate-coreml.sh");
+
+  const actualScriptPath = existsSync(scriptPath) ? scriptPath : devScriptPath;
+
+  if (!existsSync(actualScriptPath)) {
+    throw new Error(`CoreML generation script not found at ${scriptPath} or ${devScriptPath}`);
+  }
+
+  onProgress?.({
+    modelName,
+    stage: "starting",
+    message: "Starting CoreML encoder generation...",
+  });
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("bash", [actualScriptPath, modelName], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      const output = data.toString();
+      stdout += output;
+
+      // Parse progress from output
+      if (output.includes("Installing Python dependencies")) {
+        onProgress?.({
+          modelName,
+          stage: "installing-deps",
+          message: "Installing Python dependencies...",
+        });
+      } else if (output.includes("Generating CoreML encoder")) {
+        onProgress?.({
+          modelName,
+          stage: "generating",
+          message: "Generating CoreML encoder (this may take a few minutes)...",
+        });
+      } else if (output.includes("CoreML model generated successfully")) {
+        onProgress?.({
+          modelName,
+          stage: "complete",
+          message: "CoreML encoder generated successfully",
+        });
+      }
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        const encoderPath = getCoreMLEncoderPath(modelName);
+        if (existsSync(encoderPath)) {
+          resolve(encoderPath);
+        } else {
+          reject(new Error("CoreML generation completed but encoder not found"));
+        }
+      } else {
+        onProgress?.({
+          modelName,
+          stage: "error",
+          message: `CoreML generation failed: ${stderr || stdout}`,
+        });
+        reject(new Error(`CoreML generation failed with code ${code}: ${stderr || stdout}`));
+      }
+    });
+
+    child.on("error", (err) => {
+      onProgress?.({
+        modelName,
+        stage: "error",
+        message: `Failed to start CoreML generation: ${err.message}`,
+      });
+      reject(err);
+    });
+  });
 }

@@ -9,7 +9,7 @@ MODELS_DIR="${HOME}/.marshall/models"
 VENV_DIR="$BUILD_DIR/.coreml-venv"
 
 # Default model if none specified
-MODEL_NAME="${1:-base.en}"
+MODEL_NAME="${1:-tiny.en}"
 
 echo "Generating CoreML model for: $MODEL_NAME"
 echo ""
@@ -59,7 +59,7 @@ echo "Using Python $PYTHON_VERSION (venv)"
 echo ""
 echo "Installing Python dependencies..."
 pip install --upgrade pip --quiet
-pip install --quiet ane_transformers openai-whisper coremltools
+pip install --quiet torch==2.7.0 ane_transformers openai-whisper coremltools
 
 # Create models directory if it doesn't exist
 mkdir -p "$MODELS_DIR"

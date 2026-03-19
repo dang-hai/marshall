@@ -1,6 +1,11 @@
 import { app, BrowserWindow, Tray, session, ipcMain, desktopCapturer, shell } from "electron";
 import { join } from "path";
 import { randomBytes } from "crypto";
+import type {
+  CreateNoteInput,
+  SaveNoteTranscriptionInput,
+  UpdateNoteInput,
+} from "@marshall/shared";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
 import { setupSettingsIPC } from "./settings";
@@ -35,6 +40,28 @@ const pendingAuthRequests = new Map<
 
 // Store auth token in memory (for this session)
 let authToken: string | null = null;
+
+async function authenticatedJsonRequest(path: string, init?: RequestInit) {
+  if (!authToken) {
+    throw new Error("Not authenticated");
+  }
+
+  const response = await fetch(`${BETTER_AUTH_URL}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+      ...init?.headers,
+    },
+  });
+
+  const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+  if (!response.ok) {
+    throw new Error(payload?.error || `Request failed with status ${response.status}`);
+  }
+
+  return payload;
+}
 
 // Register as default protocol handler for development
 if (process.defaultApp) {
@@ -259,6 +286,38 @@ app.whenReady().then(() => {
     authToken = null;
     return true;
   });
+
+  ipcMain.handle("notes:list", async () => {
+    const payload = await authenticatedJsonRequest("/api/notes");
+    return (payload as { notes: unknown[] }).notes;
+  });
+
+  ipcMain.handle("notes:create", async (_event, input?: CreateNoteInput) => {
+    const payload = await authenticatedJsonRequest("/api/notes", {
+      method: "POST",
+      body: JSON.stringify(input ?? {}),
+    });
+    return (payload as { note: unknown }).note;
+  });
+
+  ipcMain.handle("notes:update", async (_event, noteId: string, input: UpdateNoteInput) => {
+    const payload = await authenticatedJsonRequest(`/api/notes/${noteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    return (payload as { note: unknown }).note;
+  });
+
+  ipcMain.handle(
+    "notes:save-transcription",
+    async (_event, noteId: string, input: SaveNoteTranscriptionInput) => {
+      const payload = await authenticatedJsonRequest(`/api/notes/${noteId}/transcription`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+      return (payload as { transcription: unknown }).transcription;
+    }
+  );
 
   // Shell IPC handlers
   ipcMain.handle("shell:open-path", async (_event, path: string) => {
