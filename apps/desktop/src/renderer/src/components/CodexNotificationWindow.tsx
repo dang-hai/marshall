@@ -50,9 +50,9 @@ export function CodexNotificationWindowView({
 
   return (
     <div className="min-h-screen bg-transparent p-3">
-      <div className="app-no-drag overflow-hidden rounded-lg bg-neutral-900 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
+      <div className="overflow-hidden rounded-lg bg-neutral-900 shadow-2xl">
+        {/* Header - draggable */}
+        <div className="app-drag flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-zinc-200">
               {state.noteTitle ?? "Marshall"}
@@ -66,7 +66,7 @@ export function CodexNotificationWindowView({
           <button
             type="button"
             aria-label="Dismiss"
-            className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            className="app-no-drag rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
             onClick={onDismiss}
           >
             <X className="h-3.5 w-3.5" />
