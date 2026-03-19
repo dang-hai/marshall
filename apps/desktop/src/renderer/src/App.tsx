@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Home, MessageSquare, Loader2 } from "lucide-react";
-import { APP_NAME } from "@marshall/shared";
+import { APP_NAME, type DisplayUser } from "@marshall/shared";
 import { DESKTOP_NAVIGATION_ROUTES } from "../../shared/navigation";
 import { cn } from "./lib/utils";
 import { HomePanel } from "./components/HomePanel";
@@ -17,18 +17,11 @@ const sidebarItems = [
 
 type ViewId = (typeof sidebarItems)[number]["id"] | "settings";
 
-interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  image?: string;
-}
-
 interface AppShellProps {
   initialProfileMenuOpen?: boolean;
   initialSettingsSection?: SettingsSectionId;
   initialView?: ViewId;
-  user?: AuthUser | null;
+  user?: DisplayUser | null;
   onSignOut?: () => Promise<void>;
 }
 
@@ -46,7 +39,7 @@ export function AppShell({
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    window.electronAPI?.onNavigate((path) => {
+    const cleanup = window.electronAPI?.onNavigate((path) => {
       if (path === DESKTOP_NAVIGATION_ROUTES.settings) {
         setActiveView("settings");
         setActiveSettingsSection("account");
@@ -56,6 +49,7 @@ export function AppShell({
 
       setActiveView("home");
     });
+    return cleanup;
   }, []);
 
   useEffect(() => {

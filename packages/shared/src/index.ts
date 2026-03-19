@@ -8,6 +8,20 @@ export interface User {
   updatedAt: Date;
 }
 
+/** Auth user from Better Auth session */
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+  emailVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Minimal user info for UI display */
+export type DisplayUser = Pick<AuthUser, "id" | "email" | "name" | "image">;
+
 export interface Session {
   id: string;
   userId: string;

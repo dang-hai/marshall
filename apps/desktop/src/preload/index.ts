@@ -6,7 +6,10 @@ import type { AppSettings } from "../shared/settings";
 contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform,
   onNavigate: (callback: (path: DesktopNavigationRoute) => void) => {
-    ipcRenderer.on("navigate", (_event, path) => callback(path));
+    const handler = (_event: Electron.IpcRendererEvent, path: DesktopNavigationRoute) =>
+      callback(path);
+    ipcRenderer.on("navigate", handler);
+    return () => ipcRenderer.removeListener("navigate", handler);
   },
   minimize: () => ipcRenderer.send("window:minimize"),
   maximize: () => ipcRenderer.send("window:maximize"),
@@ -170,7 +173,8 @@ interface StorageInfo {
   availableModels: Record<string, { size: string; url: string; bytes: number }>;
 }
 
-interface AuthUser {
+// AuthUser type matches @marshall/shared but declared inline for preload context isolation
+type AuthUser = {
   id: string;
   email: string;
   name: string;
@@ -178,7 +182,7 @@ interface AuthUser {
   emailVerified: boolean;
   createdAt: string;
   updatedAt: string;
-}
+};
 
 declare global {
   interface Window {
@@ -207,7 +211,7 @@ declare global {
     };
     electronAPI: {
       platform: string;
-      onNavigate: (callback: (path: DesktopNavigationRoute) => void) => void;
+      onNavigate: (callback: (path: DesktopNavigationRoute) => void) => () => void;
       minimize: () => void;
       maximize: () => void;
       close: () => void;

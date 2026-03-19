@@ -1,14 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-
-interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  image?: string;
-  emailVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { AuthUser } from "@marshall/shared";
 
 interface UseAuthReturn {
   user: AuthUser | null;
@@ -97,7 +88,7 @@ export function useAuth(): UseAuthReturn {
     user,
     token,
     isLoading,
-    isAuthenticated: !!token,
+    isAuthenticated: !!user,
     error,
     signIn,
     signOut,

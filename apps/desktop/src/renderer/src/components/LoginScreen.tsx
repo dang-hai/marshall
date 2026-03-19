@@ -7,42 +7,27 @@ interface LoginScreenProps {
   onSignIn: (options?: { provider?: string }) => Promise<void>;
 }
 
+type AuthMethod = "google" | "browser";
+
 export function LoginScreen({ onSignIn }: LoginScreenProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [authMethod, setAuthMethod] = useState<"google" | "browser" | null>(null);
+  const [loadingMethod, setLoadingMethod] = useState<AuthMethod | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setAuthMethod("google");
+  const handleSignIn = async (method: AuthMethod, options?: { provider?: string }) => {
+    setLoadingMethod(method);
     setError(null);
 
     try {
-      await onSignIn({ provider: "google" });
+      await onSignIn(options);
     } catch (err) {
       console.error("[Auth] Error:", err);
       setError(err instanceof Error ? err.message : "Auth failed");
     } finally {
-      setIsLoading(false);
-      setAuthMethod(null);
+      setLoadingMethod(null);
     }
   };
 
-  const handleBrowserSignIn = async () => {
-    setIsLoading(true);
-    setAuthMethod("browser");
-    setError(null);
-
-    try {
-      await onSignIn();
-    } catch (err) {
-      console.error("[Auth] Error:", err);
-      setError(err instanceof Error ? err.message : "Auth failed");
-    } finally {
-      setIsLoading(false);
-      setAuthMethod(null);
-    }
-  };
+  const isLoading = loadingMethod !== null;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background">
@@ -81,10 +66,10 @@ export function LoginScreen({ onSignIn }: LoginScreenProps) {
             variant="outline"
             size="lg"
             className="relative w-full justify-center gap-3 border-border/60 bg-card hover:bg-accent"
-            onClick={handleGoogleSignIn}
+            onClick={() => handleSignIn("google", { provider: "google" })}
             disabled={isLoading}
           >
-            {isLoading && authMethod === "google" ? (
+            {loadingMethod === "google" ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -122,12 +107,10 @@ export function LoginScreen({ onSignIn }: LoginScreenProps) {
             variant="secondary"
             size="lg"
             className="w-full justify-center"
-            onClick={handleBrowserSignIn}
+            onClick={() => handleSignIn("browser")}
             disabled={isLoading}
           >
-            {isLoading && authMethod === "browser" ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
+            {loadingMethod === "browser" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             <span>Sign in with Browser</span>
           </Button>
 

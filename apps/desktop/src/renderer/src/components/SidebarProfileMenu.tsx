@@ -1,14 +1,8 @@
 import type { Ref } from "react";
 import { ChevronUp, Settings, LogOut } from "lucide-react";
+import type { DisplayUser } from "@marshall/shared";
 import { cn, getInitial } from "../lib/utils";
 import { fallbackUser } from "./settings-config";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  image?: string;
-}
 
 interface SidebarProfileMenuProps {
   active: boolean;
@@ -16,7 +10,7 @@ interface SidebarProfileMenuProps {
   isOpen: boolean;
   onOpenSettings: () => void;
   onToggle: () => void;
-  user?: User | null;
+  user?: DisplayUser | null;
   onSignOut?: () => Promise<void>;
 }
 

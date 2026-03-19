@@ -21,6 +21,9 @@ let isQuitting = false;
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
 
+/** Maximum time to wait for desktop auth completion */
+const AUTH_REQUEST_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // Pending auth requests (state -> callback)
 const pendingAuthRequests = new Map<
   string,
@@ -201,15 +204,12 @@ app.whenReady().then(() => {
       pendingAuthRequests.set(state, { resolve, reject });
 
       // Set a timeout to clean up
-      setTimeout(
-        () => {
-          if (pendingAuthRequests.has(state)) {
-            pendingAuthRequests.delete(state);
-            reject(new Error("Auth request timed out"));
-          }
-        },
-        5 * 60 * 1000
-      ); // 5 minutes
+      setTimeout(() => {
+        if (pendingAuthRequests.has(state)) {
+          pendingAuthRequests.delete(state);
+          reject(new Error("Auth request timed out"));
+        }
+      }, AUTH_REQUEST_TTL_MS);
 
       // Build the auth URL
       let authUrl = `${BETTER_AUTH_URL}/auth/desktop/connect?state=${state}&scheme=${PROTOCOL}`;

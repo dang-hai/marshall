@@ -1,8 +1,8 @@
 import { CalendarDays, Shield, UserRound, type LucideIcon } from "lucide-react";
 
 export const fallbackUser = {
-  name: "Hai Dang",
-  email: "hai.dang@marshall.local",
+  name: "Guest",
+  email: "guest@marshall.local",
   status: "Signed in placeholder",
 };
 

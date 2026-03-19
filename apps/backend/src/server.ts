@@ -11,18 +11,18 @@ export interface BackendAppOptions {
 // Store pending desktop auth requests (state -> redirect info)
 const pendingDesktopAuth = new Map<string, { scheme: string; createdAt: number }>();
 
-// Clean up old entries every 5 minutes
-setInterval(
-  () => {
-    const now = Date.now();
-    for (const [state, info] of pendingDesktopAuth) {
-      if (now - info.createdAt > 5 * 60 * 1000) {
-        pendingDesktopAuth.delete(state);
-      }
+/** Maximum time to wait for desktop auth completion */
+const AUTH_REQUEST_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Clean up old entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [state, info] of pendingDesktopAuth) {
+    if (now - info.createdAt > AUTH_REQUEST_TTL_MS) {
+      pendingDesktopAuth.delete(state);
     }
-  },
-  5 * 60 * 1000
-);
+  }
+}, AUTH_REQUEST_TTL_MS);
 
 function signInPage(baseUrl: string) {
   return `<!DOCTYPE html>

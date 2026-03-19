@@ -1,17 +1,11 @@
 import { Check, ChevronRight, X } from "lucide-react";
+import type { DisplayUser } from "@marshall/shared";
 import { defaultAppSettings, type AppSettings } from "../../../shared/settings";
 import { useAudioCapture } from "../hooks/useAudioCapture";
 import { useSettings } from "../hooks/useSettings";
 import { cn, getInitial } from "../lib/utils";
 import { type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  image?: string;
-}
 
 const defaultCalendarSettings: AppSettings["calendar"] = defaultAppSettings.calendar;
 
@@ -62,7 +56,7 @@ const calendarDisplayOptions: Array<{
 interface SettingsPanelProps {
   onBack: () => void;
   section: SettingsSectionId;
-  user?: User | null;
+  user?: DisplayUser | null;
   onSignOut?: () => Promise<void>;
 }
 
