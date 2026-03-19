@@ -119,17 +119,24 @@ export interface CodexMonitorSessionInput {
 
 export interface CodexMonitorNudge {
   id: string;
-  title: string;
-  body: string;
-  priority: "high" | "medium" | "low";
+  text: string;
   suggestedPhrase: string | null;
   createdAt: string;
+}
+
+export type CodexMonitorItemStatus = "pending" | "done" | "attention";
+
+export interface CodexMonitorItem {
+  id: string;
+  text: string;
+  status: CodexMonitorItemStatus;
+  addedAt: string;
 }
 
 export interface CodexMonitorNotePatch {
   noteId: string;
   checkedPlanItems: string[];
-  followUps: string[];
+  items: CodexMonitorItem[];
   summary: string | null;
   final: boolean;
   generatedAt: string;
@@ -140,7 +147,7 @@ export interface CodexMonitorState {
   noteId: string | null;
   noteTitle: string | null;
   nudge: CodexMonitorNudge | null;
-  followUps: string[];
+  items: CodexMonitorItem[];
   summary: string | null;
   lastAnalyzedAt: string | null;
   error: string | null;

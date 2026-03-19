@@ -230,7 +230,7 @@ export function HomePanel() {
     noteId: null,
     noteTitle: null,
     nudge: null,
-    followUps: [],
+    items: [],
     summary: null,
     lastAnalyzedAt: null,
     error: null,

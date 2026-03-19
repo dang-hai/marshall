@@ -258,12 +258,12 @@ function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNote
     /<div[^>]*data-marshall-section="followups"[^>]*>[\s\S]*?<\/div>/g,
     ""
   );
-  nextHtml = nextHtml.replace(
-    /<div[^>]*data-marshall-section="summary"[^>]*>[\s\S]*?<\/div>/g,
-    ""
-  );
+  nextHtml = nextHtml.replace(/<div[^>]*data-marshall-section="summary"[^>]*>[\s\S]*?<\/div>/g, "");
 
-  const followUpsHtml = buildSectionHtml("followups", patch.followUps);
+  const followUpsHtml = buildSectionHtml(
+    "followups",
+    patch.items.map((item) => item.text)
+  );
   const summaryHtml = buildSectionHtml(
     "summary",
     patch.summary
@@ -285,7 +285,14 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
   const body = parseBodyHtml(bodyHtml);
 
   markChecklistItems(body, patch.checkedPlanItems);
-  replaceSection(body, "followups", buildFollowUpSection(body.ownerDocument, patch.followUps));
+  replaceSection(
+    body,
+    "followups",
+    buildFollowUpSection(
+      body.ownerDocument,
+      patch.items.map((item) => item.text)
+    )
+  );
   replaceSection(body, "summary", buildSummarySection(body.ownerDocument, patch.summary));
 
   return normalizeEditorHtml(body.innerHTML);

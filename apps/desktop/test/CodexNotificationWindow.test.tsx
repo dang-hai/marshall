@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { CodexNotificationWindowView } from "../src/renderer/src/components/CodexNotificationWindow";
 
 describe("CodexNotificationWindowView", () => {
-  test("renders the active nudge, follow-ups, and final summary", () => {
+  test("renders items with different statuses and the active nudge", () => {
     const markup = renderToStaticMarkup(
       <CodexNotificationWindowView
         state={{
@@ -12,14 +12,31 @@ describe("CodexNotificationWindowView", () => {
           noteTitle: "Launch review",
           nudge: {
             id: "nudge-1",
-            title: "Close the owner gap",
-            body: "Ask who owns the launch checklist before the call drifts.",
-            priority: "high",
+            text: "Ask who owns the launch checklist",
             suggestedPhrase: "Before we move on, who owns the launch checklist?",
             createdAt: new Date().toISOString(),
           },
-          followUps: ["Share the revised timeline with legal."],
-          summary: "The team aligned on ownership and queued a legal follow-up.",
+          items: [
+            {
+              id: "item-1",
+              text: "Confirm timeline with stakeholders",
+              status: "done",
+              addedAt: new Date().toISOString(),
+            },
+            {
+              id: "item-2",
+              text: "Share the revised timeline with legal",
+              status: "pending",
+              addedAt: new Date().toISOString(),
+            },
+            {
+              id: "item-3",
+              text: "Discuss launch blockers",
+              status: "attention",
+              addedAt: new Date().toISOString(),
+            },
+          ],
+          summary: null,
           lastAnalyzedAt: new Date().toISOString(),
           error: null,
           debug: {
@@ -42,10 +59,93 @@ describe("CodexNotificationWindowView", () => {
       />
     );
 
-    expect(markup).toContain("Live call guidance");
-    expect(markup).toContain("Close the owner gap");
+    // Header
+    expect(markup).toContain("Launch review");
+
+    // Nudge
+    expect(markup).toContain("Ask who owns the launch checklist");
     expect(markup).toContain("Before we move on, who owns the launch checklist?");
-    expect(markup).toContain("Share the revised timeline with legal.");
+
+    // Items
+    expect(markup).toContain("Confirm timeline with stakeholders");
+    expect(markup).toContain("Share the revised timeline with legal");
+    expect(markup).toContain("Discuss launch blockers");
+  });
+
+  test("renders summary when call ends", () => {
+    const markup = renderToStaticMarkup(
+      <CodexNotificationWindowView
+        state={{
+          status: "idle",
+          noteId: "note-1",
+          noteTitle: "Launch review",
+          nudge: null,
+          items: [
+            {
+              id: "item-1",
+              text: "Share timeline with legal",
+              status: "done",
+              addedAt: new Date().toISOString(),
+            },
+          ],
+          summary: "The team aligned on ownership and queued a legal follow-up.",
+          lastAnalyzedAt: new Date().toISOString(),
+          error: null,
+          debug: {
+            transcriptionStatus: "completed",
+            transcriptLength: 1200,
+            checklistItemCount: 2,
+            sessionUpdatedAt: new Date().toISOString(),
+            pendingAnalysis: false,
+            analysisInFlight: false,
+            analysisCount: 3,
+            lastMode: "final",
+            lastStartedAt: new Date().toISOString(),
+            lastCompletedAt: new Date().toISOString(),
+            lastOutcome: "Codex returned the final summary",
+            lastPromptPreview: "prompt preview",
+            lastResponsePreview: "response preview",
+          },
+        }}
+        onDismiss={() => {}}
+      />
+    );
+
     expect(markup).toContain("The team aligned on ownership and queued a legal follow-up.");
+  });
+
+  test("returns null when no content to show", () => {
+    const markup = renderToStaticMarkup(
+      <CodexNotificationWindowView
+        state={{
+          status: "idle",
+          noteId: null,
+          noteTitle: null,
+          nudge: null,
+          items: [],
+          summary: null,
+          lastAnalyzedAt: null,
+          error: null,
+          debug: {
+            transcriptionStatus: null,
+            transcriptLength: 0,
+            checklistItemCount: 0,
+            sessionUpdatedAt: null,
+            pendingAnalysis: false,
+            analysisInFlight: false,
+            analysisCount: 0,
+            lastMode: null,
+            lastStartedAt: null,
+            lastCompletedAt: null,
+            lastOutcome: null,
+            lastPromptPreview: null,
+            lastResponsePreview: null,
+          },
+        }}
+        onDismiss={() => {}}
+      />
+    );
+
+    expect(markup).toBe("");
   });
 });

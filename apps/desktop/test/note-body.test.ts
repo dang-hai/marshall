@@ -12,7 +12,14 @@ describe("applyCodexNotePatch", () => {
     const nextHtml = applyCodexNotePatch(bodyHtml, {
       noteId: "note-1",
       checkedPlanItems: ["Confirm launch owner"],
-      followUps: ["Send the revised launch timeline to the team."],
+      items: [
+        {
+          id: "item-1",
+          text: "Send the revised launch timeline to the team.",
+          status: "pending",
+          addedAt: new Date().toISOString(),
+        },
+      ],
       summary: "The team confirmed the launch owner and agreed to send a revised timeline.",
       final: true,
       generatedAt: new Date().toISOString(),
@@ -37,7 +44,14 @@ describe("applyCodexNotePatch", () => {
     const nextHtml = applyCodexNotePatch(bodyHtml, {
       noteId: "note-1",
       checkedPlanItems: [],
-      followUps: ["Book the legal review."],
+      items: [
+        {
+          id: "item-1",
+          text: "Book the legal review.",
+          status: "pending",
+          addedAt: new Date().toISOString(),
+        },
+      ],
       summary: "A legal review is still required before launch.",
       final: true,
       generatedAt: new Date().toISOString(),

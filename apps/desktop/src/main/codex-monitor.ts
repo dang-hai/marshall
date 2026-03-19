@@ -8,21 +8,26 @@ import type {
   CodexMonitorNotePatch,
   CodexMonitorSessionInput,
   CodexMonitorState,
+  CodexMonitorItem,
+  CodexMonitorItemStatus,
 } from "@marshall/shared";
 
 interface CodexMonitorServiceOptions {
   createNotificationWindow: () => BrowserWindow;
 }
 
+interface CodexMonitorResultItem {
+  text: string;
+  status: CodexMonitorItemStatus;
+}
+
 interface CodexMonitorResult {
   nudge: {
-    title: string;
-    body: string;
-    priority: "high" | "medium" | "low";
+    text: string;
     suggestedPhrase: string | null;
   } | null;
+  items: CodexMonitorResultItem[];
   checkedPlanItems: string[];
-  followUps: string[];
   summary: string | null;
 }
 
@@ -41,26 +46,29 @@ const RESULT_SCHEMA = {
         {
           type: "object",
           properties: {
-            title: { type: "string" },
-            body: { type: "string" },
-            priority: {
-              type: "string",
-              enum: ["high", "medium", "low"],
-            },
+            text: { type: "string" },
             suggestedPhrase: {
               anyOf: [{ type: "string" }, { type: "null" }],
             },
           },
-          required: ["title", "body", "priority", "suggestedPhrase"],
+          required: ["text", "suggestedPhrase"],
           additionalProperties: false,
         },
       ],
     },
-    checkedPlanItems: {
+    items: {
       type: "array",
-      items: { type: "string" },
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          status: { type: "string", enum: ["pending", "done", "attention"] },
+        },
+        required: ["text", "status"],
+        additionalProperties: false,
+      },
     },
-    followUps: {
+    checkedPlanItems: {
       type: "array",
       items: { type: "string" },
     },
@@ -68,7 +76,7 @@ const RESULT_SCHEMA = {
       anyOf: [{ type: "string" }, { type: "null" }],
     },
   },
-  required: ["nudge", "checkedPlanItems", "followUps", "summary"],
+  required: ["nudge", "items", "checkedPlanItems", "summary"],
   additionalProperties: false,
 } as const;
 
@@ -152,7 +160,7 @@ export class CodexMonitorService {
     noteId: null,
     noteTitle: null,
     nudge: null,
-    followUps: [],
+    items: [],
     summary: null,
     lastAnalyzedAt: null,
     error: null,
@@ -164,7 +172,6 @@ export class CodexMonitorService {
   private analysisProcess: ChildProcessWithoutNullStreams | null = null;
   private lastAnalyzedTranscriptLength = 0;
   private lastFinalizedTranscriptSignature: string | null = null;
-  private followUpSignatures = new Set<string>();
   private lastNudgeSignature: string | null = null;
   private rerunRequested = false;
   private windowDismissed = false;
@@ -255,13 +262,12 @@ export class CodexMonitorService {
       noteId: null,
       noteTitle: null,
       nudge: null,
-      followUps: [],
+      items: [],
       summary: null,
       lastAnalyzedAt: null,
       error: null,
       debug: createEmptyDebugState(),
     };
-    this.followUpSignatures.clear();
     this.lastNudgeSignature = null;
     this.windowDismissed = false;
     this.broadcastState();
@@ -280,7 +286,6 @@ export class CodexMonitorService {
     this.analysisProcess = null;
     this.lastAnalyzedTranscriptLength = 0;
     this.lastFinalizedTranscriptSignature = null;
-    this.followUpSignatures.clear();
     this.lastNudgeSignature = null;
     this.windowDismissed = false;
     this.state = {
@@ -288,7 +293,7 @@ export class CodexMonitorService {
       noteId,
       noteTitle,
       nudge: null,
-      followUps: [],
+      items: [],
       summary: null,
       lastAnalyzedAt: null,
       error: null,
@@ -380,7 +385,7 @@ export class CodexMonitorService {
         return;
       }
 
-      const mergedFollowUps = this.mergeFollowUps(result.followUps);
+      const mergedItems = this.mergeItems(result.items);
       const checkedPlanItems = this.filterChecklistMatches(
         extractChecklistItems(currentSession.noteBodyText),
         result.checkedPlanItems
@@ -393,7 +398,7 @@ export class CodexMonitorService {
         ...this.state,
         status: isActiveCall(currentSession.transcription.status) ? "monitoring" : "idle",
         nudge: nextNudge,
-        followUps: mergedFollowUps,
+        items: mergedItems,
         summary,
         lastAnalyzedAt: new Date().toISOString(),
         error: null,
@@ -406,8 +411,8 @@ export class CodexMonitorService {
             ? "Codex returned a nudge"
             : summary
               ? "Codex returned the final summary"
-              : mergedFollowUps.length > 0 || checkedPlanItems.length > 0
-                ? "Codex updated follow-ups or checklist items"
+              : mergedItems.length > 0 || checkedPlanItems.length > 0
+                ? "Codex updated items or checklist"
                 : "Codex returned no nudge",
           lastResponsePreview: truncatePreview(JSON.stringify(result, null, 2)),
         },
@@ -419,11 +424,11 @@ export class CodexMonitorService {
 
       this.broadcastState();
 
-      if (checkedPlanItems.length > 0 || mergedFollowUps.length > 0 || summary) {
+      if (checkedPlanItems.length > 0 || mergedItems.length > 0 || summary) {
         this.emitNotePatch({
           noteId: currentSession.noteId,
           checkedPlanItems,
-          followUps: mergedFollowUps,
+          items: mergedItems,
           summary,
           final: finalize,
           generatedAt: new Date().toISOString(),
@@ -457,21 +462,40 @@ export class CodexMonitorService {
     }
   }
 
-  private mergeFollowUps(nextFollowUps: string[]) {
-    const merged = [...this.state.followUps];
+  private mergeItems(nextItems: CodexMonitorResultItem[]): CodexMonitorItem[] {
+    const merged: CodexMonitorItem[] = [];
+    const seenSignatures = new Set<string>();
 
-    nextFollowUps
-      .map((item) => normalizeListItem(item))
-      .filter(Boolean)
-      .forEach((item) => {
-        const signature = normalizeSignature(item);
-        if (this.followUpSignatures.has(signature)) {
-          return;
-        }
+    // First, process existing items and update their status if mentioned
+    for (const existing of this.state.items) {
+      const sig = normalizeSignature(existing.text);
+      const update = nextItems.find((n) => normalizeSignature(n.text) === sig);
 
-        this.followUpSignatures.add(signature);
-        merged.push(item);
+      if (update) {
+        // Update status if AI says it changed
+        merged.push({ ...existing, status: update.status });
+      } else {
+        // Keep existing item unchanged
+        merged.push(existing);
+      }
+      seenSignatures.add(sig);
+    }
+
+    // Then, add new items that weren't already in the list
+    for (const newItem of nextItems) {
+      const sig = normalizeSignature(newItem.text);
+      if (seenSignatures.has(sig)) {
+        continue;
+      }
+
+      seenSignatures.add(sig);
+      merged.push({
+        id: randomUUID(),
+        text: normalizeListItem(newItem.text),
+        status: newItem.status,
+        addedAt: new Date().toISOString(),
       });
+    }
 
     return merged;
   }
@@ -489,10 +513,10 @@ export class CodexMonitorService {
 
   private buildNudge(result: CodexMonitorResult) {
     if (!result.nudge) {
-      return this.state.nudge;
+      return null; // Clear nudge when AI doesn't provide one
     }
 
-    const signature = normalizeSignature(`${result.nudge.title} ${result.nudge.body}`);
+    const signature = normalizeSignature(result.nudge.text);
     if (signature === this.lastNudgeSignature) {
       return this.state.nudge;
     }
@@ -502,9 +526,7 @@ export class CodexMonitorService {
 
     return {
       id: randomUUID(),
-      title: result.nudge.title.trim(),
-      body: result.nudge.body.trim(),
-      priority: result.nudge.priority,
+      text: result.nudge.text.trim(),
       suggestedPhrase: result.nudge.suggestedPhrase?.trim() || null,
       createdAt: new Date().toISOString(),
     };
@@ -532,7 +554,7 @@ export class CodexMonitorService {
     const shouldShow =
       !this.windowDismissed &&
       Boolean(
-        this.state.error || this.state.nudge || this.state.summary || this.state.followUps[0]
+        this.state.error || this.state.nudge || this.state.summary || this.state.items.length > 0
       );
 
     if (!shouldShow) {
@@ -662,32 +684,42 @@ export class CodexMonitorService {
 
   private buildPrompt(session: CodexMonitorSessionInput, finalize: boolean) {
     const checklistItems = extractChecklistItems(session.noteBodyText);
+    const existingItems = this.state.items.map((item) => ({
+      text: item.text,
+      status: item.status,
+    }));
+
     const promptPayload = {
       mode: finalize ? "final" : "live",
       noteTitle: session.noteTitle,
       planText: session.noteBodyText.trim().slice(0, 5000),
       planChecklistItems: checklistItems,
       transcriptExcerpt: buildTranscriptExcerpt(session.transcription.transcriptText),
-      existingFollowUps: this.state.followUps,
-      previousNudge: this.state.nudge
-        ? {
-            title: this.state.nudge.title,
-            body: this.state.nudge.body,
-          }
-        : null,
+      existingItems,
+      previousNudge: this.state.nudge?.text ?? null,
     };
 
     return [
       "You are Marshall's live call monitor.",
       "Read the call plan and transcript excerpt and return JSON that matches the provided schema.",
-      "Rules:",
-      "- Never invent facts that are not supported by the transcript or plan.",
-      "- `checkedPlanItems` must only contain exact checklist labels from `planChecklistItems` that are clearly completed.",
-      "- `followUps` should be concise standalone action items and should avoid repeating `existingFollowUps`.",
-      "- `nudge` is optional. Use it only when a short, actionable moderator nudge would help right now.",
-      "- Keep `nudge.title` short and `nudge.body` under 140 characters.",
+      "",
+      "## Items",
+      "- Return `items` as an array of {text, status} objects.",
+      "- Status values: `pending` (not yet addressed), `done` (completed/discussed), `attention` (needs focus now).",
+      "- Include existing items with updated status if their status changed based on the conversation.",
+      "- Add new action items discovered in the conversation.",
+      "- Keep item text concise (under 80 characters).",
+      "",
+      "## Nudge",
+      "- `nudge` is an ephemeral in-the-moment tip to help guide the conversation.",
+      "- Set to null unless there's something specific to say right now.",
+      "- Keep `nudge.text` under 100 characters - it should be glanceable.",
+      "- Avoid repeating the previous nudge.",
+      "",
+      "## Other rules",
+      "- `checkedPlanItems` must only contain exact labels from `planChecklistItems` that are clearly completed.",
       "- Set `summary` to null unless `mode` is `final`.",
-      "- In `final` mode, write a concise 2-4 sentence summary covering decisions, blockers, and next steps.",
+      "- In `final` mode, write a concise 2-3 sentence summary.",
       "",
       JSON.stringify(promptPayload, null, 2),
     ].join("\n");
