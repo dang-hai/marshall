@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from "electron";
 import {
   Transcriber,
   StreamingTranscriber,
+  DeepgramStreamingTranscriber,
   listAvailableModels,
   downloadModel,
   deleteModel,
@@ -13,6 +14,8 @@ import {
   type TranscriptionResult,
   type WhisperModelName,
   type PartialTranscription,
+  type DeepgramPartialTranscription,
+  type DeepgramTranscriptionResult,
 } from "@marshall/transcription";
 import {
   getPermissions,
@@ -25,6 +28,7 @@ import { join } from "path";
 
 let transcriber: Transcriber | null = null;
 let streamingTranscriber: StreamingTranscriber | null = null;
+let deepgramTranscriber: DeepgramStreamingTranscriber | null = null;
 
 const LIVE_TRANSCRIPTION_MIN_SPEECH_MS = 120;
 const LIVE_TRANSCRIPTION_SILENCE_TIMEOUT_MS = 250;
@@ -110,27 +114,76 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
     async (
       _event,
       config: {
-        modelName: WhisperModelName;
+        modelName?: WhisperModelName;
         language?: string;
         useGPU?: boolean;
         streamingEnabled?: boolean;
         vadEnabled?: boolean;
         vadThreshold?: number;
+        provider?: "local" | "deepgram";
+        backendUrl?: string;
       }
     ) => {
-      const modelPath = getModelPath(config.modelName);
-
-      if (!isModelDownloaded(config.modelName)) {
-        throw new Error(`Model ${config.modelName} is not downloaded`);
-      }
-
       // Get settings defaults
       const audioSettings = getSetting("audio");
       const transcriptionSettings = getSetting("transcription");
 
+      const provider = config.provider ?? transcriptionSettings.provider;
       const useStreaming = config.streamingEnabled ?? transcriptionSettings.streamingEnabled;
       const vadEnabled = config.vadEnabled ?? audioSettings.vadEnabled;
       const vadThreshold = config.vadThreshold ?? audioSettings.vadThreshold;
+
+      // Clear previous transriber instances
+      transcriber = null;
+      streamingTranscriber = null;
+      deepgramTranscriber = null;
+
+      if (provider === "deepgram") {
+        // Use Deepgram cloud transcription
+        const backendUrl = config.backendUrl || process.env.BACKEND_URL || "http://localhost:3000";
+
+        deepgramTranscriber = new DeepgramStreamingTranscriber({
+          backendUrl,
+          language: config.language || "en",
+        });
+
+        // Forward Deepgram events to renderer
+        deepgramTranscriber.on("transcription:partial", (partial: DeepgramPartialTranscription) => {
+          mainWindow.webContents.send("transcription:partial", {
+            text: partial.text,
+            isFinal: partial.isFinal,
+            segmentIndex: 0,
+            timestamp: partial.timestamp,
+          });
+        });
+
+        deepgramTranscriber.on("transcription:complete", (result: DeepgramTranscriptionResult) => {
+          mainWindow.webContents.send("transcription:complete", result);
+        });
+
+        deepgramTranscriber.on("transcription:error", (error: Error) => {
+          mainWindow.webContents.send("transcription:error", error.message);
+        });
+
+        // VAD events from Deepgram
+        deepgramTranscriber.on("vad:speech-start", () => {
+          mainWindow.webContents.send("transcription:vad-speech-start");
+        });
+
+        deepgramTranscriber.on("vad:speech-end", () => {
+          mainWindow.webContents.send("transcription:vad-speech-end", 0);
+        });
+
+        return { status: "initialized", mode: "streaming", provider: "deepgram" };
+      }
+
+      // Local Whisper transcription
+      const modelName = config.modelName ?? transcriptionSettings.selectedModel;
+      const modelPath = getModelPath(modelName);
+
+      if (!isModelDownloaded(modelName)) {
+        throw new Error(`Model ${modelName} is not downloaded`);
+      }
 
       if (useStreaming) {
         // Use streaming transcriber for real-time mode
@@ -189,8 +242,6 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
         streamingTranscriber.on("vad:level", (rms: number) => {
           mainWindow.webContents.send("transcription:vad-level", rms);
         });
-
-        transcriber = null;
       } else {
         // Use regular transcriber for batch mode
         transcriber = new Transcriber({
@@ -211,17 +262,19 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
         transcriber.on("transcription:error", (error: Error) => {
           mainWindow.webContents.send("transcription:error", error.message);
         });
-
-        streamingTranscriber = null;
       }
 
-      return { status: "initialized", mode: useStreaming ? "streaming" : "batch" };
+      return {
+        status: "initialized",
+        mode: useStreaming ? "streaming" : "batch",
+        provider: "local",
+      };
     }
   );
 
   // Start recording
   ipcMain.handle("transcription:start-recording", (_event, sampleRate?: number) => {
-    const activeTranscriber = streamingTranscriber || transcriber;
+    const activeTranscriber = deepgramTranscriber || streamingTranscriber || transcriber;
     if (!activeTranscriber) {
       throw new Error("Transcriber not initialized. Call transcription:init first.");
     }
@@ -231,14 +284,16 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
     }
 
     activeTranscriber.startRecording();
-    return { status: "recording", mode: streamingTranscriber ? "streaming" : "batch" };
+
+    const mode = deepgramTranscriber ? "deepgram" : streamingTranscriber ? "streaming" : "batch";
+    return { status: "recording", mode };
   });
 
   // Add audio chunk (called from renderer with Float32Array)
   ipcMain.handle(
     "transcription:add-chunk",
     (_event, chunkData: number[], isStereo: boolean = false) => {
-      const activeTranscriber = streamingTranscriber || transcriber;
+      const activeTranscriber = deepgramTranscriber || streamingTranscriber || transcriber;
       if (!activeTranscriber) {
         throw new Error("Transcriber not initialized");
       }
@@ -251,7 +306,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
   // Stop recording and transcribe
   ipcMain.handle("transcription:stop-and-transcribe", async () => {
-    const activeTranscriber = streamingTranscriber || transcriber;
+    const activeTranscriber = deepgramTranscriber || streamingTranscriber || transcriber;
     if (!activeTranscriber) {
       throw new Error("Transcriber not initialized");
     }
@@ -271,6 +326,9 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
   // Cancel transcription
   ipcMain.handle("transcription:cancel", () => {
+    if (deepgramTranscriber) {
+      deepgramTranscriber.cancel();
+    }
     if (streamingTranscriber) {
       streamingTranscriber.cancel();
     }
@@ -282,17 +340,34 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
   // Get recording status
   ipcMain.handle("transcription:get-status", () => {
-    const activeTranscriber = streamingTranscriber || transcriber;
+    const activeTranscriber = deepgramTranscriber || streamingTranscriber || transcriber;
     if (!activeTranscriber) {
-      return { initialized: false, recording: false, duration: 0, mode: null };
+      return { initialized: false, recording: false, duration: 0, mode: null, provider: null };
+    }
+
+    let mode: string;
+    let provider: string;
+    if (deepgramTranscriber) {
+      mode = "streaming";
+      provider = "deepgram";
+    } else if (streamingTranscriber) {
+      mode = "streaming";
+      provider = "local";
+    } else {
+      mode = "batch";
+      provider = "local";
     }
 
     return {
       initialized: true,
       recording: activeTranscriber.getIsRecording(),
       duration: activeTranscriber.getRecordingDuration(),
-      mode: streamingTranscriber ? "streaming" : "batch",
-      partialText: streamingTranscriber?.getPartialTranscription() || "",
+      mode,
+      provider,
+      partialText:
+        deepgramTranscriber?.getPartialTranscription() ||
+        streamingTranscriber?.getPartialTranscription() ||
+        "",
     };
   });
 

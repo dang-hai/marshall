@@ -31,7 +31,7 @@ const store = new Store<AppSettings>({
         streamingEnabled: { type: "boolean" },
         provider: {
           type: "string",
-          enum: ["local", "assemblyAI", "speechmatics"],
+          enum: ["local", "deepgram", "assemblyAI", "speechmatics"],
           default: "local",
         },
       },

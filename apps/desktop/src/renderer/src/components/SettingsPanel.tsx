@@ -84,6 +84,11 @@ const transcriptionProviderOptions: Array<{
     description: "Process audio locally using the Whisper model. Private and offline.",
   },
   {
+    key: "deepgram",
+    label: "Deepgram",
+    description: "Real-time cloud transcription with low latency. Requires internet connection.",
+  },
+  {
     key: "assemblyAI",
     label: "AssemblyAI",
     description: "Cloud-based transcription with high accuracy. Coming soon.",
@@ -370,6 +375,18 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
                           {formatBytes(modelStorageInfo.selectedModelSize)}
                         </span>
                       )}
+                    </div>
+                  )}
+                  {option.key === "deepgram" && (
+                    <div className="flex items-center gap-2 text-2xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                        Nova-2 model
+                      </span>
+                      <span className="text-muted-foreground/60">|</span>
+                      <span className="text-muted-foreground">
+                        Audio is sent to Deepgram servers for processing
+                      </span>
                     </div>
                   )}
                 </ProviderRow>

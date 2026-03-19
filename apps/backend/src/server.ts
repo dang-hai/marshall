@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import type { Auth } from "@marshall/auth";
+import { createTranscriptionRoutes } from "./transcription";
 
 export interface BackendAppOptions {
   auth: Auth;
@@ -342,6 +343,8 @@ export function createBackendApp({ auth, baseUrl, electronProtocol }: BackendApp
           return { error: "Failed to get user" };
         }
       })
+      // Transcription WebSocket routes
+      .use(createTranscriptionRoutes())
       // Use .mount() for Better Auth
       .mount(auth.handler)
   );
