@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   FloatingTranscriptionRecorderView,
+  getSnapshotSaveDelayMs,
   resolveRecorderModel,
   type FloatingTranscriptionRecorderViewProps,
 } from "../src/renderer/src/components/FloatingTranscriptionRecorder";
@@ -124,5 +125,19 @@ describe("resolveRecorderModel", () => {
 
     expect(fallbackResult.model?.name).toBe("tiny.en");
     expect(fallbackResult.usingFallback).toBe(true);
+  });
+});
+
+describe("getSnapshotSaveDelayMs", () => {
+  test("persists active recording states immediately", () => {
+    expect(getSnapshotSaveDelayMs("recording")).toBe(0);
+    expect(getSnapshotSaveDelayMs("transcribing")).toBe(0);
+  });
+
+  test("keeps the debounce for settled snapshots", () => {
+    expect(getSnapshotSaveDelayMs("draft")).toBe(300);
+    expect(getSnapshotSaveDelayMs("completed")).toBe(300);
+    expect(getSnapshotSaveDelayMs("failed")).toBe(300);
+    expect(getSnapshotSaveDelayMs("cancelled")).toBe(300);
   });
 });

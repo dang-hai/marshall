@@ -22,6 +22,21 @@ describe("CodexNotificationWindowView", () => {
           summary: "The team aligned on ownership and queued a legal follow-up.",
           lastAnalyzedAt: new Date().toISOString(),
           error: null,
+          debug: {
+            transcriptionStatus: "recording",
+            transcriptLength: 420,
+            checklistItemCount: 2,
+            sessionUpdatedAt: new Date().toISOString(),
+            pendingAnalysis: false,
+            analysisInFlight: false,
+            analysisCount: 1,
+            lastMode: "live",
+            lastStartedAt: new Date().toISOString(),
+            lastCompletedAt: new Date().toISOString(),
+            lastOutcome: "Codex returned a nudge",
+            lastPromptPreview: "prompt preview",
+            lastResponsePreview: "response preview",
+          },
         }}
         onDismiss={() => {}}
       />

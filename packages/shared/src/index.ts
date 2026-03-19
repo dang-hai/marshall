@@ -144,6 +144,21 @@ export interface CodexMonitorState {
   summary: string | null;
   lastAnalyzedAt: string | null;
   error: string | null;
+  debug: {
+    transcriptionStatus: NoteTranscriptionStatus | null;
+    transcriptLength: number;
+    checklistItemCount: number;
+    sessionUpdatedAt: string | null;
+    pendingAnalysis: boolean;
+    analysisInFlight: boolean;
+    analysisCount: number;
+    lastMode: "live" | "final" | null;
+    lastStartedAt: string | null;
+    lastCompletedAt: string | null;
+    lastOutcome: string | null;
+    lastPromptPreview: string | null;
+    lastResponsePreview: string | null;
+  };
 }
 
 export const APP_NAME = "Marshall";

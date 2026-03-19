@@ -35,9 +35,7 @@ export function CodexNotificationWindowView({
             <p className="mt-1 font-serif text-lg leading-tight text-stone-900">
               Live call guidance
             </p>
-            {state.noteTitle && (
-              <p className="mt-1 text-xs text-stone-500">{state.noteTitle}</p>
-            )}
+            {state.noteTitle && <p className="mt-1 text-xs text-stone-500">{state.noteTitle}</p>}
           </div>
 
           <button
@@ -116,6 +114,21 @@ const defaultState: CodexMonitorState = {
   summary: null,
   lastAnalyzedAt: null,
   error: null,
+  debug: {
+    transcriptionStatus: null,
+    transcriptLength: 0,
+    checklistItemCount: 0,
+    sessionUpdatedAt: null,
+    pendingAnalysis: false,
+    analysisInFlight: false,
+    analysisCount: 0,
+    lastMode: null,
+    lastStartedAt: null,
+    lastCompletedAt: null,
+    lastOutcome: null,
+    lastPromptPreview: null,
+    lastResponsePreview: null,
+  },
 };
 
 export function CodexNotificationWindow() {

@@ -26,10 +26,11 @@ interface CodexMonitorResult {
   summary: string | null;
 }
 
-const ANALYSIS_DEBOUNCE_MS = 7000;
+const LIVE_ANALYSIS_DELAY_MS = 4000;
 const FINAL_ANALYSIS_DEBOUNCE_MS = 1200;
 const MIN_TRANSCRIPT_GROWTH_FOR_RECHECK = 180;
 const TRANSCRIPT_EXCERPT_LIMIT = 12000;
+const DEBUG_PREVIEW_LIMIT = 900;
 
 const RESULT_SCHEMA = {
   type: "object",
@@ -111,6 +112,37 @@ async function createSchemaFile() {
   return schemaPath;
 }
 
+function truncatePreview(value: string | null | undefined, limit = DEBUG_PREVIEW_LIMIT) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, limit)}...`;
+}
+
+function createEmptyDebugState(): CodexMonitorState["debug"] {
+  return {
+    transcriptionStatus: null,
+    transcriptLength: 0,
+    checklistItemCount: 0,
+    sessionUpdatedAt: null,
+    pendingAnalysis: false,
+    analysisInFlight: false,
+    analysisCount: 0,
+    lastMode: null,
+    lastStartedAt: null,
+    lastCompletedAt: null,
+    lastOutcome: null,
+    lastPromptPreview: null,
+    lastResponsePreview: null,
+  };
+}
+
 export class CodexMonitorService {
   private readonly createNotificationWindow: () => BrowserWindow;
   private schemaPathPromise: Promise<string> | null = null;
@@ -124,9 +156,11 @@ export class CodexMonitorService {
     summary: null,
     lastAnalyzedAt: null,
     error: null,
+    debug: createEmptyDebugState(),
   };
   private notificationWindow: BrowserWindow | null = null;
   private analysisTimer: NodeJS.Timeout | null = null;
+  private scheduledAnalysisMode: "live" | "final" | null = null;
   private analysisProcess: ChildProcessWithoutNullStreams | null = null;
   private lastAnalyzedTranscriptLength = 0;
   private lastFinalizedTranscriptSignature: string | null = null;
@@ -148,6 +182,7 @@ export class CodexMonitorService {
     const previousWasActive = previousSession
       ? isActiveCall(previousSession.transcription.status)
       : false;
+    const transcriptText = input.transcription.transcriptText.trim();
 
     if (!previousSession || previousSession.noteId !== input.noteId) {
       this.resetSessionState(input.noteId, input.noteTitle);
@@ -160,10 +195,16 @@ export class CodexMonitorService {
       noteTitle: input.noteTitle,
       status: isActiveCall(input.transcription.status) ? "monitoring" : this.state.status,
       error: null,
+      debug: {
+        ...this.state.debug,
+        transcriptionStatus: input.transcription.status,
+        transcriptLength: transcriptText.length,
+        checklistItemCount: extractChecklistItems(input.noteBodyText).length,
+        sessionUpdatedAt: new Date().toISOString(),
+      },
     };
     this.broadcastState();
 
-    const transcriptText = input.transcription.transcriptText.trim();
     const currentIsActive = isActiveCall(input.transcription.status);
 
     this.state = {
@@ -179,7 +220,7 @@ export class CodexMonitorService {
         this.state.lastAnalyzedAt === null ||
         transcriptGrowth >= MIN_TRANSCRIPT_GROWTH_FOR_RECHECK
       ) {
-        this.scheduleAnalysis(false, ANALYSIS_DEBOUNCE_MS);
+        this.scheduleAnalysis(false, LIVE_ANALYSIS_DELAY_MS);
       }
       return { status: "updated" };
     }
@@ -218,6 +259,7 @@ export class CodexMonitorService {
       summary: null,
       lastAnalyzedAt: null,
       error: null,
+      debug: createEmptyDebugState(),
     };
     this.followUpSignatures.clear();
     this.lastNudgeSignature = null;
@@ -250,6 +292,7 @@ export class CodexMonitorService {
       summary: null,
       lastAnalyzedAt: null,
       error: null,
+      debug: createEmptyDebugState(),
     };
   }
 
@@ -258,11 +301,41 @@ export class CodexMonitorService {
       clearTimeout(this.analysisTimer);
       this.analysisTimer = null;
     }
+
+    this.scheduledAnalysisMode = null;
+    this.state = {
+      ...this.state,
+      debug: {
+        ...this.state.debug,
+        pendingAnalysis: false,
+      },
+    };
   }
 
   private scheduleAnalysis(finalize: boolean, delayMs: number) {
-    this.clearPendingAnalysis();
+    const nextMode = finalize ? "final" : "live";
+    if (this.analysisTimer) {
+      if (this.scheduledAnalysisMode === "final" || this.scheduledAnalysisMode === nextMode) {
+        return;
+      }
+
+      this.clearPendingAnalysis();
+    }
+
+    this.state = {
+      ...this.state,
+      debug: {
+        ...this.state.debug,
+        pendingAnalysis: true,
+        lastMode: nextMode,
+        lastOutcome: `Scheduled ${nextMode} analysis in ${Math.round(delayMs / 1000)}s`,
+      },
+    };
+    this.broadcastState();
+    this.scheduledAnalysisMode = nextMode;
     this.analysisTimer = setTimeout(() => {
+      this.analysisTimer = null;
+      this.scheduledAnalysisMode = null;
       void this.runAnalysis(finalize);
     }, delayMs);
   }
@@ -288,6 +361,15 @@ export class CodexMonitorService {
       ...this.state,
       status: "analyzing",
       error: null,
+      debug: {
+        ...this.state.debug,
+        pendingAnalysis: false,
+        analysisInFlight: true,
+        analysisCount: this.state.debug.analysisCount + 1,
+        lastMode: finalize ? "final" : "live",
+        lastStartedAt: new Date().toISOString(),
+        lastOutcome: `Running ${finalize ? "final" : "live"} Codex analysis`,
+      },
     };
     this.broadcastState();
 
@@ -315,6 +397,20 @@ export class CodexMonitorService {
         summary,
         lastAnalyzedAt: new Date().toISOString(),
         error: null,
+        debug: {
+          ...this.state.debug,
+          pendingAnalysis: false,
+          analysisInFlight: false,
+          lastCompletedAt: new Date().toISOString(),
+          lastOutcome: nextNudge
+            ? "Codex returned a nudge"
+            : summary
+              ? "Codex returned the final summary"
+              : mergedFollowUps.length > 0 || checkedPlanItems.length > 0
+                ? "Codex updated follow-ups or checklist items"
+                : "Codex returned no nudge",
+          lastResponsePreview: truncatePreview(JSON.stringify(result, null, 2)),
+        },
       };
 
       if (finalize && transcriptText) {
@@ -338,6 +434,13 @@ export class CodexMonitorService {
         ...this.state,
         status: "error",
         error: error instanceof Error ? error.message : "Codex monitoring failed",
+        debug: {
+          ...this.state.debug,
+          pendingAnalysis: false,
+          analysisInFlight: false,
+          lastCompletedAt: new Date().toISOString(),
+          lastOutcome: error instanceof Error ? error.message : "Codex monitoring failed",
+        },
       };
       this.broadcastState();
     } finally {
@@ -428,7 +531,9 @@ export class CodexMonitorService {
   private syncNotificationWindow() {
     const shouldShow =
       !this.windowDismissed &&
-      Boolean(this.state.error || this.state.nudge || this.state.summary || this.state.followUps[0]);
+      Boolean(
+        this.state.error || this.state.nudge || this.state.summary || this.state.followUps[0]
+      );
 
     if (!shouldShow) {
       this.notificationWindow?.hide();
@@ -463,6 +568,14 @@ export class CodexMonitorService {
     schemaPath: string
   ) {
     const prompt = this.buildPrompt(session, finalize);
+    this.state = {
+      ...this.state,
+      debug: {
+        ...this.state.debug,
+        lastPromptPreview: truncatePreview(prompt),
+      },
+    };
+    this.broadcastState();
     const args = [
       "exec",
       "--json",

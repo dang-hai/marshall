@@ -29,6 +29,16 @@ const SOUNDWAVE_CSS = `
 
 const STATIC_WAVE_HEIGHTS = [4, 8, 12, 8, 4] as const;
 
+function isTranscriptionInProgress(
+  status: SaveNoteTranscriptionInput["status"] | null | undefined
+) {
+  return status === "recording" || status === "transcribing";
+}
+
+export function getSnapshotSaveDelayMs(status: SaveNoteTranscriptionInput["status"]) {
+  return isTranscriptionInProgress(status) ? 0 : 300;
+}
+
 export interface RecorderResolvedModel {
   model: ModelInfo | null;
   selectedModelName: string;
@@ -323,7 +333,6 @@ export function FloatingTranscriptionRecorder({
     initialize,
     startRecording,
     stopRecording,
-    cancel,
     clearTranscript,
     hydrateSnapshot,
     audioCapture,
@@ -353,13 +362,14 @@ export function FloatingTranscriptionRecorder({
   const lastPartialAtRef = useRef<string | null>(null);
   const latestSnapshotRef = useRef<SaveNoteTranscriptionInput | null>(null);
   const lastPersistedFingerprintRef = useRef<string | null>(null);
+  const onSnapshotChangeRef = useRef(onSnapshotChange);
+
+  useEffect(() => {
+    onSnapshotChangeRef.current = onSnapshotChange;
+  }, [onSnapshotChange]);
 
   useEffect(() => {
     launchSessionRef.current += 1;
-
-    if (isRecording || isTranscribing) {
-      cancel({ clearTranscript: false });
-    }
 
     hydrateSnapshot(persistedSnapshot);
     startedAtRef.current = persistedSnapshot?.startedAt ?? null;
@@ -372,7 +382,7 @@ export function FloatingTranscriptionRecorder({
     lastPersistedFingerprintRef.current = persistedSnapshot
       ? JSON.stringify(persistedSnapshot)
       : null;
-  }, [cancel, hydrateSnapshot, noteId]);
+  }, [hydrateSnapshot, noteId]);
 
   useEffect(() => {
     if (partialText.trim()) {
@@ -471,11 +481,11 @@ export function FloatingTranscriptionRecorder({
 
     const timeoutId = window.setTimeout(() => {
       lastPersistedFingerprintRef.current = fingerprint;
-      void onSnapshotChange(snapshot);
-    }, 300);
+      void onSnapshotChangeRef.current(snapshot);
+    }, getSnapshotSaveDelayMs(snapshot.status));
 
     return () => window.clearTimeout(timeoutId);
-  }, [buildSnapshot, noteBodyHtml, noteId, noteTitle, onSnapshotChange, persistedSnapshot]);
+  }, [buildSnapshot, noteBodyHtml, noteId, noteTitle, persistedSnapshot]);
 
   const ensureInitialized = useCallback(async () => {
     if (!resolvedModel.model) {
@@ -533,12 +543,6 @@ export function FloatingTranscriptionRecorder({
   };
 
   const handleClose = () => {
-    launchSessionRef.current += 1;
-
-    if (isRecording || isTranscribing) {
-      cancel({ clearTranscript: false });
-    }
-
     setIsBootstrapping(false);
     setIsDownloadingModel(false);
     setIsExpanded(false);
@@ -598,13 +602,15 @@ export function FloatingTranscriptionRecorder({
 
   useEffect(() => {
     return () => {
-      void window.codexMonitorAPI?.clearSession(noteId);
-      cancel({ clearTranscript: false });
-      if (latestSnapshotRef.current) {
-        void onSnapshotChange(latestSnapshotRef.current);
+      const latestSnapshot = latestSnapshotRef.current;
+      if (!latestSnapshot || !isTranscriptionInProgress(latestSnapshot.status)) {
+        void window.codexMonitorAPI?.clearSession(noteId);
+      }
+      if (latestSnapshot) {
+        void onSnapshotChangeRef.current(latestSnapshot);
       }
     };
-  }, [cancel, noteId, onSnapshotChange]);
+  }, [noteId]);
 
   return (
     <FloatingTranscriptionRecorderView

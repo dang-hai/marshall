@@ -18,11 +18,14 @@ import {
   UserRound,
 } from "lucide-react";
 import type {
+  CodexMonitorState,
   CodexMonitorNotePatch,
   NoteRecord,
+  NoteTranscriptionStatus,
   SaveNoteTranscriptionInput,
 } from "@marshall/shared";
 import { Button } from "./ui/button";
+import { CodexMonitorDebugPanel } from "./CodexMonitorDebugPanel";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 import {
   applyCodexNotePatch,
@@ -193,6 +196,27 @@ function insertParagraphAfter(target: HTMLElement) {
   focusEditableAtEnd(paragraph as HTMLDivElement);
 }
 
+function isActiveTranscriptionStatus(status: NoteTranscriptionStatus | null | undefined) {
+  return status === "recording" || status === "transcribing";
+}
+
+export function getFloatingRecorderNote(
+  notes: NoteRecord[],
+  activeNoteId: string | null
+): NoteRecord | null {
+  const activeTranscriptionNote =
+    notes.find(
+      (note) =>
+        note.trashedAt === null && isActiveTranscriptionStatus(note.transcription?.status ?? null)
+    ) ?? null;
+
+  if (activeTranscriptionNote) {
+    return activeTranscriptionNote;
+  }
+
+  return notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null;
+}
+
 export function HomePanel() {
   const [notes, setNotes] = useState<NoteRecord[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
@@ -201,6 +225,31 @@ export function HomePanel() {
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
   const [showPlanMeetingModal, setShowPlanMeetingModal] = useState(false);
+  const [codexMonitorState, setCodexMonitorState] = useState<CodexMonitorState>({
+    status: "idle",
+    noteId: null,
+    noteTitle: null,
+    nudge: null,
+    followUps: [],
+    summary: null,
+    lastAnalyzedAt: null,
+    error: null,
+    debug: {
+      transcriptionStatus: null,
+      transcriptLength: 0,
+      checklistItemCount: 0,
+      sessionUpdatedAt: null,
+      pendingAnalysis: false,
+      analysisInFlight: false,
+      analysisCount: 0,
+      lastMode: null,
+      lastStartedAt: null,
+      lastCompletedAt: null,
+      lastOutcome: null,
+      lastPromptPreview: null,
+      lastResponsePreview: null,
+    },
+  });
   const titleRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const pendingNoteUpdatesRef = useRef<Record<string, { title?: string; body?: string }>>({});
@@ -283,6 +332,11 @@ export function HomePanel() {
     () => notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null,
     [notes, activeNoteId]
   );
+  const recorderNote = useMemo(
+    () => getFloatingRecorderNote(notes, activeNoteId),
+    [notes, activeNoteId]
+  );
+  const recorderNoteId = recorderNote?.id ?? activeNote?.id ?? null;
   const visibleNotes = useMemo(() => notes.filter((note) => note.trashedAt === null), [notes]);
 
   useEffect(() => {
@@ -420,6 +474,30 @@ export function HomePanel() {
   }, [createNote]);
 
   useEffect(() => {
+    let mounted = true;
+
+    window.codexMonitorAPI
+      ?.getState()
+      .then((state) => {
+        if (mounted) {
+          setCodexMonitorState(state);
+        }
+      })
+      .catch(() => {
+        // Ignore initial debug load failures.
+      });
+
+    const cleanup = window.codexMonitorAPI?.onState((state) => {
+      setCodexMonitorState(state);
+    });
+
+    return () => {
+      mounted = false;
+      cleanup?.();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!window.codexMonitorAPI) {
       return;
     }
@@ -505,18 +583,35 @@ export function HomePanel() {
   };
 
   const handleSnapshotChange = useCallback(
-    async (snapshot: SaveNoteTranscriptionInput) => {
-      if (!activeNoteId) {
-        return;
-      }
+    async (noteId: string, snapshot: SaveNoteTranscriptionInput) => {
+      const now = new Date().toISOString();
+
+      setNotes((currentNotes) =>
+        currentNotes
+          .map((note) =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  transcription: {
+                    id: note.transcription?.id ?? `pending-${noteId}`,
+                    noteId,
+                    createdAt: note.transcription?.createdAt ?? now,
+                    updatedAt: now,
+                    ...snapshot,
+                  },
+                  updatedAt: now,
+                }
+              : note
+          )
+          .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+      );
 
       try {
-        const savedSnapshot = await window.notesAPI.saveTranscription(activeNoteId, snapshot);
-        const now = new Date().toISOString();
+        const savedSnapshot = await window.notesAPI.saveTranscription(noteId, snapshot);
         setNotes((currentNotes) =>
           currentNotes
             .map((note) =>
-              note.id === activeNoteId
+              note.id === noteId
                 ? {
                     ...note,
                     transcription: savedSnapshot,
@@ -530,7 +625,18 @@ export function HomePanel() {
         setNotesError(error instanceof Error ? error.message : "Failed to save transcription");
       }
     },
-    [activeNoteId]
+    []
+  );
+
+  const handleRecorderSnapshotChange = useCallback(
+    (snapshot: SaveNoteTranscriptionInput) => {
+      if (!recorderNoteId) {
+        return;
+      }
+
+      return handleSnapshotChange(recorderNoteId, snapshot);
+    },
+    [handleSnapshotChange, recorderNoteId]
   );
 
   const syncBodyHtml = () => {
@@ -698,15 +804,21 @@ export function HomePanel() {
                   onPaste={handleBodyPaste}
                 />
               </div>
+
+              <CodexMonitorDebugPanel
+                state={codexMonitorState}
+                noteId={activeNote.id}
+                transcription={activeNote.transcription}
+              />
             </div>
           </div>
         </div>
         <FloatingTranscriptionRecorder
-          noteId={activeNote.id}
-          noteBodyHtml={activeNote.body}
-          noteTitle={activeNote.title}
-          persistedSnapshot={activeNote.transcription}
-          onSnapshotChange={handleSnapshotChange}
+          noteId={recorderNote?.id ?? activeNote.id}
+          noteBodyHtml={recorderNote?.body ?? activeNote.body}
+          noteTitle={recorderNote?.title ?? activeNote.title}
+          persistedSnapshot={recorderNote?.transcription ?? activeNote.transcription}
+          onSnapshotChange={handleRecorderSnapshotChange}
         />
         {showPlanMeetingModal && (
           <PlanMeetingModal
@@ -844,6 +956,15 @@ export function HomePanel() {
           </div>
         </aside>
       </div>
+      {recorderNote && (
+        <FloatingTranscriptionRecorder
+          noteId={recorderNote.id}
+          noteBodyHtml={recorderNote.body}
+          noteTitle={recorderNote.title}
+          persistedSnapshot={recorderNote.transcription}
+          onSnapshotChange={handleRecorderSnapshotChange}
+        />
+      )}
     </div>
   );
 }
