@@ -3,6 +3,13 @@ import { FloatingOverlayPill } from "./components/FloatingOverlayPill";
 
 type OverlayActivityState = "idle" | "recording" | "transcribing";
 
+export function getOverlayPillState(activityState: OverlayActivityState) {
+  return {
+    isVisible: activityState !== "idle",
+    isActive: activityState === "recording",
+  };
+}
+
 export function OverlayPillApp() {
   const [activityState, setActivityState] = useState<OverlayActivityState>("idle");
 
@@ -27,5 +34,10 @@ export function OverlayPillApp() {
     };
   }, []);
 
-  return <FloatingOverlayPill isActive={activityState !== "idle"} />;
+  const overlayPillState = getOverlayPillState(activityState);
+  if (!overlayPillState.isVisible) {
+    return null;
+  }
+
+  return <FloatingOverlayPill isActive={overlayPillState.isActive} />;
 }

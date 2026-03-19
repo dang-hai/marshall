@@ -290,12 +290,14 @@ export function FloatingTranscriptionRecorderView({
 interface FloatingTranscriptionRecorderProps {
   noteId: string;
   persistedSnapshot: NoteTranscriptionSnapshot | null;
+  onActivityChange?: (isActive: boolean) => void;
   onSnapshotChange: (snapshot: SaveNoteTranscriptionInput) => Promise<void> | void;
 }
 
 export function FloatingTranscriptionRecorder({
   noteId,
   persistedSnapshot,
+  onActivityChange,
   onSnapshotChange,
 }: FloatingTranscriptionRecorderProps) {
   const { settings } = useSettings();
@@ -348,6 +350,10 @@ export function FloatingTranscriptionRecorder({
   const lastPartialAtRef = useRef<string | null>(null);
   const latestSnapshotRef = useRef<SaveNoteTranscriptionInput | null>(null);
   const lastPersistedFingerprintRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    onActivityChange?.(isRecording || isTranscribing);
+  }, [isRecording, isTranscribing, onActivityChange]);
 
   useEffect(() => {
     launchSessionRef.current += 1;
@@ -522,10 +528,6 @@ export function FloatingTranscriptionRecorder({
   const handleClose = () => {
     launchSessionRef.current += 1;
 
-    if (isRecording || isTranscribing) {
-      cancel({ clearTranscript: false });
-    }
-
     setIsBootstrapping(false);
     setIsDownloadingModel(false);
     setIsExpanded(false);
@@ -586,11 +588,12 @@ export function FloatingTranscriptionRecorder({
   useEffect(() => {
     return () => {
       cancel({ clearTranscript: false });
+      onActivityChange?.(false);
       if (latestSnapshotRef.current) {
         void onSnapshotChange(latestSnapshotRef.current);
       }
     };
-  }, [cancel, onSnapshotChange]);
+  }, [cancel, onActivityChange, onSnapshotChange]);
 
   return (
     <FloatingTranscriptionRecorderView
