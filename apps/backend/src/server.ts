@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
 import type { Auth } from "@marshall/auth";
 import { note, noteTranscription, type Database } from "@marshall/database";
@@ -12,6 +12,8 @@ import type {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { createTranscriptionRoutes } from "./transcription";
+import { generateText } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
 
 export interface BackendAppOptions {
   auth: Auth;
@@ -428,6 +430,35 @@ export function createBackendApp({
           return { error: "Failed to get user" };
         }
       })
+      // LLM completion endpoint
+      .post(
+        "/api/ai/completion",
+        async ({ body, set }) => {
+          try {
+            const { prompt, system } = body;
+
+            const { text } = await generateText({
+              model: anthropic("claude-sonnet-4-20250514"),
+              system: system || "You are a helpful assistant.",
+              prompt,
+            });
+
+            return { text };
+          } catch (error) {
+            console.error("[AI] Completion error:", error);
+            set.status = 500;
+            return {
+              error: error instanceof Error ? error.message : "Completion failed",
+            };
+          }
+        },
+        {
+          body: t.Object({
+            prompt: t.String(),
+            system: t.Optional(t.String()),
+          }),
+        }
+      )
       .get("/api/notes", async ({ request, set }) => {
         if (!db) {
           set.status = 500;
