@@ -1,9 +1,26 @@
-import { ClipboardEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronLeft, Ellipsis, FolderPlus, Trash2, UserRound } from "lucide-react";
+import {
+  ClipboardEvent,
+  KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  Ellipsis,
+  FolderPlus,
+  Loader2,
+  Trash2,
+  UserRound,
+} from "lucide-react";
+import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 
-interface QuickNote {
+interface LegacyQuickNote {
   id: number;
   title: string;
   body: string;
@@ -40,7 +57,13 @@ function formatTimestamp(timestamp: number) {
   return timestampFormatter.format(timestamp);
 }
 
-function loadStoredNotes(): QuickNote[] {
+function formatStoredTimestamp(timestamp: string | number) {
+  return typeof timestamp === "number"
+    ? formatTimestamp(timestamp)
+    : formatTimestamp(Date.parse(timestamp));
+}
+
+function loadStoredNotes(): LegacyQuickNote[] {
   if (typeof window === "undefined") {
     return [];
   }
@@ -85,18 +108,6 @@ function loadStoredNotes(): QuickNote[] {
   } catch {
     return [];
   }
-}
-
-function createEmptyNote(): QuickNote {
-  const now = Date.now();
-  return {
-    id: now,
-    title: "",
-    body: "",
-    createdAt: now,
-    updatedAt: now,
-    trashedAt: null,
-  };
 }
 
 function summarizeBody(body: string) {
@@ -233,18 +244,89 @@ function insertParagraphAfter(target: HTMLElement) {
 }
 
 export function HomePanel() {
-  const [notes, setNotes] = useState<QuickNote[]>(() => loadStoredNotes());
-  const [activeNoteId, setActiveNoteId] = useState<number | null>(null);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [notes, setNotes] = useState<NoteRecord[]>([]);
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [isLoadingNotes, setIsLoadingNotes] = useState(true);
+  const [isCreatingNote, setIsCreatingNote] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const pendingNoteUpdatesRef = useRef<Record<string, { title?: string; body?: string }>>({});
+  const noteSaveTimersRef = useRef<Record<string, number>>({});
+
+  const applySavedNote = useCallback((savedNote: NoteRecord) => {
+    setNotes((currentNotes) => {
+      const existingIndex = currentNotes.findIndex((note) => note.id === savedNote.id);
+      const nextNotes = [...currentNotes];
+
+      if (existingIndex === -1) {
+        nextNotes.unshift(savedNote);
+      } else {
+        nextNotes[existingIndex] = savedNote;
+      }
+
+      return nextNotes.sort(
+        (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)
+      );
+    });
+  }, []);
+
+  const migrateLegacyNotes = useCallback(async () => {
+    const legacyNotes = loadStoredNotes();
+    if (legacyNotes.length === 0) {
+      return [];
+    }
+
+    const migratedNotes: NoteRecord[] = [];
+    for (const note of legacyNotes.sort((a, b) => b.updatedAt - a.updatedAt)) {
+      const migratedNote = await window.notesAPI.create({
+        title: note.title,
+        body: note.body,
+        createdAt: new Date(note.createdAt).toISOString(),
+        updatedAt: new Date(note.updatedAt).toISOString(),
+        trashedAt: note.trashedAt ? new Date(note.trashedAt).toISOString() : null,
+      });
+      migratedNotes.push(migratedNote);
+    }
+
+    window.localStorage.removeItem(QUICK_NOTES_STORAGE_KEY);
+    return migratedNotes;
+  }, []);
 
   useEffect(() => {
-    const serialized = JSON.stringify(notes);
-    if (window.localStorage.getItem(QUICK_NOTES_STORAGE_KEY) !== serialized) {
-      window.localStorage.setItem(QUICK_NOTES_STORAGE_KEY, serialized);
-    }
-  }, [notes]);
+    let cancelled = false;
+
+    const loadNotes = async () => {
+      setIsLoadingNotes(true);
+      setNotesError(null);
+
+      try {
+        let loadedNotes = await window.notesAPI.list();
+        if (loadedNotes.length === 0) {
+          loadedNotes = await migrateLegacyNotes();
+        }
+
+        if (!cancelled) {
+          setNotes(loadedNotes);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setNotesError(error instanceof Error ? error.message : "Failed to load notes");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingNotes(false);
+        }
+      }
+    };
+
+    void loadNotes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [migrateLegacyNotes]);
 
   const activeNote = useMemo(
     () => notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null,
@@ -301,26 +383,84 @@ export function HomePanel() {
   const noteCountLabel =
     visibleNotes.length === 1 ? "1 note captured" : `${visibleNotes.length} notes captured`;
 
-  const openNote = (noteId: number) => {
+  const openNote = (noteId: string) => {
     setOpenMenuId(null);
     setActiveNoteId(noteId);
   };
 
-  const createNote = () => {
-    const note = createEmptyNote();
-    setNotes((currentNotes) => [note, ...currentNotes]);
-    setOpenMenuId(null);
-    setActiveNoteId(note.id);
+  const flushPendingNoteUpdate = useCallback(
+    async (noteId: string) => {
+      const pending = pendingNoteUpdatesRef.current[noteId];
+      if (!pending) {
+        return;
+      }
+
+      delete pendingNoteUpdatesRef.current[noteId];
+      delete noteSaveTimersRef.current[noteId];
+
+      try {
+        const savedNote = await window.notesAPI.update(noteId, pending);
+        applySavedNote(savedNote);
+      } catch (error) {
+        setNotesError(error instanceof Error ? error.message : "Failed to save note");
+      }
+    },
+    [applySavedNote]
+  );
+
+  const scheduleNoteUpdate = useCallback(
+    (noteId: string, update: { title?: string; body?: string }) => {
+      pendingNoteUpdatesRef.current[noteId] = {
+        ...pendingNoteUpdatesRef.current[noteId],
+        ...update,
+      };
+
+      const existingTimer = noteSaveTimersRef.current[noteId];
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      noteSaveTimersRef.current[noteId] = window.setTimeout(() => {
+        void flushPendingNoteUpdate(noteId);
+      }, 400);
+    },
+    [flushPendingNoteUpdate]
+  );
+
+  useEffect(() => {
+    return () => {
+      Object.values(noteSaveTimersRef.current).forEach((timerId) => window.clearTimeout(timerId));
+      Object.keys(pendingNoteUpdatesRef.current).forEach((noteId) => {
+        void flushPendingNoteUpdate(noteId);
+      });
+    };
+  }, [flushPendingNoteUpdate]);
+
+  const createNote = async () => {
+    setIsCreatingNote(true);
+    setNotesError(null);
+
+    try {
+      const note = await window.notesAPI.create();
+      setOpenMenuId(null);
+      applySavedNote(note);
+      setActiveNoteId(note.id);
+    } catch (error) {
+      setNotesError(error instanceof Error ? error.message : "Failed to create note");
+    } finally {
+      setIsCreatingNote(false);
+    }
   };
 
-  const moveNoteToTrash = (noteId: number) => {
+  const moveNoteToTrash = async (noteId: string) => {
+    const trashedAt = new Date().toISOString();
     setNotes((currentNotes) =>
       currentNotes.map((note) =>
         note.id === noteId
           ? {
               ...note,
-              trashedAt: Date.now(),
-              updatedAt: Date.now(),
+              trashedAt,
+              updatedAt: trashedAt,
             }
           : note
       )
@@ -328,6 +468,13 @@ export function HomePanel() {
     setOpenMenuId(null);
     if (activeNoteId === noteId) {
       setActiveNoteId(null);
+    }
+
+    try {
+      const savedNote = await window.notesAPI.update(noteId, { trashedAt });
+      applySavedNote(savedNote);
+    } catch (error) {
+      setNotesError(error instanceof Error ? error.message : "Failed to move note to trash");
     }
   };
 
@@ -347,12 +494,43 @@ export function HomePanel() {
           ? {
               ...note,
               [field]: value,
-              updatedAt: Date.now(),
+              updatedAt: new Date().toISOString(),
             }
           : note
       );
     });
+
+    scheduleNoteUpdate(activeNoteId, { [field]: value });
   };
+
+  const handleSnapshotChange = useCallback(
+    async (snapshot: SaveNoteTranscriptionInput) => {
+      if (!activeNoteId) {
+        return;
+      }
+
+      try {
+        const savedSnapshot = await window.notesAPI.saveTranscription(activeNoteId, snapshot);
+        const now = new Date().toISOString();
+        setNotes((currentNotes) =>
+          currentNotes
+            .map((note) =>
+              note.id === activeNoteId
+                ? {
+                    ...note,
+                    transcription: savedSnapshot,
+                    updatedAt: now,
+                  }
+                : note
+            )
+            .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+        );
+      } catch (error) {
+        setNotesError(error instanceof Error ? error.message : "Failed to save transcription");
+      }
+    },
+    [activeNoteId]
+  );
 
   const syncBodyHtml = () => {
     if (!bodyRef.current) {
@@ -448,7 +626,7 @@ export function HomePanel() {
               Back
             </Button>
             <p className="text-2xs tracking-wide text-muted-foreground/70">
-              Updated {formatTimestamp(activeNote.updatedAt)}
+              Updated {formatStoredTimestamp(activeNote.updatedAt)}
             </p>
           </div>
 
@@ -514,7 +692,11 @@ export function HomePanel() {
             </div>
           </div>
         </div>
-        <FloatingTranscriptionRecorder />
+        <FloatingTranscriptionRecorder
+          noteId={activeNote.id}
+          persistedSnapshot={activeNote.transcription}
+          onSnapshotChange={handleSnapshotChange}
+        />
       </>
     );
   }
@@ -538,13 +720,20 @@ export function HomePanel() {
         </div>
 
         <Button type="button" className="shrink-0" onClick={createNote}>
-          <span>+ Quick Note</span>
+          <span>{isCreatingNote ? "Creating..." : "+ Quick Note"}</span>
         </Button>
       </div>
 
       <div className="grid flex-1 gap-6 pt-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
         <div className="space-y-3">
-          {visibleNotes.length > 0 ? (
+          {isLoadingNotes ? (
+            <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading notes...</span>
+              </div>
+            </div>
+          ) : visibleNotes.length > 0 ? (
             visibleNotes.map((note) => (
               <article
                 key={note.id}
@@ -561,7 +750,7 @@ export function HomePanel() {
                         {note.title.trim() || "New note"}
                       </p>
                       <p className="shrink-0 text-2xs tracking-wide text-muted-foreground/70">
-                        {formatTimestamp(note.updatedAt)}
+                        {formatStoredTimestamp(note.updatedAt)}
                       </p>
                     </div>
                     <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
@@ -607,6 +796,12 @@ export function HomePanel() {
                   Use the + Quick Note button in the top right to open a fresh note document.
                 </p>
               </div>
+            </div>
+          )}
+
+          {notesError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {notesError}
             </div>
           )}
         </div>

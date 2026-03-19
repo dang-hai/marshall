@@ -1,4 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type {
+  CreateNoteInput,
+  NoteRecord,
+  NoteTranscriptionSnapshot,
+  SaveNoteTranscriptionInput,
+  UpdateNoteInput,
+} from "@marshall/shared";
 import type { DesktopNavigationRoute } from "../shared/navigation";
 import type { AppSettings } from "../shared/settings";
 
@@ -49,6 +56,15 @@ contextBridge.exposeInMainWorld("settingsAPI", {
   update: (updates: Record<string, unknown>) => ipcRenderer.invoke("settings:update", updates),
   reset: () => ipcRenderer.invoke("settings:reset"),
   getPath: () => ipcRenderer.invoke("settings:get-path"),
+});
+
+contextBridge.exposeInMainWorld("notesAPI", {
+  list: () => ipcRenderer.invoke("notes:list"),
+  create: (input?: CreateNoteInput) => ipcRenderer.invoke("notes:create", input),
+  update: (noteId: string, input: UpdateNoteInput) =>
+    ipcRenderer.invoke("notes:update", noteId, input),
+  saveTranscription: (noteId: string, input: SaveNoteTranscriptionInput) =>
+    ipcRenderer.invoke("notes:save-transcription", noteId, input),
 });
 
 // Transcription API
@@ -230,6 +246,15 @@ declare global {
       update: (updates: Partial<AppSettings>) => Promise<AppSettings>;
       reset: () => Promise<AppSettings>;
       getPath: () => Promise<string>;
+    };
+    notesAPI: {
+      list: () => Promise<NoteRecord[]>;
+      create: (input?: CreateNoteInput) => Promise<NoteRecord>;
+      update: (noteId: string, input: UpdateNoteInput) => Promise<NoteRecord>;
+      saveTranscription: (
+        noteId: string,
+        input: SaveNoteTranscriptionInput
+      ) => Promise<NoteTranscriptionSnapshot>;
     };
     transcriptionAPI: {
       // Models

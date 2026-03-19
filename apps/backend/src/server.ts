@@ -1,12 +1,23 @@
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import type { Auth } from "@marshall/auth";
+import { note, noteTranscription, type Database } from "@marshall/database";
+import type {
+  CreateNoteInput,
+  NoteRecord,
+  NoteTranscriptionSnapshot,
+  SaveNoteTranscriptionInput,
+  UpdateNoteInput,
+} from "@marshall/shared";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import { createTranscriptionRoutes } from "./transcription";
 
 export interface BackendAppOptions {
   auth: Auth;
-  baseUrl: string;
-  electronProtocol: string;
+  db?: Database;
+  baseUrl?: string;
+  electronProtocol?: string;
 }
 
 // Store pending desktop auth requests (state -> redirect info)
@@ -222,7 +233,82 @@ function desktopSuccessPage(scheme: string, token: string, state: string) {
 </html>`;
 }
 
-export function createBackendApp({ auth, baseUrl, electronProtocol }: BackendAppOptions) {
+function toIsoString(value: Date | null | undefined) {
+  return value ? value.toISOString() : null;
+}
+
+function parseDateInput(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function serializeNoteTranscription(
+  row: typeof noteTranscription.$inferSelect
+): NoteTranscriptionSnapshot {
+  return {
+    id: row.id,
+    noteId: row.noteId,
+    status: row.status,
+    provider: row.provider,
+    mode: row.mode,
+    language: row.language,
+    model: row.model,
+    transcriptText: row.transcriptText,
+    finalText: row.finalText,
+    interimText: row.interimText,
+    segments: row.segments,
+    lastSegmentIndex: row.lastSegmentIndex,
+    durationSeconds: row.durationSeconds,
+    recordingDurationSeconds: row.recordingDurationSeconds,
+    error: row.error,
+    startedAt: toIsoString(row.startedAt),
+    completedAt: toIsoString(row.completedAt),
+    lastPartialAt: toIsoString(row.lastPartialAt),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function serializeNote(
+  row: typeof note.$inferSelect,
+  transcriptionRow?: typeof noteTranscription.$inferSelect
+): NoteRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    title: row.title,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    trashedAt: toIsoString(row.trashedAt),
+    transcription: transcriptionRow ? serializeNoteTranscription(transcriptionRow) : null,
+  };
+}
+
+async function getAuthenticatedSession(
+  auth: Auth,
+  request: Request,
+  set: { status?: number | string }
+) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) {
+    set.status = 401;
+    return null;
+  }
+
+  return session;
+}
+
+export function createBackendApp({
+  auth,
+  db,
+  baseUrl = "http://localhost:3000",
+  electronProtocol = "marshall",
+}: BackendAppOptions) {
   return (
     new Elysia()
       .use(
@@ -320,9 +406,8 @@ export function createBackendApp({ auth, baseUrl, electronProtocol }: BackendApp
       // Get current user from session token (for desktop app)
       .get("/api/user/me", async ({ request, set }) => {
         try {
-          const session = await auth.api.getSession({ headers: request.headers });
+          const session = await getAuthenticatedSession(auth, request, set);
           if (!session) {
-            set.status = 401;
             return { error: "Not authenticated" };
           }
 
@@ -341,6 +426,227 @@ export function createBackendApp({ auth, baseUrl, electronProtocol }: BackendApp
           console.error("[API] Error getting user:", error);
           set.status = 500;
           return { error: "Failed to get user" };
+        }
+      })
+      .get("/api/notes", async ({ request, set }) => {
+        if (!db) {
+          set.status = 500;
+          return { error: "Database is not configured" };
+        }
+
+        try {
+          const session = await getAuthenticatedSession(auth, request, set);
+          if (!session) {
+            return { error: "Not authenticated" };
+          }
+
+          const notes = await db
+            .select()
+            .from(note)
+            .where(eq(note.userId, session.user.id))
+            .orderBy(desc(note.updatedAt));
+
+          const noteIds = notes.map((entry) => entry.id);
+          const transcriptions =
+            noteIds.length > 0
+              ? await db
+                  .select()
+                  .from(noteTranscription)
+                  .where(inArray(noteTranscription.noteId, noteIds))
+              : [];
+
+          const transcriptionByNoteId = new Map(
+            transcriptions.map((entry) => [entry.noteId, entry] as const)
+          );
+
+          return {
+            notes: notes.map((entry) => serializeNote(entry, transcriptionByNoteId.get(entry.id))),
+          };
+        } catch (error) {
+          console.error("[API] Error listing notes:", error);
+          set.status = 500;
+          return { error: "Failed to list notes" };
+        }
+      })
+      .post("/api/notes", async ({ body, request, set }) => {
+        if (!db) {
+          set.status = 500;
+          return { error: "Database is not configured" };
+        }
+
+        try {
+          const session = await getAuthenticatedSession(auth, request, set);
+          if (!session) {
+            return { error: "Not authenticated" };
+          }
+
+          const input = (body ?? {}) as CreateNoteInput;
+          const now = new Date();
+          const createdAt = parseDateInput(input.createdAt) ?? now;
+          const updatedAt = parseDateInput(input.updatedAt) ?? createdAt;
+          const trashedAt = parseDateInput(input.trashedAt);
+
+          const [createdNote] = await db
+            .insert(note)
+            .values({
+              id: randomUUID(),
+              userId: session.user.id,
+              title: input.title ?? "",
+              body: input.body ?? "",
+              createdAt,
+              updatedAt,
+              trashedAt,
+            })
+            .returning();
+
+          return {
+            note: serializeNote(createdNote),
+          };
+        } catch (error) {
+          console.error("[API] Error creating note:", error);
+          set.status = 500;
+          return { error: "Failed to create note" };
+        }
+      })
+      .patch("/api/notes/:noteId", async ({ body, params, request, set }) => {
+        if (!db) {
+          set.status = 500;
+          return { error: "Database is not configured" };
+        }
+
+        try {
+          const session = await getAuthenticatedSession(auth, request, set);
+          if (!session) {
+            return { error: "Not authenticated" };
+          }
+
+          const input = (body ?? {}) as UpdateNoteInput;
+          const updates: Partial<typeof note.$inferInsert> = {
+            updatedAt: new Date(),
+          };
+
+          if (typeof input.title === "string") {
+            updates.title = input.title;
+          }
+
+          if (typeof input.body === "string") {
+            updates.body = input.body;
+          }
+
+          if ("trashedAt" in input) {
+            updates.trashedAt = parseDateInput(input.trashedAt ?? null);
+          }
+
+          const [updatedNote] = await db
+            .update(note)
+            .set(updates)
+            .where(and(eq(note.id, params.noteId), eq(note.userId, session.user.id)))
+            .returning();
+
+          if (!updatedNote) {
+            set.status = 404;
+            return { error: "Note not found" };
+          }
+
+          const [transcriptionRow] = await db
+            .select()
+            .from(noteTranscription)
+            .where(eq(noteTranscription.noteId, updatedNote.id));
+
+          return {
+            note: serializeNote(updatedNote, transcriptionRow),
+          };
+        } catch (error) {
+          console.error("[API] Error updating note:", error);
+          set.status = 500;
+          return { error: "Failed to update note" };
+        }
+      })
+      .put("/api/notes/:noteId/transcription", async ({ body, params, request, set }) => {
+        if (!db) {
+          set.status = 500;
+          return { error: "Database is not configured" };
+        }
+
+        try {
+          const session = await getAuthenticatedSession(auth, request, set);
+          if (!session) {
+            return { error: "Not authenticated" };
+          }
+
+          const [ownedNote] = await db
+            .select()
+            .from(note)
+            .where(and(eq(note.id, params.noteId), eq(note.userId, session.user.id)));
+
+          if (!ownedNote) {
+            set.status = 404;
+            return { error: "Note not found" };
+          }
+
+          const input = body as SaveNoteTranscriptionInput;
+          const now = new Date();
+
+          const [savedTranscription] = await db
+            .insert(noteTranscription)
+            .values({
+              id: randomUUID(),
+              noteId: ownedNote.id,
+              status: input.status,
+              provider: input.provider,
+              mode: input.mode,
+              language: input.language,
+              model: input.model,
+              transcriptText: input.transcriptText,
+              finalText: input.finalText,
+              interimText: input.interimText,
+              segments: input.segments,
+              lastSegmentIndex: input.lastSegmentIndex,
+              durationSeconds: input.durationSeconds,
+              recordingDurationSeconds: input.recordingDurationSeconds,
+              error: input.error,
+              startedAt: parseDateInput(input.startedAt),
+              completedAt: parseDateInput(input.completedAt),
+              lastPartialAt: parseDateInput(input.lastPartialAt),
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: noteTranscription.noteId,
+              set: {
+                status: input.status,
+                provider: input.provider,
+                mode: input.mode,
+                language: input.language,
+                model: input.model,
+                transcriptText: input.transcriptText,
+                finalText: input.finalText,
+                interimText: input.interimText,
+                segments: input.segments,
+                lastSegmentIndex: input.lastSegmentIndex,
+                durationSeconds: input.durationSeconds,
+                recordingDurationSeconds: input.recordingDurationSeconds,
+                error: input.error,
+                startedAt: parseDateInput(input.startedAt),
+                completedAt: parseDateInput(input.completedAt),
+                lastPartialAt: parseDateInput(input.lastPartialAt),
+                updatedAt: now,
+              },
+            })
+            .returning();
+
+          await db
+            .update(note)
+            .set({ updatedAt: now })
+            .where(and(eq(note.id, ownedNote.id), eq(note.userId, session.user.id)));
+
+          return {
+            transcription: serializeNoteTranscription(savedTranscription),
+          };
+        } catch (error) {
+          console.error("[API] Error saving note transcription:", error);
+          set.status = 500;
+          return { error: "Failed to save note transcription" };
         }
       })
       // Transcription WebSocket routes

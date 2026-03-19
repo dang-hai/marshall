@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import type { NoteTranscriptionSnapshot } from "@marshall/shared";
 import { useAudioCapture, type AudioSource } from "./useAudioCapture";
 
 export interface TranscriptionSegment {
@@ -41,6 +42,7 @@ export interface TranscriptionState {
   currentModel: string | null;
   mode: "streaming" | "batch" | null;
   transcript: TranscriptionResult | null;
+  lastSegmentIndex: number | null;
   /** Accumulated final transcription text */
   finalText: string;
   /** Current interim (in-progress) text that may change */
@@ -61,9 +63,61 @@ export interface UseTranscriptionOptions {
   vadThreshold?: number;
 }
 
+function offsetSegments(segments: TranscriptionSegment[], offsetSeconds: number) {
+  return segments.map((segment) => ({
+    ...segment,
+    start: segment.start + offsetSeconds,
+    end: segment.end + offsetSeconds,
+  }));
+}
+
+export function snapshotToTranscript(
+  snapshot: NoteTranscriptionSnapshot | null
+): TranscriptionResult | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  const text = snapshot.transcriptText.trim()
+    ? snapshot.transcriptText.trim()
+    : [snapshot.finalText.trim(), snapshot.interimText.trim()].filter(Boolean).join(" ").trim();
+
+  if (!text && snapshot.segments.length === 0 && snapshot.durationSeconds <= 0) {
+    return null;
+  }
+
+  return {
+    text,
+    language: snapshot.language,
+    segments: snapshot.segments,
+    duration: snapshot.durationSeconds,
+  };
+}
+
+export function mergeTranscriptionResults(
+  base: TranscriptionResult | null,
+  incoming: TranscriptionResult
+): TranscriptionResult {
+  if (!base) {
+    return incoming;
+  }
+
+  const baseText = base.text.trim();
+  const incomingText = incoming.text.trim();
+
+  return {
+    text: [baseText, incomingText].filter(Boolean).join(" ").trim(),
+    language: incoming.language || base.language,
+    segments: [...base.segments, ...offsetSegments(incoming.segments, base.duration)],
+    duration: base.duration + incoming.duration,
+  };
+}
+
 export function useTranscription(options: UseTranscriptionOptions = {}) {
   const { streamingEnabled = true, vadEnabled = true, vadThreshold = 0.015 } = options;
   const initializedRef = useRef(false);
+  const stateRef = useRef<TranscriptionState | null>(null);
+  const resumeBaseRef = useRef<TranscriptionResult | null>(null);
 
   const [state, setState] = useState<TranscriptionState>({
     isInitialized: false,
@@ -72,6 +126,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     currentModel: null,
     mode: null,
     transcript: null,
+    lastSegmentIndex: null,
     finalText: "",
     interimText: "",
     partialText: "",
@@ -81,6 +136,14 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     isSpeaking: false,
     vadLevel: 0,
   });
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const mergeWithResumeBase = useCallback((result: TranscriptionResult) => {
+    return mergeTranscriptionResults(resumeBaseRef.current, result);
+  }, []);
 
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
@@ -100,6 +163,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       });
     }, []),
   });
+  const { startCapture, stopCapture, duration: captureDuration } = audioCapture;
 
   // Set up event listeners
   useEffect(() => {
@@ -114,6 +178,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           const newFinalText = prev.finalText ? prev.finalText + " " + partial.text : partial.text;
           return {
             ...prev,
+            lastSegmentIndex: partial.segmentIndex,
             finalText: newFinalText,
             interimText: "",
             partialText: newFinalText,
@@ -125,6 +190,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
             : partial.text;
           return {
             ...prev,
+            lastSegmentIndex: partial.segmentIndex,
             interimText: partial.text,
             partialText: newPartialText,
           };
@@ -137,10 +203,14 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     });
 
     const unsubComplete = window.transcriptionAPI.onComplete((result) => {
+      const mergedResult = mergeWithResumeBase(result as TranscriptionResult);
       setState((prev) => ({
         ...prev,
         isTranscribing: false,
-        transcript: result as TranscriptionResult,
+        transcript: mergedResult,
+        finalText: mergedResult.text,
+        interimText: "",
+        partialText: mergedResult.text,
         progress: 100,
       }));
     });
@@ -292,7 +362,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
   );
 
   const startRecording = useCallback(
-    async (source: AudioSource = "microphone") => {
+    async (source: AudioSource = "microphone", options?: { preserveExisting?: boolean }) => {
       if (!initializedRef.current) {
         setState((prev) => ({
           ...prev,
@@ -302,17 +372,22 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       }
 
       try {
+        const preserveExisting = options?.preserveExisting ?? false;
+        const currentState = stateRef.current;
+        resumeBaseRef.current = preserveExisting ? (currentState?.transcript ?? null) : null;
+
         setState((prev) => ({
           ...prev,
           error: null,
-          transcript: null,
-          finalText: "",
-          interimText: "",
-          partialText: "",
+          transcript: preserveExisting ? prev.transcript : null,
+          lastSegmentIndex: preserveExisting ? prev.lastSegmentIndex : null,
+          finalText: preserveExisting ? prev.finalText : "",
+          interimText: preserveExisting ? prev.interimText : "",
+          partialText: preserveExisting ? prev.partialText : "",
         }));
 
         // Start audio capture
-        const captureStarted = await audioCapture.startCapture(source);
+        const captureStarted = await startCapture(source);
         if (!captureStarted) {
           return false;
         }
@@ -325,37 +400,41 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to start recording";
         setState((prev) => ({ ...prev, error: message }));
-        audioCapture.stopCapture();
+        stopCapture();
         return false;
       }
     },
-    [audioCapture]
+    [startCapture, stopCapture]
   );
 
   const stopRecording = useCallback(async (): Promise<TranscriptionResult | null> => {
     // Stop audio capture
-    audioCapture.stopCapture();
+    stopCapture();
 
     setState((prev) => ({
       ...prev,
       isRecording: false,
       isTranscribing: true,
       progress: 0,
-      recordingDuration: audioCapture.duration,
+      recordingDuration: captureDuration,
     }));
 
     try {
       // Stop and transcribe
-      const result = await window.transcriptionAPI.stopAndTranscribe();
+      const result = (await window.transcriptionAPI.stopAndTranscribe()) as TranscriptionResult;
+      const mergedResult = mergeWithResumeBase(result);
 
       setState((prev) => ({
         ...prev,
         isTranscribing: false,
-        transcript: result as TranscriptionResult,
+        transcript: mergedResult,
+        finalText: mergedResult.text,
+        interimText: "",
+        partialText: mergedResult.text,
         progress: 100,
       }));
 
-      return result as TranscriptionResult;
+      return mergedResult;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Transcription failed";
       setState((prev) => ({
@@ -365,33 +444,65 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       }));
       return null;
     }
-  }, [audioCapture]);
+  }, [captureDuration, mergeWithResumeBase, stopCapture]);
 
-  const cancel = useCallback(() => {
-    audioCapture.stopCapture();
-    window.transcriptionAPI.cancel();
+  const cancel = useCallback(
+    (options?: { clearTranscript?: boolean }) => {
+      stopCapture();
+      window.transcriptionAPI.cancel();
 
-    setState((prev) => ({
-      ...prev,
-      isRecording: false,
-      isTranscribing: false,
-      progress: 0,
-      finalText: "",
-      interimText: "",
-      partialText: "",
-      isSpeaking: false,
-      vadLevel: 0,
-    }));
-  }, [audioCapture]);
+      setState((prev) => ({
+        ...prev,
+        isRecording: false,
+        isTranscribing: false,
+        progress: 0,
+        finalText: options?.clearTranscript === false ? prev.finalText : "",
+        interimText: options?.clearTranscript === false ? prev.interimText : "",
+        partialText: options?.clearTranscript === false ? prev.partialText : "",
+        transcript: options?.clearTranscript === false ? prev.transcript : null,
+        lastSegmentIndex: options?.clearTranscript === false ? prev.lastSegmentIndex : null,
+        isSpeaking: false,
+        vadLevel: 0,
+      }));
+    },
+    [stopCapture]
+  );
 
   const clearTranscript = useCallback(() => {
+    resumeBaseRef.current = null;
     setState((prev) => ({
       ...prev,
       transcript: null,
+      lastSegmentIndex: null,
       error: null,
       finalText: "",
       interimText: "",
       partialText: "",
+    }));
+  }, []);
+
+  const hydrateSnapshot = useCallback((snapshot: NoteTranscriptionSnapshot | null) => {
+    resumeBaseRef.current = null;
+    const transcript = snapshotToTranscript(snapshot);
+
+    setState((prev) => ({
+      ...prev,
+      transcript,
+      lastSegmentIndex: snapshot?.lastSegmentIndex ?? null,
+      finalText: snapshot?.finalText ?? "",
+      interimText: snapshot?.interimText ?? "",
+      partialText:
+        snapshot?.transcriptText ||
+        [snapshot?.finalText?.trim() ?? "", snapshot?.interimText?.trim() ?? ""]
+          .filter(Boolean)
+          .join(" "),
+      recordingDuration: snapshot?.recordingDurationSeconds ?? 0,
+      error: snapshot?.error ?? null,
+      isRecording: false,
+      isTranscribing: false,
+      progress: 0,
+      isSpeaking: false,
+      vadLevel: 0,
     }));
   }, []);
 
@@ -421,6 +532,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     stopRecording,
     cancel,
     clearTranscript,
+    hydrateSnapshot,
     setVADThreshold,
   };
 }

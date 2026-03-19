@@ -1,4 +1,45 @@
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+
+export const NOTE_TRANSCRIPTION_STATUSES = [
+  "draft",
+  "recording",
+  "transcribing",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+
+export type NoteTranscriptionStatus = (typeof NOTE_TRANSCRIPTION_STATUSES)[number];
+
+export const NOTE_TRANSCRIPTION_PROVIDERS = [
+  "local",
+  "deepgram",
+  "assemblyAI",
+  "speechmatics",
+] as const;
+
+export type NoteTranscriptionProvider = (typeof NOTE_TRANSCRIPTION_PROVIDERS)[number];
+
+export const NOTE_TRANSCRIPTION_MODES = ["streaming", "batch"] as const;
+
+export type NoteTranscriptionMode = (typeof NOTE_TRANSCRIPTION_MODES)[number];
+
+export interface NoteTranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -122,5 +163,63 @@ export const invitation = pgTable(
   (table) => ({
     organizationIdIdx: index("invitation_organizationId_idx").on(table.organizationId),
     emailIdx: index("invitation_email_idx").on(table.email),
+  })
+);
+
+export const note = pgTable(
+  "note",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+    trashedAt: timestamp("trashedAt", { mode: "date" }),
+  },
+  (table) => ({
+    userIdIdx: index("note_userId_idx").on(table.userId),
+    userIdUpdatedAtIdx: index("note_userId_updatedAt_idx").on(table.userId, table.updatedAt),
+  })
+);
+
+export const noteTranscription = pgTable(
+  "note_transcription",
+  {
+    id: text("id").primaryKey(),
+    noteId: text("noteId")
+      .notNull()
+      .references(() => note.id, { onDelete: "cascade" }),
+    status: text("status").$type<NoteTranscriptionStatus>().notNull().default("draft"),
+    provider: text("provider").$type<NoteTranscriptionProvider>().notNull().default("local"),
+    mode: text("mode").$type<NoteTranscriptionMode>(),
+    language: text("language").notNull().default("en"),
+    model: text("model"),
+    transcriptText: text("transcriptText").notNull().default(""),
+    finalText: text("finalText").notNull().default(""),
+    interimText: text("interimText").notNull().default(""),
+    segments: jsonb("segments")
+      .$type<NoteTranscriptionSegment[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    lastSegmentIndex: integer("lastSegmentIndex"),
+    durationSeconds: doublePrecision("durationSeconds").notNull().default(0),
+    recordingDurationSeconds: doublePrecision("recordingDurationSeconds").notNull().default(0),
+    error: text("error"),
+    startedAt: timestamp("startedAt", { mode: "date" }),
+    completedAt: timestamp("completedAt", { mode: "date" }),
+    lastPartialAt: timestamp("lastPartialAt", { mode: "date" }),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    noteIdIdx: uniqueIndex("note_transcription_noteId_idx").on(table.noteId),
+    statusIdx: index("note_transcription_status_idx").on(table.status),
+    noteIdUpdatedAtIdx: index("note_transcription_noteId_updatedAt_idx").on(
+      table.noteId,
+      table.updatedAt
+    ),
   })
 );

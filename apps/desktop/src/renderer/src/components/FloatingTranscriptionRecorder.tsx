@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Square, X, Settings2 } from "lucide-react";
+import type { NoteTranscriptionSnapshot, SaveNoteTranscriptionInput } from "@marshall/shared";
 import type { WhisperModelName } from "@marshall/transcription";
 import { defaultAppSettings } from "../../../shared/settings";
 import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
@@ -285,7 +286,17 @@ export function FloatingTranscriptionRecorderView({
   );
 }
 
-export function FloatingTranscriptionRecorder() {
+interface FloatingTranscriptionRecorderProps {
+  noteId: string;
+  persistedSnapshot: NoteTranscriptionSnapshot | null;
+  onSnapshotChange: (snapshot: SaveNoteTranscriptionInput) => Promise<void> | void;
+}
+
+export function FloatingTranscriptionRecorder({
+  noteId,
+  persistedSnapshot,
+  onSnapshotChange,
+}: FloatingTranscriptionRecorderProps) {
   const { settings } = useSettings();
   const {
     currentModel,
@@ -298,12 +309,18 @@ export function FloatingTranscriptionRecorder() {
     partialText,
     progress,
     transcript,
+    mode,
+    finalText,
+    interimText,
+    lastSegmentIndex,
     downloadModel,
     initialize,
     startRecording,
     stopRecording,
     cancel,
     clearTranscript,
+    hydrateSnapshot,
+    audioCapture,
   } = useTranscription({
     streamingEnabled: settings?.transcription.streamingEnabled ?? true,
     vadEnabled: settings?.audio.vadEnabled ?? true,
@@ -324,6 +341,129 @@ export function FloatingTranscriptionRecorder() {
   const language = settings?.transcription.language ?? "en";
   const useGPU = settings?.transcription.useGPU ?? true;
   const audioSource = settings?.audio.source ?? "microphone";
+  const provider = settings?.transcription.provider ?? "local";
+  const startedAtRef = useRef<string | null>(null);
+  const completedAtRef = useRef<string | null>(null);
+  const lastPartialAtRef = useRef<string | null>(null);
+  const latestSnapshotRef = useRef<SaveNoteTranscriptionInput | null>(null);
+  const lastPersistedFingerprintRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    launchSessionRef.current += 1;
+
+    if (isRecording || isTranscribing) {
+      cancel({ clearTranscript: false });
+    }
+
+    hydrateSnapshot(persistedSnapshot);
+    startedAtRef.current = persistedSnapshot?.startedAt ?? null;
+    completedAtRef.current = persistedSnapshot?.completedAt ?? null;
+    lastPartialAtRef.current = persistedSnapshot?.lastPartialAt ?? null;
+    setIsExpanded(false);
+    setIsBootstrapping(false);
+    setIsDownloadingModel(false);
+    setIsModelDialogOpen(false);
+    lastPersistedFingerprintRef.current = persistedSnapshot
+      ? JSON.stringify(persistedSnapshot)
+      : null;
+  }, [cancel, hydrateSnapshot, noteId]);
+
+  useEffect(() => {
+    if (partialText.trim()) {
+      lastPartialAtRef.current = new Date().toISOString();
+    }
+  }, [partialText]);
+
+  useEffect(() => {
+    if (isRecording || isTranscribing) {
+      completedAtRef.current = null;
+      return;
+    }
+
+    if (transcript?.text?.trim()) {
+      completedAtRef.current = completedAtRef.current ?? new Date().toISOString();
+    }
+  }, [isRecording, isTranscribing, transcript]);
+
+  const buildSnapshot = useCallback(() => {
+    const hasSegments = transcript?.segments.length ? transcript.segments : [];
+    const transcriptText = transcript?.text?.trim() || partialText.trim();
+    const hasAnyText = Boolean(transcriptText || finalText.trim() || interimText.trim());
+
+    let status: SaveNoteTranscriptionInput["status"] = "draft";
+    if (isRecording) {
+      status = "recording";
+    } else if (isTranscribing) {
+      status = "transcribing";
+    } else if (error) {
+      status = "failed";
+    } else if (transcript?.segments.length || transcript?.duration) {
+      status = "completed";
+    } else if (hasAnyText) {
+      status = "cancelled";
+    }
+
+    return {
+      status,
+      provider,
+      mode,
+      language: transcript?.language || language,
+      model: currentModel,
+      transcriptText,
+      finalText,
+      interimText,
+      segments: hasSegments,
+      lastSegmentIndex,
+      durationSeconds: transcript?.duration ?? 0,
+      recordingDurationSeconds: Math.max(audioCapture.duration, transcript?.duration ?? 0),
+      error,
+      startedAt: startedAtRef.current,
+      completedAt: completedAtRef.current,
+      lastPartialAt: lastPartialAtRef.current,
+    } satisfies SaveNoteTranscriptionInput;
+  }, [
+    audioCapture.duration,
+    currentModel,
+    error,
+    finalText,
+    interimText,
+    isRecording,
+    isTranscribing,
+    language,
+    lastSegmentIndex,
+    mode,
+    partialText,
+    provider,
+    transcript,
+  ]);
+
+  useEffect(() => {
+    latestSnapshotRef.current = buildSnapshot();
+  }, [buildSnapshot]);
+
+  useEffect(() => {
+    const snapshot = buildSnapshot();
+    if (
+      snapshot.status === "draft" &&
+      !snapshot.startedAt &&
+      !snapshot.transcriptText &&
+      !persistedSnapshot
+    ) {
+      return;
+    }
+
+    const fingerprint = JSON.stringify(snapshot);
+    if (fingerprint === lastPersistedFingerprintRef.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      lastPersistedFingerprintRef.current = fingerprint;
+      void onSnapshotChange(snapshot);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [buildSnapshot, onSnapshotChange, persistedSnapshot]);
 
   const ensureInitialized = async () => {
     if (!resolvedModel.model) {
@@ -340,10 +480,17 @@ export function FloatingTranscriptionRecorder() {
 
   const startLiveRecording = async () => {
     const launchSession = ++launchSessionRef.current;
+    const shouldPreserveExisting = Boolean(transcript?.text?.trim() || partialText.trim());
 
-    clearTranscript();
     setIsExpanded(true);
     setIsBootstrapping(true);
+    startedAtRef.current = startedAtRef.current ?? new Date().toISOString();
+
+    if (!shouldPreserveExisting) {
+      clearTranscript();
+      startedAtRef.current = new Date().toISOString();
+    }
+    completedAtRef.current = null;
 
     try {
       const ready = await ensureInitialized();
@@ -351,7 +498,7 @@ export function FloatingTranscriptionRecorder() {
         return;
       }
 
-      await startRecording(audioSource);
+      await startRecording(audioSource, { preserveExisting: shouldPreserveExisting });
     } finally {
       if (launchSession === launchSessionRef.current) {
         setIsBootstrapping(false);
@@ -365,6 +512,11 @@ export function FloatingTranscriptionRecorder() {
       return;
     }
 
+    if (transcript?.text?.trim() || partialText.trim()) {
+      setIsExpanded(true);
+      return;
+    }
+
     await startLiveRecording();
   };
 
@@ -372,12 +524,11 @@ export function FloatingTranscriptionRecorder() {
     launchSessionRef.current += 1;
 
     if (isRecording || isTranscribing) {
-      cancel();
+      cancel({ clearTranscript: false });
     }
 
     setIsBootstrapping(false);
     setIsDownloadingModel(false);
-    clearTranscript();
     setIsExpanded(false);
     setIsModelDialogOpen(false);
   };
@@ -406,6 +557,7 @@ export function FloatingTranscriptionRecorder() {
       }
 
       clearTranscript();
+      startedAtRef.current = new Date().toISOString();
       await startRecording(audioSource);
     } finally {
       if (launchSession === launchSessionRef.current) {
@@ -418,6 +570,15 @@ export function FloatingTranscriptionRecorder() {
   const handleStopRecording = async () => {
     await stopRecording();
   };
+
+  useEffect(() => {
+    return () => {
+      cancel({ clearTranscript: false });
+      if (latestSnapshotRef.current) {
+        void onSnapshotChange(latestSnapshotRef.current);
+      }
+    };
+  }, [cancel, onSnapshotChange]);
 
   return (
     <FloatingTranscriptionRecorderView
