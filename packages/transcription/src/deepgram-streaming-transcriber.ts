@@ -99,8 +99,11 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
   }
 
   private handleMessage(data: TranscriptionMessage): void {
+    console.log("[DeepgramTranscriber] Received message:", data.type, data.text?.substring(0, 50));
+
     switch (data.type) {
       case "interim":
+        console.log("[DeepgramTranscriber] Emitting interim partial:", data.text);
         this.emit("transcription:partial", {
           text: data.text || "",
           isFinal: false,
@@ -111,6 +114,7 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
         break;
 
       case "final":
+        console.log("[DeepgramTranscriber] Emitting final partial:", data.text);
         if (data.text && data.text.trim()) {
           this.allText.push(data.text.trim());
 
@@ -136,14 +140,17 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
         break;
 
       case "speech_started":
+        console.log("[DeepgramTranscriber] Speech started");
         this.emit("vad:speech-start");
         break;
 
       case "utterance_end":
+        console.log("[DeepgramTranscriber] Utterance end");
         this.emit("vad:speech-end");
         break;
 
       case "error":
+        console.error("[DeepgramTranscriber] Error:", data.error);
         this.emit("transcription:error", new Error(data.error || "Unknown error"));
         break;
     }

@@ -185,6 +185,11 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
         // Forward Deepgram events to renderer
         deepgramTranscriber.on("transcription:partial", (partial: DeepgramPartialTranscription) => {
+          console.log(
+            "[Transcription IPC] Forwarding partial to renderer:",
+            partial.isFinal ? "FINAL" : "INTERIM",
+            partial.text?.substring(0, 50)
+          );
           mainWindow.webContents.send("transcription:partial", {
             text: partial.text,
             isFinal: partial.isFinal,
