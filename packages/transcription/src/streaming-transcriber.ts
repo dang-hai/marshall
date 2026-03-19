@@ -81,8 +81,8 @@ export class StreamingTranscriber extends EventEmitter {
     this.config = {
       tempDir: tmpdir(),
       keepTempFiles: false,
-      minSegmentDuration: 1.0,
-      maxSegmentDuration: 30.0,
+      minSegmentDuration: 0.35,
+      maxSegmentDuration: 12.0,
       streamingEnabled: true,
       vad: {},
       language: "en",
@@ -96,8 +96,8 @@ export class StreamingTranscriber extends EventEmitter {
     this.vad = new VoiceActivityDetector({
       sampleRate: 16000, // We'll resample before VAD
       threshold: 0.015,
-      minSpeechDuration: 200,
-      silenceTimeout: 800,
+      minSpeechDuration: 120,
+      silenceTimeout: 250,
       ...this.config.vad,
     });
 
