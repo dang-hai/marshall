@@ -86,6 +86,12 @@ contextBridge.exposeInMainWorld("notesAPI", {
     ipcRenderer.invoke("notes:save-transcription", noteId, input),
 });
 
+// AI API
+contextBridge.exposeInMainWorld("aiAPI", {
+  completion: (input: { prompt: string; system?: string }) =>
+    ipcRenderer.invoke("ai:completion", input),
+});
+
 // Transcription API
 contextBridge.exposeInMainWorld("transcriptionAPI", {
   // Models
@@ -309,6 +315,9 @@ declare global {
         noteId: string,
         input: SaveNoteTranscriptionInput
       ) => Promise<NoteTranscriptionSnapshot>;
+    };
+    aiAPI: {
+      completion: (input: { prompt: string; system?: string }) => Promise<{ text: string }>;
     };
     transcriptionAPI: {
       // Models

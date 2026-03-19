@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   CalendarDays,
+  CalendarPlus,
   ChevronLeft,
   Ellipsis,
   FolderPlus,
@@ -19,7 +20,8 @@ import {
 import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
-import { MARSHALL_EVENTS } from "../App";
+import { PlanMeetingModal } from "./PlanMeetingModal";
+import { MARSHALL_EVENTS } from "../constants";
 
 interface LegacyQuickNote {
   id: number;
@@ -251,6 +253,7 @@ export function HomePanel() {
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [showPlanMeetingModal, setShowPlanMeetingModal] = useState(false);
   const titleRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const pendingNoteUpdatesRef = useRef<Record<string, { title?: string; body?: string }>>({});
@@ -438,12 +441,12 @@ export function HomePanel() {
   }, [flushPendingNoteUpdate]);
 
   const createNote = useCallback(
-    async (title?: string) => {
+    async (options?: { title?: string; body?: string }) => {
       setIsCreatingNote(true);
       setNotesError(null);
 
       try {
-        const note = await window.notesAPI.create(title ? { title } : undefined);
+        const note = await window.notesAPI.create(options);
         setOpenMenuId(null);
         applySavedNote(note);
         setActiveNoteId(note.id);
@@ -459,7 +462,7 @@ export function HomePanel() {
   // Listen for create note events from call notifications
   useEffect(() => {
     const handleCreateNote = (event: CustomEvent<{ title: string }>) => {
-      createNote(event.detail.title);
+      createNote({ title: event.detail.title });
     };
 
     window.addEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
@@ -468,6 +471,14 @@ export function HomePanel() {
       window.removeEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
     };
   }, [createNote]);
+
+  const handlePlanGenerated = useCallback(
+    (plan: string, title: string) => {
+      setShowPlanMeetingModal(false);
+      createNote({ title, body: textToParagraphHtml(plan) });
+    },
+    [createNote]
+  );
 
   const moveNoteToTrash = async (noteId: string) => {
     const trashedAt = new Date().toISOString();
@@ -686,6 +697,14 @@ export function HomePanel() {
                   <FolderPlus className="h-3 w-3" />
                   <span>Add Folder</span>
                 </button>
+                <button
+                  type="button"
+                  className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
+                  onClick={() => setShowPlanMeetingModal(true)}
+                >
+                  <CalendarPlus className="h-3 w-3" />
+                  <span>+ Plan Meeting</span>
+                </button>
               </div>
 
               <div className="relative mt-10 min-h-[20rem] flex-1">
@@ -714,6 +733,12 @@ export function HomePanel() {
           persistedSnapshot={activeNote.transcription}
           onSnapshotChange={handleSnapshotChange}
         />
+        {showPlanMeetingModal && (
+          <PlanMeetingModal
+            onClose={() => setShowPlanMeetingModal(false)}
+            onPlanGenerated={handlePlanGenerated}
+          />
+        )}
       </>
     );
   }

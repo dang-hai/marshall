@@ -320,6 +320,15 @@ app.whenReady().then(() => {
     }
   );
 
+  // AI completion handler
+  ipcMain.handle("ai:completion", async (_event, input: { prompt: string; system?: string }) => {
+    const payload = await authenticatedJsonRequest("/api/ai/completion", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return payload as { text: string };
+  });
+
   // Shell IPC handlers
   ipcMain.handle("shell:open-path", async (_event, path: string) => {
     return shell.openPath(path);
