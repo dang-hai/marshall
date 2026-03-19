@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.3](https://github.com/dang-hai/marshall/compare/v0.0.2...v0.0.3) (2026-03-19)
+
+
+### Features
+
+* add audio settings page and CoreML model support ([#22](https://github.com/dang-hai/marshall/issues/22)) ([44f1f1b](https://github.com/dang-hai/marshall/commit/44f1f1b9a3ed255e66d5e37332dba540b475c15a))
+* add floating transcription recorder with subtle icon-only ui ([77ead54](https://github.com/dang-hai/marshall/commit/77ead540f2cd3ec6af7b745f2fd4b1c7edea204d))
+
+
+### Bug Fixes
+
+* build shared package before desktop to fix ci deployment ([a66b4e1](https://github.com/dang-hai/marshall/commit/a66b4e1432323db0b1fc22cfb74b8e610b00ac0f))
+* show floating recorder only in note editor, centered at bottom ([ab3c6ed](https://github.com/dang-hai/marshall/commit/ab3c6ed5824958381a089737f632114dfd98f633))
+
 ## [0.0.2](https://github.com/dang-hai/marshall/compare/v0.0.1...v0.0.2) (2026-03-18)
 
 
