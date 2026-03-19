@@ -78,6 +78,12 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
   isModelDownloaded: (modelName: string) =>
     ipcRenderer.invoke("transcription:is-model-downloaded", modelName),
 
+  // CoreML (macOS only)
+  generateCoreML: (modelName: string) =>
+    ipcRenderer.invoke("transcription:generate-coreml", modelName),
+  isCoreMLAvailable: (modelName: string) =>
+    ipcRenderer.invoke("transcription:is-coreml-available", modelName),
+
   // Permissions
   getPermissions: () => ipcRenderer.invoke("transcription:get-permissions"),
   requestMicPermission: () => ipcRenderer.invoke("transcription:request-mic-permission"),
@@ -112,6 +118,10 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
   onDownloadProgress: (callback: (progress: unknown) => void) => {
     ipcRenderer.on("transcription:download-progress", (_event, progress) => callback(progress));
     return () => ipcRenderer.removeAllListeners("transcription:download-progress");
+  },
+  onCoreMLProgress: (callback: (progress: unknown) => void) => {
+    ipcRenderer.on("transcription:coreml-progress", (_event, progress) => callback(progress));
+    return () => ipcRenderer.removeAllListeners("transcription:coreml-progress");
   },
   onProgress: (callback: (percent: number) => void) => {
     ipcRenderer.on("transcription:progress", (_event, percent) => callback(percent));
@@ -180,10 +190,17 @@ interface DownloadProgress {
   percent: number;
 }
 
+interface CoreMLProgress {
+  modelName: string;
+  stage: "starting" | "installing-deps" | "generating" | "complete" | "error";
+  message: string;
+}
+
 interface ModelInfo {
   name: string;
   size: string;
   downloaded: boolean;
+  coremlAvailable: boolean;
   path: string;
 }
 
@@ -264,6 +281,10 @@ declare global {
       deleteModel: (modelName: string) => Promise<{ status: string }>;
       isModelDownloaded: (modelName: string) => Promise<boolean>;
 
+      // CoreML (macOS only)
+      generateCoreML: (modelName: string) => Promise<string>;
+      isCoreMLAvailable: (modelName: string) => Promise<boolean>;
+
       // Permissions
       getPermissions: () => Promise<{ microphone: string; screen: string }>;
       requestMicPermission: () => Promise<boolean>;
@@ -306,6 +327,7 @@ declare global {
 
       // Events
       onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void;
+      onCoreMLProgress: (callback: (progress: CoreMLProgress) => void) => () => void;
       onProgress: (callback: (percent: number) => void) => () => void;
       onPartial: (callback: (partial: PartialTranscription) => void) => () => void;
       onSegment: (callback: (data: SegmentData) => void) => () => void;

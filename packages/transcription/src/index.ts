@@ -25,9 +25,11 @@ export {
   getModelsDirectory,
   getModelPath,
   isModelDownloaded,
+  isCoreMLEncoderAvailable,
   listAvailableModels,
   downloadModel,
   deleteModel,
+  generateCoreMLEncoder,
   WHISPER_MODELS,
 } from "./whisper/index.js";
 export type {
@@ -38,6 +40,8 @@ export type {
   WhisperModelName,
   DownloadProgress,
   DownloadProgressCallback,
+  CoreMLGenerationProgress,
+  CoreMLProgressCallback,
 } from "./whisper/index.js";
 
 // Audio utilities

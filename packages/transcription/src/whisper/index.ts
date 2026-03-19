@@ -8,6 +8,7 @@ export {
   listAvailableModels,
   downloadModel,
   deleteModel,
+  generateCoreMLEncoder,
 } from "./models.js";
 export { WHISPER_MODELS } from "./types.js";
 export type {
@@ -17,4 +18,9 @@ export type {
   WhisperProgress,
   WhisperModelName,
 } from "./types.js";
-export type { DownloadProgress, DownloadProgressCallback } from "./models.js";
+export type {
+  DownloadProgress,
+  DownloadProgressCallback,
+  CoreMLGenerationProgress,
+  CoreMLProgressCallback,
+} from "./models.js";
