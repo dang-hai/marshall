@@ -8,6 +8,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
 import { LoginScreen } from "./components/LoginScreen";
 import { CallNotificationStack } from "./components/CallNotification";
+import { CodexNotificationWindow } from "./components/CodexNotificationWindow";
 import { useAuth, useCallDetection } from "./hooks";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
 
@@ -255,7 +256,7 @@ export const MARSHALL_EVENTS = {
   START_TRANSCRIPTION: "marshall:start-transcription",
 } as const;
 
-export default function App() {
+function MainDesktopApp() {
   const { user, isLoading, isAuthenticated, signOut, signIn } = useAuth();
 
   const handleCreateNote = useCallback((title: string) => {
@@ -295,4 +296,17 @@ export default function App() {
       onStartTranscription={handleStartTranscription}
     />
   );
+}
+
+export default function App() {
+  const windowMode =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("window");
+
+  if (windowMode === "codex-monitor") {
+    return <CodexNotificationWindow />;
+  }
+
+  return <MainDesktopApp />;
 }

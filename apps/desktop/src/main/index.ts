@@ -1,7 +1,17 @@
-import { app, BrowserWindow, Tray, session, ipcMain, desktopCapturer, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  session,
+  ipcMain,
+  desktopCapturer,
+  shell,
+  screen,
+} from "electron";
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type {
+  CodexMonitorSessionInput,
   CreateNoteInput,
   SaveNoteTranscriptionInput,
   UpdateNoteInput,
@@ -10,6 +20,7 @@ import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
 import { setupSettingsIPC } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
+import { CodexMonitorService } from "./codex-monitor";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -23,6 +34,7 @@ app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let codexNotificationWindow: BrowserWindow | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -175,13 +187,10 @@ function createWindow() {
     }
   });
 
-  // electron-vite injects these env vars
+  loadRendererWindow(mainWindow);
+
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-    // Open DevTools in development
     mainWindow.webContents.openDevTools({ mode: "detach" });
-  } else {
-    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
   mainWindow.on("closed", () => {
@@ -196,7 +205,68 @@ function createWindow() {
   });
 }
 
+function loadRendererWindow(window: BrowserWindow, query?: Record<string, string>) {
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const url = new URL(process.env.ELECTRON_RENDERER_URL);
+    if (query) {
+      Object.entries(query).forEach(([key, value]) => {
+        url.searchParams.set(key, value);
+      });
+    }
+    window.loadURL(url.toString());
+    return;
+  }
+
+  window.loadFile(join(__dirname, "../renderer/index.html"), {
+    query,
+  });
+}
+
+function createCodexNotificationWindow() {
+  if (codexNotificationWindow && !codexNotificationWindow.isDestroyed()) {
+    return codexNotificationWindow;
+  }
+
+  const { workArea } = screen.getPrimaryDisplay();
+  codexNotificationWindow = new BrowserWindow({
+    width: 360,
+    height: 520,
+    x: workArea.x + workArea.width - 380,
+    y: workArea.y + 56,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 18, y: 18 },
+    webPreferences: {
+      preload: join(__dirname, "../preload/index.mjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+    },
+  });
+
+  codexNotificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  loadRendererWindow(codexNotificationWindow, { window: "codex-monitor" });
+
+  codexNotificationWindow.on("closed", () => {
+    codexNotificationWindow = null;
+  });
+
+  return codexNotificationWindow;
+}
+
 app.whenReady().then(() => {
+  const codexMonitor = new CodexMonitorService({
+    createNotificationWindow: createCodexNotificationWindow,
+  });
+
   // Set up permission handlers for media access
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     // Allow media permissions (microphone, screen capture)
@@ -319,6 +389,15 @@ app.whenReady().then(() => {
       return (payload as { transcription: unknown }).transcription;
     }
   );
+
+  ipcMain.handle("codex-monitor:update-session", async (_event, input: CodexMonitorSessionInput) =>
+    codexMonitor.updateSession(input)
+  );
+  ipcMain.handle("codex-monitor:clear-session", async (_event, noteId?: string) =>
+    codexMonitor.clearSession(noteId)
+  );
+  ipcMain.handle("codex-monitor:get-state", () => codexMonitor.getState());
+  ipcMain.handle("codex-monitor:dismiss-window", () => codexMonitor.dismissWindow());
 
   // Shell IPC handlers
   ipcMain.handle("shell:open-path", async (_event, path: string) => {

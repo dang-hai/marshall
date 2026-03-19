@@ -11,6 +11,7 @@ import {
   type TranscriptionResult,
 } from "../hooks/useTranscription";
 import { cn } from "../lib/utils";
+import { extractPlainTextFromHtml } from "../lib/note-body";
 import { ModelSetupDialog } from "./ModelSetupDialog";
 import { MARSHALL_EVENTS } from "../App";
 
@@ -289,12 +290,16 @@ export function FloatingTranscriptionRecorderView({
 
 interface FloatingTranscriptionRecorderProps {
   noteId: string;
+  noteBodyHtml: string;
+  noteTitle: string;
   persistedSnapshot: NoteTranscriptionSnapshot | null;
   onSnapshotChange: (snapshot: SaveNoteTranscriptionInput) => Promise<void> | void;
 }
 
 export function FloatingTranscriptionRecorder({
   noteId,
+  noteBodyHtml,
+  noteTitle,
   persistedSnapshot,
   onSnapshotChange,
 }: FloatingTranscriptionRecorderProps) {
@@ -442,6 +447,14 @@ export function FloatingTranscriptionRecorder({
     const snapshot = buildSnapshot();
     latestSnapshotRef.current = snapshot;
 
+    void window.codexMonitorAPI?.updateSession({
+      noteId,
+      noteTitle,
+      noteBodyHtml,
+      noteBodyText: extractPlainTextFromHtml(noteBodyHtml).replace(/\s+/g, " ").trim(),
+      transcription: snapshot,
+    });
+
     if (
       snapshot.status === "draft" &&
       !snapshot.startedAt &&
@@ -462,7 +475,7 @@ export function FloatingTranscriptionRecorder({
     }, 300);
 
     return () => window.clearTimeout(timeoutId);
-  }, [buildSnapshot, onSnapshotChange, persistedSnapshot]);
+  }, [buildSnapshot, noteBodyHtml, noteId, noteTitle, onSnapshotChange, persistedSnapshot]);
 
   const ensureInitialized = useCallback(async () => {
     if (!resolvedModel.model) {
@@ -585,12 +598,13 @@ export function FloatingTranscriptionRecorder({
 
   useEffect(() => {
     return () => {
+      void window.codexMonitorAPI?.clearSession(noteId);
       cancel({ clearTranscript: false });
       if (latestSnapshotRef.current) {
         void onSnapshotChange(latestSnapshotRef.current);
       }
     };
-  }, [cancel, onSnapshotChange]);
+  }, [cancel, noteId, onSnapshotChange]);
 
   return (
     <FloatingTranscriptionRecorderView

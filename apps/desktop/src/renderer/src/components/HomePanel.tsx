@@ -16,10 +16,25 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
+import type {
+  CodexMonitorNotePatch,
+  NoteRecord,
+  SaveNoteTranscriptionInput,
+} from "@marshall/shared";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 import { MARSHALL_EVENTS } from "../App";
+import {
+  applyCodexNotePatch,
+  DIVIDER_BLOCK_CLASS,
+  extractPlainTextFromHtml,
+  getBlockClassName,
+  normalizeEditorHtml,
+  PARAGRAPH_BLOCK_CLASS,
+  renderInlineMarkdown,
+  textToParagraphHtml,
+  type MarkdownBlockType,
+} from "../lib/note-body";
 
 interface LegacyQuickNote {
   id: number;
@@ -31,18 +46,6 @@ interface LegacyQuickNote {
 }
 
 const QUICK_NOTES_STORAGE_KEY = "marshall.quick-notes";
-const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
-const HEADING_ONE_BLOCK_CLASS =
-  "min-h-[2.5rem] font-serif text-[1.5rem] font-medium leading-tight tracking-[-0.01em]";
-const HEADING_TWO_BLOCK_CLASS =
-  "min-h-[2.2rem] font-serif text-[1.25rem] font-medium leading-tight tracking-[-0.01em]";
-const BULLET_BLOCK_CLASS =
-  "relative min-h-[1.85rem] pl-6 before:absolute before:left-0 before:top-0 before:text-foreground/65 before:content-['•']";
-const QUOTE_BLOCK_CLASS = "min-h-[1.85rem] border-l-2 border-border/80 pl-4 text-muted-foreground";
-const DIVIDER_BLOCK_CLASS = "my-4 border-0 border-t border-border/80";
-const INLINE_CODE_CLASS = "rounded bg-muted px-1 py-0.5 font-mono text-[0.875em] text-foreground";
-
-type MarkdownBlockType = "paragraph" | "heading-1" | "heading-2" | "bullet" | "quote";
 
 const METADATA_CHIP_CLASS =
   "inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground";
@@ -158,62 +161,6 @@ function insertPlainTextAtSelection(text: string) {
   range.collapse(true);
   selection.removeAllRanges();
   selection.addRange(range);
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function renderInlineMarkdown(text: string) {
-  return escapeHtml(text)
-    .replace(/`([^`]+)`/g, `<code class="${INLINE_CODE_CLASS}">$1</code>`)
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>")
-    .replace(/(^|[^_])_([^_]+)_(?!_)/g, "$1<em>$2</em>");
-}
-
-function textToParagraphHtml(text: string) {
-  const lines = text.split("\n");
-  return lines
-    .map(
-      (line) =>
-        `<div class="${PARAGRAPH_BLOCK_CLASS}">${renderInlineMarkdown(line) || "<br>"}</div>`
-    )
-    .join("");
-}
-
-function extractPlainTextFromHtml(html: string) {
-  if (typeof window === "undefined") {
-    return html.replace(/<[^>]+>/g, " ");
-  }
-
-  const container = window.document.createElement("div");
-  container.innerHTML = html;
-  return container.innerText.replace(/\r\n/g, "\n");
-}
-
-function normalizeEditorHtml(html: string) {
-  return html.trim();
-}
-
-function getBlockClassName(type: MarkdownBlockType) {
-  switch (type) {
-    case "heading-1":
-      return HEADING_ONE_BLOCK_CLASS;
-    case "heading-2":
-      return HEADING_TWO_BLOCK_CLASS;
-    case "bullet":
-      return BULLET_BLOCK_CLASS;
-    case "quote":
-      return QUOTE_BLOCK_CLASS;
-    default:
-      return PARAGRAPH_BLOCK_CLASS;
-  }
 }
 
 function findEditorBlock(editor: HTMLDivElement, node: Node | null): HTMLElement | null {
@@ -469,6 +416,32 @@ export function HomePanel() {
     };
   }, [createNote]);
 
+  useEffect(() => {
+    if (!window.codexMonitorAPI) {
+      return;
+    }
+
+    const handleNotePatch = (patch: CodexMonitorNotePatch) => {
+      if (patch.noteId !== activeNoteId) {
+        return;
+      }
+
+      const currentHtml = bodyRef.current?.innerHTML ?? activeNote?.body ?? "";
+      const nextHtml = applyCodexNotePatch(currentHtml, patch);
+      if (normalizeEditorHtml(nextHtml) === normalizeEditorHtml(currentHtml)) {
+        return;
+      }
+
+      if (bodyRef.current) {
+        setEditableHtml(bodyRef.current, nextHtml);
+      }
+
+      updateActiveNote("body", nextHtml);
+    };
+
+    return window.codexMonitorAPI.onNotePatch(handleNotePatch);
+  }, [activeNote?.body, activeNoteId]);
+
   const moveNoteToTrash = async (noteId: string) => {
     const trashedAt = new Date().toISOString();
     setNotes((currentNotes) =>
@@ -711,6 +684,8 @@ export function HomePanel() {
         </div>
         <FloatingTranscriptionRecorder
           noteId={activeNote.id}
+          noteBodyHtml={activeNote.body}
+          noteTitle={activeNote.title}
           persistedSnapshot={activeNote.transcription}
           onSnapshotChange={handleSnapshotChange}
         />

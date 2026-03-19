@@ -109,6 +109,43 @@ export interface UpdateNoteInput {
   trashedAt?: string | null;
 }
 
+export interface CodexMonitorSessionInput {
+  noteId: string;
+  noteTitle: string;
+  noteBodyHtml: string;
+  noteBodyText: string;
+  transcription: SaveNoteTranscriptionInput;
+}
+
+export interface CodexMonitorNudge {
+  id: string;
+  title: string;
+  body: string;
+  priority: "high" | "medium" | "low";
+  suggestedPhrase: string | null;
+  createdAt: string;
+}
+
+export interface CodexMonitorNotePatch {
+  noteId: string;
+  checkedPlanItems: string[];
+  followUps: string[];
+  summary: string | null;
+  final: boolean;
+  generatedAt: string;
+}
+
+export interface CodexMonitorState {
+  status: "idle" | "monitoring" | "analyzing" | "error";
+  noteId: string | null;
+  noteTitle: string | null;
+  nudge: CodexMonitorNudge | null;
+  followUps: string[];
+  summary: string | null;
+  lastAnalyzedAt: string | null;
+  error: string | null;
+}
+
 export const APP_NAME = "Marshall";
 export const APP_VERSION = "0.0.1";
 
