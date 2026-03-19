@@ -131,7 +131,9 @@ bun run --filter @marshall/desktop package
 | `DATABASE_URL`       | Neon PostgreSQL connection string |
 | `BETTER_AUTH_SECRET` | Secret key for auth token signing |
 | `BETTER_AUTH_URL`    | Base URL for auth callbacks       |
+
 =======
+
 # Architecture
 
 ## Application Stack
@@ -148,6 +150,17 @@ bun run --filter @marshall/desktop package
 
 - Authentication is handled with Better Auth.
 - Persistent application data is stored in Neon Database.
+
+### Desktop Auth Flow (Electron + Better Auth + Elysia)
+
+Better Auth's electron plugin doesn't work with Elysia (cookie not preserved through OAuth). Custom flow instead:
+
+1. **Electron** generates state, opens browser to `/sign-in?desktop_state=...&desktop_scheme=marshall`
+2. **Browser** completes OAuth, redirects to `/auth/desktop/success`
+3. **Backend** reads session, redirects to `marshall://auth/callback?token=...&state=...`
+4. **Electron** receives deep link, resolves pending auth promise
+
+Note: `marshall://auth/callback` parses as `host=auth, pathname=/callback` (not `pathname=/auth/callback`).
 
 ## Feature Management
 

@@ -1,5 +1,6 @@
 import { Check, ChevronRight, FolderOpen, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import type { DisplayUser } from "@marshall/shared";
 import {
   defaultAppSettings,
   type AppSettings,
@@ -22,7 +23,7 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 import { cn, getInitial } from "../lib/utils";
-import { fallbackUser, type SettingsSectionId } from "./settings-config";
+import { type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
 
 const defaultCalendarSettings: AppSettings["calendar"] = defaultAppSettings.calendar;
@@ -99,6 +100,8 @@ const transcriptionProviderOptions: Array<{
 interface SettingsPanelProps {
   onBack: () => void;
   section: SettingsSectionId;
+  user?: DisplayUser | null;
+  onSignOut?: () => Promise<void>;
 }
 
 interface PermissionRowProps {
@@ -215,13 +218,14 @@ function ProviderRow({
 
 const defaultTranscriptionSettings: AppSettings["transcription"] = defaultAppSettings.transcription;
 
-export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
+export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPanelProps) {
   const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
     useAudioCapture();
   const { error, loading, settings, updateSection } = useSettings();
   const calendarSettings = settings?.calendar ?? defaultCalendarSettings;
   const transcriptionSettings = settings?.transcription ?? defaultTranscriptionSettings;
   const calendarReady = !loading && Boolean(settings);
+  const displayName = user?.name || user?.email || "User";
   const transcriptionReady = !loading && Boolean(settings);
 
   const [modelStorageInfo, setModelStorageInfo] = useState<ModelStorageInfo | null>(null);
@@ -299,21 +303,29 @@ export function SettingsPanel({ onBack, section }: SettingsPanelProps) {
               Current user
             </p>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-muted-foreground">
-                {getInitial(fallbackUser.name)}
-              </div>
+              {user?.image ? (
+                <img
+                  src={user.image}
+                  alt={displayName}
+                  className="h-10 w-10 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-muted-foreground">
+                  {getInitial(displayName)}
+                </div>
+              )}
               <div>
-                <h3 className="text-sm font-medium text-foreground">{fallbackUser.name}</h3>
-                <p className="text-xs text-muted-foreground">{fallbackUser.email}</p>
+                <h3 className="text-sm font-medium text-foreground">{displayName}</h3>
+                <p className="text-xs text-muted-foreground">{user?.email || "Not signed in"}</p>
               </div>
             </div>
-            <div className="mt-4 rounded-lg border border-dashed border-border/70 bg-muted/30 p-3">
-              <p className="text-xs font-medium text-foreground">{fallbackUser.status}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Authentication is not wired in yet. This section is the placeholder for the
-                currently logged in user and account actions.
-              </p>
-            </div>
+            {onSignOut && (
+              <div className="mt-4">
+                <Button variant="outline" size="sm" onClick={onSignOut}>
+                  Sign out
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

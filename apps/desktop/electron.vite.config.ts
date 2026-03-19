@@ -38,7 +38,11 @@ export default defineConfig({
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: ["@better-auth/electron"],
+      }),
+    ],
     build: {
       rollupOptions: {
         input: {

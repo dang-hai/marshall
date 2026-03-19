@@ -12,6 +12,6 @@ describe("sidebar profile menu", () => {
     expect(markup).toContain("Profile menu");
     expect(markup).toContain("Settings");
     expect(markup).not.toContain("Calendar preferences");
-    expect(markup).toContain("Signed in placeholder");
+    expect(markup).toContain("Signed in");
   });
 });

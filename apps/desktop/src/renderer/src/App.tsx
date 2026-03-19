@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Home, MessageSquare } from "lucide-react";
-import { APP_NAME } from "@marshall/shared";
+import { Home, MessageSquare, Loader2 } from "lucide-react";
+import { APP_NAME, type DisplayUser } from "@marshall/shared";
 import { DESKTOP_NAVIGATION_ROUTES } from "../../shared/navigation";
 import { cn } from "./lib/utils";
 import { HomePanel } from "./components/HomePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
+import { LoginScreen } from "./components/LoginScreen";
+import { useAuth } from "./hooks";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
 
 const sidebarItems = [
@@ -19,12 +21,16 @@ interface AppShellProps {
   initialProfileMenuOpen?: boolean;
   initialSettingsSection?: SettingsSectionId;
   initialView?: ViewId;
+  user?: DisplayUser | null;
+  onSignOut?: () => Promise<void>;
 }
 
 export function AppShell({
   initialProfileMenuOpen = false,
   initialSettingsSection = "account",
   initialView = "home",
+  user,
+  onSignOut,
 }: AppShellProps) {
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [activeSettingsSection, setActiveSettingsSection] =
@@ -33,7 +39,7 @@ export function AppShell({
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    window.electronAPI?.onNavigate((path) => {
+    const cleanup = window.electronAPI?.onNavigate((path) => {
       if (path === DESKTOP_NAVIGATION_ROUTES.settings) {
         setActiveView("settings");
         setActiveSettingsSection("account");
@@ -43,6 +49,7 @@ export function AppShell({
 
       setActiveView("home");
     });
+    return cleanup;
   }, []);
 
   useEffect(() => {
@@ -158,6 +165,8 @@ export function AppShell({
                 isOpen={isProfileMenuOpen}
                 onOpenSettings={openSettings}
                 onToggle={() => setIsProfileMenuOpen((current) => !current)}
+                user={user}
+                onSignOut={onSignOut}
               />
             </>
           )}
@@ -186,7 +195,12 @@ export function AppShell({
           )}
 
           {activeView === "settings" && (
-            <SettingsPanel onBack={() => setActiveView("home")} section={activeSettingsSection} />
+            <SettingsPanel
+              onBack={() => setActiveView("home")}
+              section={activeSettingsSection}
+              user={user}
+              onSignOut={onSignOut}
+            />
           )}
         </section>
       </main>
@@ -195,5 +209,23 @@ export function AppShell({
 }
 
 export default function App() {
-  return <AppShell />;
+  const { user, isLoading, isAuthenticated, signOut, signIn } = useAuth();
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <div className="fixed inset-x-0 top-0 h-7 app-drag" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isAuthenticated) {
+    return <LoginScreen onSignIn={signIn} />;
+  }
+
+  // Show main app shell when authenticated with real user data
+  return <AppShell user={user} onSignOut={signOut} />;
 }

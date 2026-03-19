@@ -13,6 +13,9 @@
     "package": "electron-builder"
   },
   "dependencies": {
+    "@better-auth/electron": "^1.5.5",
+    "better-auth": "^1.5.5",
+    "conf": "^13.0.0",
     "@marshall/api": "workspace:*",
     "@marshall/auth": "workspace:*",
     "@marshall/database": "workspace:*",
@@ -46,6 +49,14 @@
   "build": {
     "appId": "com.marshall.app",
     "productName": "Marshall",
+    "protocols": [
+      {
+        "name": "Marshall Protocol",
+        "schemes": [
+          "marshall"
+        ]
+      }
+    ],
     "directories": {
       "output": "dist"
     },

@@ -17,11 +17,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "bun test test"
   },
   "dependencies": {
-    "better-auth": "^1.0.0",
-    "@marshall/database": "workspace:*"
+    "@better-auth/electron": "1.5.5",
+    "@marshall/database": "workspace:*",
+    "better-auth": "^1.5.5"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

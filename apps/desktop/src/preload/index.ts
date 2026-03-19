@@ -6,12 +6,27 @@ import type { AppSettings } from "../shared/settings";
 contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform,
   onNavigate: (callback: (path: DesktopNavigationRoute) => void) => {
-    ipcRenderer.on("navigate", (_event, path) => callback(path));
+    const handler = (_event: Electron.IpcRendererEvent, path: DesktopNavigationRoute) =>
+      callback(path);
+    ipcRenderer.on("navigate", handler);
+    return () => ipcRenderer.removeListener("navigate", handler);
   },
   minimize: () => ipcRenderer.send("window:minimize"),
   maximize: () => ipcRenderer.send("window:maximize"),
   close: () => ipcRenderer.send("window:close"),
   openPath: (path: string) => ipcRenderer.invoke("shell:open-path", path),
+});
+
+// Auth API (custom desktop auth flow)
+contextBridge.exposeInMainWorld("authAPI", {
+  // Request authentication (opens browser)
+  requestAuth: (options?: { provider?: string }) => ipcRenderer.invoke("auth:request", options),
+  // Get stored auth token
+  getToken: () => ipcRenderer.invoke("auth:get-token"),
+  // Get current user from server
+  getUser: () => ipcRenderer.invoke("auth:get-user"),
+  // Sign out
+  signOut: () => ipcRenderer.invoke("auth:sign-out"),
 });
 
 // Desktop Capturer API for system audio capture (via IPC - required for Electron 30+)
@@ -159,8 +174,25 @@ interface StorageInfo {
   availableModels: Record<string, { size: string; url: string; bytes: number }>;
 }
 
+// AuthUser type matches @marshall/shared but declared inline for preload context isolation
+type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  image?: string;
+  emailVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 declare global {
   interface Window {
+    authAPI: {
+      requestAuth: (options?: { provider?: string }) => Promise<string>;
+      getToken: () => Promise<string | null>;
+      getUser: () => Promise<AuthUser | null>;
+      signOut: () => Promise<boolean>;
+    };
     electron: {
       desktopCapturer: {
         getSources: (options: {
@@ -180,7 +212,7 @@ declare global {
     };
     electronAPI: {
       platform: string;
-      onNavigate: (callback: (path: DesktopNavigationRoute) => void) => void;
+      onNavigate: (callback: (path: DesktopNavigationRoute) => void) => () => void;
       minimize: () => void;
       maximize: () => void;
       close: () => void;
