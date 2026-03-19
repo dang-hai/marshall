@@ -4,7 +4,6 @@ import { APP_NAME } from "@marshall/shared";
 import { DESKTOP_NAVIGATION_ROUTES } from "../../shared/navigation";
 import { cn } from "./lib/utils";
 import { HomePanel } from "./components/HomePanel";
-import { FloatingTranscriptionRecorder } from "./components/FloatingTranscriptionRecorder";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
@@ -191,8 +190,6 @@ export function AppShell({
           )}
         </section>
       </main>
-
-      {activeView === "home" && <FloatingTranscriptionRecorder />}
     </div>
   );
 }

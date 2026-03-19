@@ -82,9 +82,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     percent: number;
   } | null>(null);
 
-  // Partial transcriptions for streaming mode
-  const [partials, setPartials] = useState<PartialTranscription[]>([]);
-
   // Audio capture hook with chunk callback
   const audioCapture = useAudioCapture({
     sampleRate: 48000,
@@ -104,7 +101,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     });
 
     const unsubPartial = window.transcriptionAPI.onPartial((partial) => {
-      setPartials((prev) => [...prev, partial]);
       setState((prev) => ({
         ...prev,
         partialText: prev.partialText + " " + partial.text,
@@ -287,7 +283,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           transcript: null,
           partialText: "",
         }));
-        setPartials([]);
 
         // Start audio capture
         const captureStarted = await audioCapture.startCapture(source);
@@ -348,7 +343,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
   const cancel = useCallback(() => {
     audioCapture.stopCapture();
     window.transcriptionAPI.cancel();
-    setPartials([]);
 
     setState((prev) => ({
       ...prev,
@@ -368,7 +362,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       error: null,
       partialText: "",
     }));
-    setPartials([]);
   }, []);
 
   const setVADThreshold = useCallback(async (threshold: number) => {
@@ -385,7 +378,6 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     models,
     storageInfo,
     downloadProgress,
-    partials,
     audioCapture,
 
     // Actions

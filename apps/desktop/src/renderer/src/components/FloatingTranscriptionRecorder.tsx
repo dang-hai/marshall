@@ -14,6 +14,18 @@ import { ModelSetupDialog } from "./ModelSetupDialog";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
 
+const SOUNDWAVE_CSS = `
+@keyframes soundwave {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+.animate-soundwave {
+  animation: soundwave 0.8s ease-in-out infinite;
+}
+`;
+
+const STATIC_WAVE_HEIGHTS = [4, 8, 12, 8, 4] as const;
+
 export interface RecorderResolvedModel {
   model: ModelInfo | null;
   selectedModelName: string;
@@ -73,7 +85,7 @@ function AnimatedSoundWave({
 }) {
   return (
     <div className={cn("flex items-center justify-center gap-[3px]", className)}>
-      {[0, 1, 2, 3, 4].map((i) => (
+      {STATIC_WAVE_HEIGHTS.map((staticHeight, i) => (
         <span
           key={i}
           className={cn(
@@ -82,19 +94,11 @@ function AnimatedSoundWave({
           )}
           style={{
             animationDelay: isAnimating ? `${i * 0.12}s` : undefined,
-            height: isAnimating ? undefined : [4, 8, 12, 8, 4][i],
+            height: isAnimating ? undefined : staticHeight,
           }}
         />
       ))}
-      <style>{`
-        @keyframes soundwave {
-          0%, 100% { height: 4px; }
-          50% { height: 16px; }
-        }
-        .animate-soundwave {
-          animation: soundwave 0.8s ease-in-out infinite;
-        }
-      `}</style>
+      <style>{SOUNDWAVE_CSS}</style>
     </div>
   );
 }
@@ -148,10 +152,10 @@ export function FloatingTranscriptionRecorderView({
           type="button"
         />
 
-        <div className="pointer-events-none absolute bottom-6 right-6 flex items-end justify-end">
+        <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 flex items-end justify-center">
           <div
             className={cn(
-              "pointer-events-auto app-no-drag origin-bottom-right overflow-hidden transition-all duration-300 ease-out",
+              "pointer-events-auto app-no-drag origin-bottom overflow-hidden transition-all duration-300 ease-out",
               isExpanded
                 ? "w-[22rem] max-w-[calc(100vw-3rem)] rounded-2xl border border-stone-200/80 bg-stone-50 shadow-[0_25px_50px_-12px_rgba(28,25,23,0.25)]"
                 : "h-12 w-12 rounded-full border border-stone-200 bg-white shadow-lg hover:shadow-xl hover:scale-105"
@@ -302,7 +306,6 @@ export function FloatingTranscriptionRecorder() {
 
   const selectedModelName = (settings?.transcription.selectedModel ??
     FALLBACK_MODEL) as WhisperModelName;
-  const selectedModelInfo = models.find((model) => model.name === selectedModelName) ?? null;
   const resolvedModel = useMemo(
     () => resolveRecorderModel(models, selectedModelName),
     [models, selectedModelName]
@@ -419,7 +422,7 @@ export function FloatingTranscriptionRecorder() {
       partialText={partialText}
       progress={progress}
       resolvedModel={resolvedModel}
-      selectedModelSize={selectedModelInfo?.size ?? "Whisper model"}
+      selectedModelSize={resolvedModel.model?.size ?? "Whisper model"}
       transcript={transcript}
     />
   );
