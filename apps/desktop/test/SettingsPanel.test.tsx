@@ -3,12 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SettingsPanel } from "../src/renderer/src/components/SettingsPanel";
 
 describe("desktop settings panel", () => {
-  test("renders the placeholder account section", () => {
+  test("renders the account section with fallback when no user", () => {
     const markup = renderToStaticMarkup(<SettingsPanel onBack={() => {}} section="account" />);
 
     expect(markup).toContain("Current user");
-    expect(markup).toContain("Hai Dang");
-    expect(markup).toContain("Authentication is not wired in yet.");
+    expect(markup).toContain("User");
+    expect(markup).toContain("Not signed in");
     expect(markup).not.toContain("Sections");
   });
 
