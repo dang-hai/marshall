@@ -1,6 +1,6 @@
 import type { WhisperModelName } from "@marshall/transcription";
 
-export type TranscriptionProvider = "local" | "assemblyAI" | "speechmatics";
+export type TranscriptionProvider = "local" | "deepgram" | "assemblyAI" | "speechmatics";
 
 export interface AppSettings {
   transcription: {

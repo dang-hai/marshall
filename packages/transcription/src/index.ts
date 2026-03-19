@@ -10,6 +10,15 @@ export type {
   PartialTranscription,
 } from "./streaming-transcriber.js";
 
+// Deepgram streaming transcriber
+export { DeepgramStreamingTranscriber } from "./deepgram-streaming-transcriber.js";
+export type {
+  DeepgramTranscriberConfig,
+  DeepgramTranscriberEvents,
+  DeepgramPartialTranscription,
+  DeepgramTranscriptionResult,
+} from "./deepgram-streaming-transcriber.js";
+
 // Whisper
 export {
   WhisperProcess,

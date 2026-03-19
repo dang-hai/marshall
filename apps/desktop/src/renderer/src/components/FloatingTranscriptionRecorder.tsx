@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, Square, X } from "lucide-react";
+import { Mic, Square, X, Settings2 } from "lucide-react";
 import type { WhisperModelName } from "@marshall/transcription";
 import { defaultAppSettings } from "../../../shared/settings";
+import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
 import { useSettings } from "../hooks/useSettings";
 import {
   useTranscription,
   type ModelInfo,
   type TranscriptionResult,
 } from "../hooks/useTranscription";
-import type { AudioSource } from "../hooks/useAudioCapture";
 import { cn } from "../lib/utils";
 import { ModelSetupDialog } from "./ModelSetupDialog";
 
@@ -45,6 +45,7 @@ export interface FloatingTranscriptionRecorderViewProps {
   onDismissModelDialog: () => void;
   onDownloadModel: () => void;
   onOpen: () => void;
+  onOpenSettings: () => void;
   onRecordAgain: () => void;
   onStopRecording: () => void;
   partialText: string;
@@ -116,6 +117,7 @@ export function FloatingTranscriptionRecorderView({
   onDismissModelDialog,
   onDownloadModel,
   onOpen,
+  onOpenSettings,
   onRecordAgain,
   onStopRecording,
   partialText,
@@ -176,7 +178,16 @@ export function FloatingTranscriptionRecorderView({
               </button>
             ) : (
               <div className="flex max-h-[70vh] flex-col">
-                <div className="flex items-center justify-end px-3 pt-2">
+                <div className="flex items-center justify-between px-3 pt-2">
+                  <button
+                    aria-label="Audio settings"
+                    className="rounded-full p-1 text-stone-300 transition-colors hover:text-stone-500"
+                    onClick={onOpenSettings}
+                    type="button"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                  </button>
+
                   <button
                     aria-label="Close recorder"
                     className="rounded-full p-1 text-stone-300 transition-colors hover:text-stone-500"
@@ -312,7 +323,7 @@ export function FloatingTranscriptionRecorder() {
   );
   const language = settings?.transcription.language ?? "en";
   const useGPU = settings?.transcription.useGPU ?? true;
-  const audioSource: AudioSource = settings?.audio.source ?? "microphone";
+  const audioSource = settings?.audio.source ?? "microphone";
 
   const ensureInitialized = async () => {
     if (!resolvedModel.model) {
@@ -371,6 +382,11 @@ export function FloatingTranscriptionRecorder() {
     setIsModelDialogOpen(false);
   };
 
+  const handleOpenSettings = () => {
+    handleClose();
+    window.electronAPI.navigate(DESKTOP_NAVIGATION_ROUTES.settingsAudio);
+  };
+
   const handleDownloadModel = async () => {
     const launchSession = ++launchSessionRef.current;
 
@@ -417,6 +433,7 @@ export function FloatingTranscriptionRecorder() {
       onDismissModelDialog={() => setIsModelDialogOpen(false)}
       onDownloadModel={handleDownloadModel}
       onOpen={handleOpen}
+      onOpenSettings={handleOpenSettings}
       onRecordAgain={startLiveRecording}
       onStopRecording={handleStopRecording}
       partialText={partialText}

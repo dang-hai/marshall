@@ -41,6 +41,11 @@ export interface TranscriptionState {
   currentModel: string | null;
   mode: "streaming" | "batch" | null;
   transcript: TranscriptionResult | null;
+  /** Accumulated final transcription text */
+  finalText: string;
+  /** Current interim (in-progress) text that may change */
+  interimText: string;
+  /** Combined display text: finalText + interimText */
   partialText: string;
   error: string | null;
   progress: number;
@@ -67,6 +72,8 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     currentModel: null,
     mode: null,
     transcript: null,
+    finalText: "",
+    interimText: "",
     partialText: "",
     error: null,
     progress: 0,
@@ -101,10 +108,28 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
     });
 
     const unsubPartial = window.transcriptionAPI.onPartial((partial) => {
-      setState((prev) => ({
-        ...prev,
-        partialText: prev.partialText + " " + partial.text,
-      }));
+      setState((prev) => {
+        if (partial.isFinal) {
+          // Final result: append to finalText, clear interimText
+          const newFinalText = prev.finalText ? prev.finalText + " " + partial.text : partial.text;
+          return {
+            ...prev,
+            finalText: newFinalText,
+            interimText: "",
+            partialText: newFinalText,
+          };
+        } else {
+          // Interim result: replace interimText (don't accumulate)
+          const newPartialText = prev.finalText
+            ? prev.finalText + " " + partial.text
+            : partial.text;
+          return {
+            ...prev,
+            interimText: partial.text,
+            partialText: newPartialText,
+          };
+        }
+      });
     });
 
     const unsubSegment = window.transcriptionAPI.onSegment((_data) => {
@@ -281,6 +306,8 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           ...prev,
           error: null,
           transcript: null,
+          finalText: "",
+          interimText: "",
           partialText: "",
         }));
 
@@ -349,6 +376,8 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       isRecording: false,
       isTranscribing: false,
       progress: 0,
+      finalText: "",
+      interimText: "",
       partialText: "",
       isSpeaking: false,
       vadLevel: 0,
@@ -360,6 +389,8 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       ...prev,
       transcript: null,
       error: null,
+      finalText: "",
+      interimText: "",
       partialText: "",
     }));
   }, []);

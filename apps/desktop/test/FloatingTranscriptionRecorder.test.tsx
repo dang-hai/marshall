@@ -19,6 +19,7 @@ const baseProps: FloatingTranscriptionRecorderViewProps = {
   onDismissModelDialog: () => {},
   onDownloadModel: () => {},
   onOpen: () => {},
+  onOpenSettings: () => {},
   onRecordAgain: () => {},
   onStopRecording: () => {},
   partialText: "",
