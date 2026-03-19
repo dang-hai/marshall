@@ -2,7 +2,9 @@ export { WhisperProcess } from "./subprocess.js";
 export {
   getModelsDirectory,
   getModelPath,
+  getCoreMLEncoderPath,
   isModelDownloaded,
+  isCoreMLEncoderAvailable,
   listAvailableModels,
   downloadModel,
   deleteModel,

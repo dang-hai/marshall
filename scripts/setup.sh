@@ -58,10 +58,19 @@ if (existsSync(neonContextFile)) {
 writeFileSync(envFile, current);
 EOF
 
-echo "Building whisper binary..."
+echo "Building whisper binary with CoreML support..."
 bun run --filter @marshall/transcription build:whisper
+
+echo "Generating CoreML model for base.en (for ANE acceleration)..."
+echo "This enables ~3x faster transcription on Apple Silicon."
+bun run --filter @marshall/transcription generate:coreml base.en
 
 echo "Running typecheck..."
 bun run typecheck
 
 echo "Setup complete."
+echo ""
+echo "CoreML acceleration is now enabled for the base.en model."
+echo "To generate CoreML models for other sizes, run:"
+echo "  bun run --filter @marshall/transcription generate:coreml <model-name>"
+echo "Available models: tiny.en, base.en, small.en, medium.en, large-v3, large-v3-turbo"
