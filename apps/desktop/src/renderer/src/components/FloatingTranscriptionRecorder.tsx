@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, Square, X, Settings2 } from "lucide-react";
 import type { WhisperModelName } from "@marshall/transcription";
 import { defaultAppSettings } from "../../../shared/settings";
@@ -11,6 +11,7 @@ import {
 } from "../hooks/useTranscription";
 import { cn } from "../lib/utils";
 import { ModelSetupDialog } from "./ModelSetupDialog";
+import { MARSHALL_EVENTS } from "../App";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
 
@@ -325,7 +326,7 @@ export function FloatingTranscriptionRecorder() {
   const useGPU = settings?.transcription.useGPU ?? true;
   const audioSource = settings?.audio.source ?? "microphone";
 
-  const ensureInitialized = async () => {
+  const ensureInitialized = useCallback(async () => {
     if (!resolvedModel.model) {
       setIsModelDialogOpen(true);
       return false;
@@ -336,9 +337,9 @@ export function FloatingTranscriptionRecorder() {
     }
 
     return initialize(resolvedModel.model.name, language, useGPU);
-  };
+  }, [resolvedModel.model, isInitialized, currentModel, initialize, language, useGPU]);
 
-  const startLiveRecording = async () => {
+  const startLiveRecording = useCallback(async () => {
     const launchSession = ++launchSessionRef.current;
 
     clearTranscript();
@@ -357,7 +358,7 @@ export function FloatingTranscriptionRecorder() {
         setIsBootstrapping(false);
       }
     }
-  };
+  }, [clearTranscript, ensureInitialized, startRecording, audioSource]);
 
   const handleOpen = async () => {
     if (isRecording || isTranscribing) {
@@ -418,6 +419,19 @@ export function FloatingTranscriptionRecorder() {
   const handleStopRecording = async () => {
     await stopRecording();
   };
+
+  // Listen for start transcription events from call notifications
+  useEffect(() => {
+    const handleStartTranscription = () => {
+      startLiveRecording();
+    };
+
+    window.addEventListener(MARSHALL_EVENTS.START_TRANSCRIPTION, handleStartTranscription);
+
+    return () => {
+      window.removeEventListener(MARSHALL_EVENTS.START_TRANSCRIPTION, handleStartTranscription);
+    };
+  }, [startLiveRecording]);
 
   return (
     <FloatingTranscriptionRecorderView

@@ -16,3 +16,6 @@ export { useSettings } from "./useSettings";
 export type { AppSettings } from "../../../shared/settings";
 
 export { useAuth } from "./useAuth";
+
+export { useCallDetection } from "./useCallDetection";
+export type { DetectedCall } from "./useCallDetection";

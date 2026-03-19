@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Home, MessageSquare, Loader2 } from "lucide-react";
 import { APP_NAME, type DisplayUser } from "@marshall/shared";
 import { DESKTOP_NAVIGATION_ROUTES } from "../../shared/navigation";
@@ -7,7 +7,8 @@ import { HomePanel } from "./components/HomePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
 import { LoginScreen } from "./components/LoginScreen";
-import { useAuth } from "./hooks";
+import { CallNotificationStack } from "./components/CallNotification";
+import { useAuth, useCallDetection } from "./hooks";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
 
 const sidebarItems = [
@@ -23,6 +24,8 @@ interface AppShellProps {
   initialView?: ViewId;
   user?: DisplayUser | null;
   onSignOut?: () => Promise<void>;
+  onCreateNote?: (title: string) => void;
+  onStartTranscription?: () => void;
 }
 
 export function AppShell({
@@ -31,12 +34,35 @@ export function AppShell({
   initialView = "home",
   user,
   onSignOut,
+  onCreateNote,
+  onStartTranscription,
 }: AppShellProps) {
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>(initialSettingsSection);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(initialProfileMenuOpen);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const { detectedCalls, dismissCall, startMonitoring } = useCallDetection();
+
+  // Start call monitoring on mount
+  useEffect(() => {
+    startMonitoring();
+  }, [startMonitoring]);
+
+  const handleCreateNote = useCallback(
+    (title: string) => {
+      onCreateNote?.(title);
+      // Navigate to home to show the new note
+      setActiveView("home");
+    },
+    [onCreateNote]
+  );
+
+  const handleStartTranscription = useCallback(() => {
+    onStartTranscription?.();
+    // Navigate to home where the transcription recorder is
+    setActiveView("home");
+  }, [onStartTranscription]);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigate((path) => {
@@ -211,12 +237,39 @@ export function AppShell({
           )}
         </section>
       </main>
+
+      {/* Call notification stack - fixed position top-right */}
+      <CallNotificationStack
+        calls={detectedCalls}
+        onDismiss={dismissCall}
+        onStartTranscription={handleStartTranscription}
+        onCreateNote={handleCreateNote}
+      />
     </div>
   );
 }
 
+// Custom event names for cross-component communication
+export const MARSHALL_EVENTS = {
+  CREATE_NOTE: "marshall:create-note",
+  START_TRANSCRIPTION: "marshall:start-transcription",
+} as const;
+
 export default function App() {
   const { user, isLoading, isAuthenticated, signOut, signIn } = useAuth();
+
+  const handleCreateNote = useCallback((title: string) => {
+    // Dispatch custom event that HomePanel can listen to
+    window.dispatchEvent(new CustomEvent(MARSHALL_EVENTS.CREATE_NOTE, { detail: { title } }));
+  }, []);
+
+  const handleStartTranscription = useCallback(() => {
+    // Dispatch custom event that FloatingTranscriptionRecorder can listen to
+    // Use setTimeout to ensure the event fires after React has re-rendered
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(MARSHALL_EVENTS.START_TRANSCRIPTION));
+    }, 100);
+  }, []);
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -234,5 +287,12 @@ export default function App() {
   }
 
   // Show main app shell when authenticated with real user data
-  return <AppShell user={user} onSignOut={signOut} />;
+  return (
+    <AppShell
+      user={user}
+      onSignOut={signOut}
+      onCreateNote={handleCreateNote}
+      onStartTranscription={handleStartTranscription}
+    />
+  );
 }

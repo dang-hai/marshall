@@ -1,7 +1,16 @@
-import { ClipboardEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ClipboardEvent,
+  KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { CalendarDays, ChevronLeft, Ellipsis, FolderPlus, Trash2, UserRound } from "lucide-react";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
+import { MARSHALL_EVENTS } from "../App";
 
 interface QuickNote {
   id: number;
@@ -306,12 +315,28 @@ export function HomePanel() {
     setActiveNoteId(noteId);
   };
 
-  const createNote = () => {
+  const createNote = useCallback((title?: string) => {
     const note = createEmptyNote();
+    if (title) {
+      note.title = title;
+    }
     setNotes((currentNotes) => [note, ...currentNotes]);
     setOpenMenuId(null);
     setActiveNoteId(note.id);
-  };
+  }, []);
+
+  // Listen for create note events from call notifications
+  useEffect(() => {
+    const handleCreateNote = (event: CustomEvent<{ title: string }>) => {
+      createNote(event.detail.title);
+    };
+
+    window.addEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
+
+    return () => {
+      window.removeEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
+    };
+  }, [createNote]);
 
   const moveNoteToTrash = (noteId: number) => {
     setNotes((currentNotes) =>
@@ -537,7 +562,7 @@ export function HomePanel() {
           </div>
         </div>
 
-        <Button type="button" className="shrink-0" onClick={createNote}>
+        <Button type="button" className="shrink-0" onClick={() => createNote()}>
           <span>+ Quick Note</span>
         </Button>
       </div>
@@ -632,6 +657,8 @@ export function HomePanel() {
           </div>
         </aside>
       </div>
+
+      <FloatingTranscriptionRecorder />
     </div>
   );
 }

@@ -51,6 +51,25 @@ contextBridge.exposeInMainWorld("settingsAPI", {
   getPath: () => ipcRenderer.invoke("settings:get-path"),
 });
 
+// Call Detection API
+contextBridge.exposeInMainWorld("callDetectionAPI", {
+  startMonitoring: () => ipcRenderer.invoke("call-detection:start-monitoring"),
+  stopMonitoring: () => ipcRenderer.invoke("call-detection:stop-monitoring"),
+  getDetectedCalls: () => ipcRenderer.invoke("call-detection:get-detected-calls"),
+  dismissCall: (callId: string) => ipcRenderer.invoke("call-detection:dismiss-call", callId),
+  isMonitoring: () => ipcRenderer.invoke("call-detection:is-monitoring"),
+
+  // Events
+  onCallDetected: (callback: (call: unknown) => void) => {
+    ipcRenderer.on("call-detection:call-detected", (_event, call) => callback(call));
+    return () => ipcRenderer.removeAllListeners("call-detection:call-detected");
+  },
+  onCallDismissed: (callback: (callId: string) => void) => {
+    ipcRenderer.on("call-detection:call-dismissed", (_event, callId) => callback(callId));
+    return () => ipcRenderer.removeAllListeners("call-detection:call-dismissed");
+  },
+});
+
 // Transcription API
 contextBridge.exposeInMainWorld("transcriptionAPI", {
   // Models
@@ -189,6 +208,15 @@ type AuthUser = {
   updatedAt: string;
 };
 
+// Call detection types
+interface DetectedCall {
+  id: string;
+  appName: string;
+  appIcon?: string;
+  detectedAt: number;
+  dismissed: boolean;
+}
+
 declare global {
   interface Window {
     authAPI: {
@@ -196,6 +224,15 @@ declare global {
       getToken: () => Promise<string | null>;
       getUser: () => Promise<AuthUser | null>;
       signOut: () => Promise<boolean>;
+    };
+    callDetectionAPI: {
+      startMonitoring: () => Promise<{ status: string }>;
+      stopMonitoring: () => Promise<{ status: string }>;
+      getDetectedCalls: () => Promise<DetectedCall[]>;
+      dismissCall: (callId: string) => Promise<{ status: string }>;
+      isMonitoring: () => Promise<boolean>;
+      onCallDetected: (callback: (call: DetectedCall) => void) => () => void;
+      onCallDismissed: (callback: (callId: string) => void) => () => void;
     };
     electron: {
       desktopCapturer: {
