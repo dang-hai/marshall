@@ -13,7 +13,7 @@ import {
 import { cn } from "../lib/utils";
 import { extractPlainTextFromHtml } from "../lib/note-body";
 import { ModelSetupDialog } from "./ModelSetupDialog";
-import { MARSHALL_EVENTS } from "../App";
+import { MARSHALL_EVENTS } from "../constants";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
 

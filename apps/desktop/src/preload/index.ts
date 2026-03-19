@@ -109,6 +109,12 @@ contextBridge.exposeInMainWorld("codexMonitorAPI", {
   },
 });
 
+// AI API
+contextBridge.exposeInMainWorld("aiAPI", {
+  completion: (input: { prompt: string; system?: string }) =>
+    ipcRenderer.invoke("ai:completion", input),
+});
+
 // Transcription API
 contextBridge.exposeInMainWorld("transcriptionAPI", {
   // Models
@@ -340,6 +346,9 @@ declare global {
       dismissWindow: () => Promise<{ status: string }>;
       onState: (callback: (state: CodexMonitorState) => void) => () => void;
       onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => () => void;
+    };
+    aiAPI: {
+      completion: (input: { prompt: string; system?: string }) => Promise<{ text: string }>;
     };
     transcriptionAPI: {
       // Models
