@@ -38,14 +38,17 @@ class NotchViewModel: ObservableObject {
     @Published var connectionState: ConnectionState = .disconnected
     @Published var isExpanded: Bool = false
 
-    // Calendar events (still mock for now - calendar integration is separate)
-    @Published var events: [CalendarEvent] = CalendarEvent.mockEvents
+    // Meeting proposals from WebSocket
+    @Published var meetingProposals: [MeetingProposalPayload] = []
     // Action items from WebSocket
     @Published var actionItems: [ActionItemPayload] = []
 
     private var cancellables = Set<AnyCancellable>()
+    private let webSocketService: WebSocketService
 
     init(webSocketService: WebSocketService) {
+        self.webSocketService = webSocketService
+
         webSocketService.$state
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -57,6 +60,7 @@ class NotchViewModel: ObservableObject {
                 self?.noteTitle = state.noteTitle
                 self?.error = state.error
                 self?.actionItems = state.items
+                self?.meetingProposals = state.meetingProposals
             }
             .store(in: &cancellables)
 
@@ -67,28 +71,22 @@ class NotchViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
-}
 
-// MARK: - Data Models
+    func acceptProposal(_ id: String) {
+        webSocketService.sendAction("acceptProposal", proposalId: id)
+    }
 
-struct CalendarEvent: Identifiable {
-    let id = UUID()
-    let title: String
-    let time: String
-    let endTime: String
-    let color: Color
-    let location: String?
+    func remindProposal(_ id: String) {
+        webSocketService.sendAction("remindProposal", proposalId: id)
+    }
 
-    static var mockEvents: [CalendarEvent] {
-        [
-            CalendarEvent(title: "Team Standup", time: "10:00", endTime: "10:15", color: .blue, location: "Zoom"),
-            CalendarEvent(title: "Product Review", time: "14:00", endTime: "15:00", color: .green, location: "Room 3B"),
-            CalendarEvent(title: "1:1 with Sarah", time: "16:00", endTime: "16:30", color: .purple, location: nil),
-        ]
+    func discardProposal(_ id: String) {
+        webSocketService.sendAction("discardProposal", proposalId: id)
     }
 }
 
 // ActionItem is now ActionItemPayload from NotchState.swift
+// MeetingProposal is now MeetingProposalPayload from NotchState.swift
 
 // MARK: - Main Notch View
 
@@ -117,12 +115,12 @@ struct NotchView: View {
             .frame(width: notchWidth, height: notchHeight, alignment: .top)
             .background(Color.black)
             .clipShape(NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: viewModel.isExpanded)
             .onHover { hovering in
+                // Only detect hover on the actual notch area, not the entire window
                 isHovering = hovering
                 if hovering && !viewModel.isExpanded {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    // Delay expansion to avoid accidental triggers
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         if isHovering {
                             withAnimation { viewModel.isExpanded = true }
                         }
@@ -132,6 +130,8 @@ struct NotchView: View {
             .onTapGesture {
                 withAnimation { viewModel.isExpanded.toggle() }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: viewModel.isExpanded)
     }
 
     @ViewBuilder
