@@ -21,13 +21,6 @@ import type {
   NoteRecord,
   MeetingProposal,
 } from "@marshall/shared";
-import type { ProposeMeetingInput } from "@marshall/shared";
-import {
-  MARSHALL_MCP_TOOLS,
-  handleToolCall,
-  buildMinimalAgentPrompt,
-  type MarshallMCPContext,
-} from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
 
 // ============================================================================
@@ -59,6 +52,14 @@ interface AgentFinalResponse {
   } | null;
   items: CodexMonitorResultItem[];
   summary: string | null;
+  meetingProposal: {
+    title: string;
+    startAt: string;
+    endAt: string;
+    participants?: string[];
+    location?: string;
+    description?: string;
+  } | null;
 }
 
 // ============================================================================
@@ -100,8 +101,30 @@ const FINAL_RESPONSE_SCHEMA = {
       },
     },
     summary: { anyOf: [{ type: "string" }, { type: "null" }] },
+    meetingProposal: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            startAt: { type: "string", description: "ISO 8601 datetime" },
+            endAt: { type: "string", description: "ISO 8601 datetime" },
+            participants: {
+              type: "array",
+              items: { type: "string" },
+              description: "Email addresses",
+            },
+            location: { type: "string" },
+            description: { type: "string" },
+          },
+          required: ["title", "startAt", "endAt"],
+          additionalProperties: false,
+        },
+      ],
+    },
   },
-  required: ["nudge", "items", "summary"],
+  required: ["nudge", "items", "summary", "meetingProposal"],
   additionalProperties: false,
 } as const;
 
@@ -147,66 +170,62 @@ async function createTempFile(prefix: string, filename: string, content: string)
 }
 
 // ============================================================================
-// MCP Context Builder
+// Context Prompt Builder
 // ============================================================================
 
-function buildMCPContext(
-  session: CodexMonitorSessionInput,
-  options: CodexMonitorMCPServiceOptions,
-  pendingOps: AgentOperation[],
-  emitMeetingProposal: (proposal: MeetingProposal) => void
-): MarshallMCPContext {
-  return {
-    userId: "", // Would come from session in real implementation
-    currentNote: {
-      id: session.noteId,
-      title: session.noteTitle,
-      body: session.noteBodyText,
-    },
-    transcription: {
-      status: session.transcription.status,
-      text: session.transcription.transcriptText,
-      utterances: session.transcription.utterances || [],
-    },
-    fetchNotes: options.fetchNotes || (async () => []),
-    fetchNote: options.fetchNote || (async () => null),
-    applyOperations: async (_noteId, ops) => {
-      // Collect operations to apply after agent finishes
-      pendingOps.push(...ops);
-    },
-    proposeMeeting: async (input: ProposeMeetingInput) => {
-      const proposal: MeetingProposal = {
-        id: randomUUID(),
-        title: input.title,
-        startAt: input.startAt,
-        endAt: input.endAt,
-        participants: input.participants || [],
-        location: input.location || null,
-        description: input.description || null,
-        createdAt: new Date().toISOString(),
-        status: "pending",
-      };
-      emitMeetingProposal(proposal);
-      return proposal;
-    },
-  };
+function buildContextPrompt(params: {
+  noteTitle: string;
+  noteBody: string;
+  transcript: string;
+  mode: "live" | "final";
+  chatMessage?: string | null;
+}): string {
+  const transcriptSection = params.transcript.trim()
+    ? `## Current Transcript
+${params.transcript.trim()}`
+    : "## Current Transcript\n(No transcript yet)";
+
+  const noteSection = params.noteBody.trim()
+    ? `## Current Note
+${params.noteBody.trim()}`
+    : "## Current Note\n(Empty note)";
+
+  const userRequestSection = params.chatMessage
+    ? `\n## User Request\n${params.chatMessage}\n\nIMPORTANT: Respond to this request directly. If asked to schedule a meeting, populate meetingProposal.`
+    : "";
+
+  return `You are Marshall, an AI assistant helping during a call.
+
+## Call: ${params.noteTitle}
+
+${transcriptSection}
+
+${noteSection}
+${userRequestSection}
+
+## Your Task
+Analyze the transcript and note above. Respond with a JSON object containing:
+- "nudge": An object with "text" (advice for the user) and "suggestedPhrase" (what to say), or null
+- "items": Array of action items with "text" and "status" ("pending", "done", or "attention")
+- "summary": ${params.mode === "final" ? "A brief summary of the call" : "null (only provide in final mode)"}
+- "meetingProposal": If anyone in the transcript mentions scheduling, creating, or proposing a meeting, you MUST create a proposal:
+  - "title": Meeting title (infer from context if not explicitly stated)
+  - "startAt": ISO 8601 datetime. Today is ${new Date().toISOString().split("T")[0]}. "Tomorrow at 2pm" means the next day at 14:00.
+  - "endAt": ISO 8601 datetime. Calculate from duration (e.g., "30 minutes" = startAt + 30 min)
+  - "participants": Array of email addresses. If names are mentioned without emails, use format "name@example.com" as placeholder.
+  - "location": Location or video link (optional)
+  - "description": Meeting description (optional)
+  Set to null ONLY if no meeting was discussed in the transcript.
+
+CRITICAL: When the transcript contains phrases like "schedule a meeting", "set up a call", "let's meet", "book a meeting", or similar - you MUST populate meetingProposal. Extract the details (time, duration, participants) from what was said. Do NOT just add it as an action item - CREATE the proposal.
+
+${params.mode === "final" ? "This is the FINAL analysis after the call ended. Provide a summary." : "This is a LIVE check during the call. Focus on immediate guidance."}
+
+Respond ONLY with valid JSON matching this schema. No other text.`;
 }
 
 // ============================================================================
-// Tool Definitions for Codex
-// ============================================================================
-
-function buildToolsConfig() {
-  // Convert MCP tools to Codex tool format
-  return MARSHALL_MCP_TOOLS.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.inputSchema,
-  }));
-}
-
-// ============================================================================
-// Codex Process with Tool Calling
+// Codex Process
 // ============================================================================
 
 interface ToolCall {
@@ -225,21 +244,14 @@ interface CodexMessage {
   };
 }
 
-async function runCodexWithTools(
+async function runCodexWithContext(
   prompt: string,
-  context: MarshallMCPContext,
   schemaPath: string,
   conversationId: string | null,
   noteId: string,
   onThreadStarted: (threadId: string) => void,
   setProcess: (child: ChildProcessWithoutNullStreams | null) => void
 ): Promise<AgentFinalResponse> {
-  const toolsPath = await createTempFile(
-    "marshall-tools-",
-    "tools.json",
-    JSON.stringify(buildToolsConfig())
-  );
-
   return new Promise((resolve, reject) => {
     const args = conversationId
       ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", conversationId, "-"]
@@ -250,8 +262,6 @@ async function runCodexWithTools(
           "never",
           "-m",
           "gpt-5.4-mini",
-          "--tools",
-          toolsPath,
           "--output-schema",
           schemaPath,
           "-",
@@ -265,9 +275,8 @@ async function runCodexWithTools(
 
     let lastAgentMessage = "";
     let stderr = "";
-    let pendingToolCalls: ToolCall[] = [];
 
-    const handleStdout = async (chunk: Buffer) => {
+    const handleStdout = (chunk: Buffer) => {
       const text = chunk.toString("utf8");
 
       for (const line of text.split("\n")) {
@@ -282,27 +291,6 @@ async function runCodexWithTools(
             onThreadStarted(parsed.thread_id);
             if (noteId) {
               setConversationId(noteId, parsed.thread_id);
-            }
-          }
-
-          // Handle tool calls
-          if (parsed.type === "item.created" && parsed.item?.tool_calls) {
-            pendingToolCalls.push(...parsed.item.tool_calls);
-          }
-
-          // Handle tool call requests - execute and send results back
-          if (parsed.type === "tool_call.requested" && parsed.item?.tool_calls) {
-            for (const toolCall of parsed.item.tool_calls) {
-              const result = await handleToolCall(context, toolCall.name, toolCall.arguments);
-
-              // Send tool result back to Codex
-              const toolResult = {
-                type: "tool_result",
-                tool_call_id: toolCall.id,
-                content: result.content,
-                is_error: result.isError || false,
-              };
-              child.stdin.write(JSON.stringify(toolResult) + "\n");
             }
           }
 
@@ -352,14 +340,18 @@ async function runCodexWithTools(
 
       try {
         resolve(JSON.parse(lastAgentMessage) as AgentFinalResponse);
-      } catch (error) {
-        reject(
-          new Error(
-            error instanceof Error
-              ? `Failed to parse Codex output: ${error.message}`
-              : "Failed to parse Codex output"
-          )
-        );
+      } catch {
+        // Agent returned plain text instead of JSON - treat as a nudge
+        console.warn("[Codex] Agent returned non-JSON response:", lastAgentMessage.slice(0, 100));
+        resolve({
+          nudge: {
+            text: lastAgentMessage.trim(),
+            suggestedPhrase: null,
+          },
+          items: [],
+          summary: null,
+          meetingProposal: null,
+        });
       }
     });
 
@@ -400,7 +392,10 @@ export class CodexMonitorMCPService {
   private lastNudgeSignature: string | null = null;
   private rerunRequested = false;
   private windowDismissed = false;
+  private windowManuallyShown = false;
   private pendingDocumentOps: AgentOperation[] = [];
+  private pendingMeetingProposals: Map<string, MeetingProposal> = new Map();
+  private pendingChatMessage: string | null = null;
 
   constructor(options: CodexMonitorMCPServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
@@ -495,6 +490,7 @@ export class CodexMonitorMCPService {
 
   async dismissWindow() {
     this.windowDismissed = true;
+    this.windowManuallyShown = false;
     this.notificationWindow?.hide();
     return { status: "dismissed" };
   }
@@ -507,6 +503,15 @@ export class CodexMonitorMCPService {
     this.syncNotificationWindow();
   }
 
+  showWindow() {
+    const window = this.ensureNotificationWindow();
+    if (!window.isVisible()) {
+      window.showInactive();
+    }
+    this.windowDismissed = false;
+    this.windowManuallyShown = true;
+  }
+
   async dispose() {
     await this.clearSession();
     if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
@@ -517,16 +522,61 @@ export class CodexMonitorMCPService {
   }
 
   async sendChat(message: string) {
-    // In MCP mode, chat is handled through the agent's tools
-    // The agent can use get_transcript to answer questions
     if (!this.session) {
       return { status: "error", error: "No active session" };
     }
 
-    // For now, trigger an analysis that will use tools to answer
-    // TODO: Implement dedicated chat flow with MCP tools
+    // Store the chat message to include in the next analysis
+    this.pendingChatMessage = message;
     this.scheduleAnalysis(false, 0);
     return { status: "queued", message: `Chat message "${message}" will be processed` };
+  }
+
+  getMeetingProposal(proposalId: string): MeetingProposal | null {
+    return this.pendingMeetingProposals.get(proposalId) ?? null;
+  }
+
+  getPendingMeetingProposals(): MeetingProposal[] {
+    return Array.from(this.pendingMeetingProposals.values()).filter((p) => p.status === "pending");
+  }
+
+  async acceptMeetingProposal(proposalId: string): Promise<{ status: string; error?: string }> {
+    const proposal = this.pendingMeetingProposals.get(proposalId);
+    if (!proposal) {
+      return { status: "error", error: "Proposal not found" };
+    }
+
+    if (proposal.status !== "pending") {
+      return { status: "error", error: `Proposal already ${proposal.status}` };
+    }
+
+    // Update status optimistically
+    proposal.status = "accepted";
+    this.pendingMeetingProposals.set(proposalId, proposal);
+
+    // Emit update to UI
+    this.emitMeetingProposalUpdate(proposal);
+
+    return { status: "accepted" };
+  }
+
+  async discardMeetingProposal(proposalId: string): Promise<{ status: string; error?: string }> {
+    const proposal = this.pendingMeetingProposals.get(proposalId);
+    if (!proposal) {
+      return { status: "error", error: "Proposal not found" };
+    }
+
+    if (proposal.status !== "pending") {
+      return { status: "error", error: `Proposal already ${proposal.status}` };
+    }
+
+    proposal.status = "discarded";
+    this.pendingMeetingProposals.set(proposalId, proposal);
+
+    // Emit update to UI
+    this.emitMeetingProposalUpdate(proposal);
+
+    return { status: "discarded" };
   }
 
   // ============================================================================
@@ -636,26 +686,23 @@ export class CodexMonitorMCPService {
       // Reset pending ops
       this.pendingDocumentOps = [];
 
-      // Build MCP context
-      const context = buildMCPContext(
-        currentSession,
-        this.options,
-        this.pendingDocumentOps,
-        (proposal) => this.emitMeetingProposal(proposal)
-      );
+      // Build prompt with embedded context (include chat message if present)
+      const chatMessage = this.pendingChatMessage;
+      this.pendingChatMessage = null; // Clear after use
 
-      // Build minimal prompt (agent will use tools for data)
-      const prompt = buildMinimalAgentPrompt({
+      const prompt = buildContextPrompt({
         noteTitle: currentSession.noteTitle,
+        noteBody: currentSession.noteBodyText,
+        transcript: currentSession.transcription.transcriptText,
         mode: finalize ? "final" : "live",
+        chatMessage,
       });
 
       const schemaPath = await this.getSchemaPath();
 
-      // Run Codex with tool support
-      const result = await runCodexWithTools(
+      // Run Codex with context embedded in prompt
+      const result = await runCodexWithContext(
         prompt,
-        context,
         schemaPath,
         this.conversationId,
         currentSession.noteId,
@@ -675,6 +722,22 @@ export class CodexMonitorMCPService {
       const mergedItems = this.mergeItems(result.items);
       const summary = finalize ? result.summary?.trim() || null : this.state.summary;
       const nextNudge = finalize ? null : this.buildNudge(result);
+
+      // Handle meeting proposal if present
+      if (result.meetingProposal) {
+        const proposal: MeetingProposal = {
+          id: randomUUID(),
+          title: result.meetingProposal.title,
+          startAt: result.meetingProposal.startAt,
+          endAt: result.meetingProposal.endAt,
+          participants: result.meetingProposal.participants || [],
+          location: result.meetingProposal.location || null,
+          description: result.meetingProposal.description || null,
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        };
+        this.emitMeetingProposal(proposal);
+      }
 
       this.lastAnalyzedTranscriptLength = transcriptText.length;
       this.state = {
@@ -799,9 +862,20 @@ export class CodexMonitorMCPService {
   }
 
   private emitMeetingProposal(proposal: MeetingProposal) {
+    // Store the proposal for later accept/discard
+    this.pendingMeetingProposals.set(proposal.id, proposal);
+
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
         window.webContents.send("codex-monitor:meeting-proposal", proposal);
+      }
+    }
+  }
+
+  private emitMeetingProposalUpdate(proposal: MeetingProposal) {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send("codex-monitor:meeting-proposal-update", proposal);
       }
     }
   }
@@ -816,11 +890,10 @@ export class CodexMonitorMCPService {
   }
 
   private syncNotificationWindow() {
-    const shouldShow =
-      !this.windowDismissed &&
-      Boolean(
-        this.state.error || this.state.nudge || this.state.summary || this.state.items.length > 0
-      );
+    const hasContent = Boolean(
+      this.state.error || this.state.nudge || this.state.summary || this.state.items.length > 0
+    );
+    const shouldShow = !this.windowDismissed && (hasContent || this.windowManuallyShown);
 
     if (!shouldShow) {
       this.notificationWindow?.hide();

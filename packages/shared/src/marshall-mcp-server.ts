@@ -551,7 +551,7 @@ export function buildMinimalAgentPrompt(params: {
 - \`list_notes\`: Browse the user's other notes for context
 - \`get_note\`: Read a specific note
 - \`update_document\`: Update the note (check items, add notes, etc.)
-- \`propose_meeting\`: Propose a follow-up meeting for user to review and schedule
+- \`propose_meeting\`: Propose a meeting for user to review and schedule. Use this when asked to schedule, create, or propose any meeting. You CAN create meeting proposals - the user will review and accept them.
 
 ## Your Job
 1. Monitor the conversation by checking the transcript periodically
