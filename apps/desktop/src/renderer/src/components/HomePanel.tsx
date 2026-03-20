@@ -359,7 +359,7 @@ function EventCard({ event }: EventCardProps) {
     <article className="group flex h-16 overflow-hidden rounded-xl border border-border/40 bg-card/80 shadow-sm transition-all hover:border-border/70 hover:shadow-md">
       {/* Date block */}
       <div className="flex shrink-0 items-center gap-2 bg-muted/30 pl-3 pr-3">
-        <span className="w-9 text-right font-serif text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+        <span className="w-9 text-right font-serif text-3xl font-semibold tabular-nums tracking-normal text-foreground">
           {dayNumber}
         </span>
         <div className="flex w-8 flex-col items-start justify-center leading-none">
