@@ -148,6 +148,19 @@ function normalizeSignature(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function normalizeMeetingProposalSignature(proposal: {
+  title: string;
+  startAt: string;
+  endAt: string;
+}): string {
+  // Normalize by title + start/end times to detect duplicate proposals
+  const normalizedTitle = normalizeSignature(proposal.title);
+  // Truncate timestamps to minute precision to handle slight variations
+  const startMinute = proposal.startAt.slice(0, 16);
+  const endMinute = proposal.endAt.slice(0, 16);
+  return `${normalizedTitle}|${startMinute}|${endMinute}`;
+}
+
 function createEmptyDebugState(): AIAgentMonitorState["debug"] {
   return {
     transcriptionStatus: null,
@@ -520,6 +533,7 @@ export class AIAgentMonitorMCPService {
   private pendingDocumentOps: AgentOperation[] = [];
   private pendingMeetingProposals: Map<string, MeetingProposal> = new Map();
   private pendingChatMessage: string | null = null;
+  private lastMeetingProposalSignature: string | null = null;
 
   constructor(options: AIAgentMonitorMCPServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
@@ -635,9 +649,11 @@ export class AIAgentMonitorMCPService {
       debug: createEmptyDebugState(),
     };
     this.lastNudgeSignature = null;
+    this.lastMeetingProposalSignature = null;
     this.windowDismissed = false;
     this.conversationId = null;
     this.pendingDocumentOps = [];
+    this.pendingMeetingProposals.clear();
     this.broadcastState();
     return { status: "cleared" };
   }
@@ -809,8 +825,10 @@ export class AIAgentMonitorMCPService {
     this.lastAnalyzedTranscriptLength = 0;
     this.lastFinalizedTranscriptSignature = null;
     this.lastNudgeSignature = null;
+    this.lastMeetingProposalSignature = null;
     this.windowDismissed = false;
     this.pendingDocumentOps = [];
+    this.pendingMeetingProposals.clear();
 
     const existingConversationId = getConversationId(noteId);
     if (existingConversationId) {
@@ -848,6 +866,13 @@ export class AIAgentMonitorMCPService {
 
   private scheduleAnalysis(finalize: boolean, delayMs: number) {
     const nextMode = finalize ? "final" : "live";
+
+    // If an analysis is already running, just mark for rerun instead of scheduling
+    if (this.analysisProcess) {
+      this.rerunRequested = true;
+      return;
+    }
+
     if (this.analysisTimer) {
       if (this.scheduledAnalysisMode === "final" || this.scheduledAnalysisMode === nextMode) {
         return;
@@ -942,20 +967,26 @@ export class AIAgentMonitorMCPService {
       const summary = finalize ? result.summary?.trim() || null : this.state.summary;
       const nextNudge = finalize ? null : this.buildNudge(result);
 
-      // Handle meeting proposal if present
+      // Handle meeting proposal if present (with deduplication)
       if (result.meetingProposal) {
-        const proposal: MeetingProposal = {
-          id: randomUUID(),
-          title: result.meetingProposal.title,
-          startAt: result.meetingProposal.startAt,
-          endAt: result.meetingProposal.endAt,
-          participants: result.meetingProposal.participants || [],
-          location: result.meetingProposal.location || null,
-          description: result.meetingProposal.description || null,
-          createdAt: new Date().toISOString(),
-          status: "pending",
-        };
-        this.emitMeetingProposal(proposal);
+        const proposalSignature = normalizeMeetingProposalSignature(result.meetingProposal);
+
+        // Skip if we've already emitted an equivalent proposal
+        if (proposalSignature !== this.lastMeetingProposalSignature) {
+          this.lastMeetingProposalSignature = proposalSignature;
+          const proposal: MeetingProposal = {
+            id: randomUUID(),
+            title: result.meetingProposal.title,
+            startAt: result.meetingProposal.startAt,
+            endAt: result.meetingProposal.endAt,
+            participants: result.meetingProposal.participants || [],
+            location: result.meetingProposal.location || null,
+            description: result.meetingProposal.description || null,
+            createdAt: new Date().toISOString(),
+            status: "pending",
+          };
+          this.emitMeetingProposal(proposal);
+        }
       }
 
       this.lastAnalyzedTranscriptLength = transcriptText.length;
