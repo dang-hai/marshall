@@ -18,7 +18,7 @@ import type {
 } from "@marshall/shared";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
-import { setupSettingsIPC } from "./settings";
+import { setupSettingsIPC, getSetting } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
 import { AIAgentMonitorMCPService } from "./ai-agent-monitor-mcp";
 import { detectAvailableAgents } from "./coding-agents";
@@ -423,6 +423,7 @@ function setupAIAgentMonitorWindowHandlers(window: BrowserWindow) {
 app.whenReady().then(() => {
   const aiAgentMonitor = new AIAgentMonitorMCPService({
     createNotificationWindow: createAIAgentNotificationWindow,
+    getSelectedAgent: () => getSetting("monitor").agent,
     fetchNotes: async (params) => {
       try {
         const query = new URLSearchParams();

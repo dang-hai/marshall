@@ -23,6 +23,7 @@ import type {
   MeetingProposal,
 } from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
+import type { MonitorAgent } from "../shared/settings";
 
 // ============================================================================
 // Types
@@ -38,6 +39,8 @@ interface AIAgentMonitorMCPServiceOptions {
   }) => Promise<NoteRecord[]>;
   /** Callback to fetch a single note */
   fetchNote?: (noteId: string) => Promise<NoteRecord | null>;
+  /** Callback to get the selected monitoring agent */
+  getSelectedAgent?: () => MonitorAgent;
 }
 
 interface AIAgentMonitorResultItem {
@@ -365,6 +368,122 @@ async function runCodexWithContext(
   });
 }
 
+async function runClaudeCodeWithContext(
+  prompt: string,
+  schemaPath: string,
+  conversationId: string | null,
+  noteId: string,
+  onThreadStarted: (threadId: string) => void,
+  setProcess: (child: ChildProcessWithoutNullStreams | null) => void
+): Promise<AgentFinalResponse> {
+  return new Promise((resolve, reject) => {
+    // Claude Code uses different CLI arguments
+    const args = conversationId
+      ? ["--resume", conversationId, "--print", "--output-format", "json", "-p", prompt]
+      : ["--print", "--output-format", "json", "--output-schema", schemaPath, "-p", prompt];
+
+    const child = spawn("claude", args, {
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    setProcess(child);
+
+    let stdout = "";
+    let stderr = "";
+
+    const handleStdout = (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    };
+
+    const handleStderr = (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    };
+
+    const cleanup = () => {
+      child.stdout.removeListener("data", handleStdout);
+      child.stderr.removeListener("data", handleStderr);
+    };
+
+    child.stdout.on("data", handleStdout);
+    child.stderr.on("data", handleStderr);
+
+    child.on("error", (err) => {
+      cleanup();
+      reject(err);
+    });
+
+    child.on("close", (code) => {
+      cleanup();
+
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Claude Code exited with code ${code}`));
+        return;
+      }
+
+      if (!stdout.trim()) {
+        reject(new Error("Claude Code returned no response"));
+        return;
+      }
+
+      try {
+        // Try to parse the output as JSON
+        const lines = stdout.trim().split("\n");
+        let result: string | null = null;
+
+        // Look for JSON output (might be mixed with other output)
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i].trim();
+          if (line.startsWith("{") || line.startsWith("[")) {
+            try {
+              JSON.parse(line);
+              result = line;
+              break;
+            } catch {
+              continue;
+            }
+          }
+        }
+
+        // If no valid JSON found, try parsing entire output
+        if (!result) {
+          try {
+            JSON.parse(stdout.trim());
+            result = stdout.trim();
+          } catch {
+            result = lines[lines.length - 1] || stdout.trim();
+          }
+        }
+
+        // Extract session ID for conversation continuity
+        const sessionMatch = stdout.match(/session[_-]?id["\s:]+["']?([a-zA-Z0-9_-]+)/i);
+        if (sessionMatch) {
+          onThreadStarted(sessionMatch[1]);
+          if (noteId) {
+            setConversationId(noteId, sessionMatch[1]);
+          }
+        }
+
+        resolve(JSON.parse(result) as AgentFinalResponse);
+      } catch {
+        // Agent returned plain text instead of JSON - treat as a nudge
+        console.warn(
+          "[AIAgentMonitor] Claude Code returned non-JSON response:",
+          stdout.slice(0, 100)
+        );
+        resolve({
+          nudge: {
+            text: stdout.trim(),
+            suggestedPhrase: null,
+          },
+          items: [],
+          summary: null,
+          meetingProposal: null,
+        });
+      }
+    });
+  });
+}
+
 // ============================================================================
 // Service Class
 // ============================================================================
@@ -372,6 +491,7 @@ async function runCodexWithContext(
 export class AIAgentMonitorMCPService {
   private readonly createNotificationWindow: () => BrowserWindow;
   private readonly options: AIAgentMonitorMCPServiceOptions;
+  private readonly getSelectedAgent: () => MonitorAgent;
   private schemaPathPromise: Promise<string> | null = null;
   private session: AIAgentMonitorSessionInput | null = null;
   private state: AIAgentMonitorState = {
@@ -404,6 +524,36 @@ export class AIAgentMonitorMCPService {
   constructor(options: AIAgentMonitorMCPServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
     this.options = options;
+    this.getSelectedAgent = options.getSelectedAgent ?? (() => "codex");
+  }
+
+  private runAgentWithContext(
+    prompt: string,
+    schemaPath: string,
+    conversationId: string | null,
+    noteId: string,
+    onThreadStarted: (threadId: string) => void,
+    setProcess: (child: ChildProcessWithoutNullStreams | null) => void
+  ): Promise<AgentFinalResponse> {
+    const agent = this.getSelectedAgent();
+    if (agent === "claude-code") {
+      return runClaudeCodeWithContext(
+        prompt,
+        schemaPath,
+        conversationId,
+        noteId,
+        onThreadStarted,
+        setProcess
+      );
+    }
+    return runCodexWithContext(
+      prompt,
+      schemaPath,
+      conversationId,
+      noteId,
+      onThreadStarted,
+      setProcess
+    );
   }
 
   getState() {
@@ -769,8 +919,8 @@ export class AIAgentMonitorMCPService {
 
       const schemaPath = await this.getSchemaPath();
 
-      // Run agent with context embedded in prompt
-      const result = await runCodexWithContext(
+      // Run agent with context embedded in prompt (uses selected agent from settings)
+      const result = await this.runAgentWithContext(
         prompt,
         schemaPath,
         this.conversationId,
