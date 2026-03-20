@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.0.8](https://github.com/dang-hai/marshall/compare/v0.0.7...v0.0.8) (2026-03-20)
+
+
+### Bug Fixes
+
+* **ci:** build shared package before running tests ([34ce8ca](https://github.com/dang-hai/marshall/commit/34ce8ca7f627477fcc45341fe6ba225dc28c4f6d))
+* **ci:** remove type import before mock and require ci for releases ([573fc02](https://github.com/dang-hai/marshall/commit/573fc029138523051bc680765aae08960386fae7))
+* **desktop:** correct electron mock to use named export ([3e1d8cb](https://github.com/dang-hai/marshall/commit/3e1d8cb1c19e68976f1222ff98b34556c1ddbe08))
+* **desktop:** simplify electron mock in ai-agent-monitor test ([d857856](https://github.com/dang-hai/marshall/commit/d8578567b5c1e3019c51a6c3011b47d23cd98c57))
+* **desktop:** skip ai-agent-monitor test in ci ([da61f89](https://github.com/dang-hai/marshall/commit/da61f89479d26e563efd06bc88f1f7de8da6d979))
+
 ## [0.0.7](https://github.com/dang-hai/marshall/compare/v0.0.6...v0.0.7) (2026-03-20)
 
 
