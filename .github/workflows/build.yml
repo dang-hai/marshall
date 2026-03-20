@@ -47,6 +47,10 @@ jobs:
           BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
 
+      - name: Build NotchCompanion (Swift)
+        run: ./build.sh
+        working-directory: apps/notch-companion
+
       - name: Import Code Signing Certificate
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
