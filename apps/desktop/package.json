@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@better-auth/electron": "^1.5.5",
+    "@notionhq/client": "^2.2.15",
     "better-auth": "^1.5.5",
     "conf": "^13.0.0",
     "@marshall/api": "workspace:*",

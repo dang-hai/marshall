@@ -1,4 +1,4 @@
-import { CalendarDays, Mic, Shield, UserRound, type LucideIcon } from "lucide-react";
+import { CalendarDays, Mic, Plug, Shield, UserRound, type LucideIcon } from "lucide-react";
 
 export const fallbackUser = {
   name: "Guest",
@@ -21,6 +21,11 @@ export const SETTINGS_SECTIONS = {
     label: "Calendar",
     description: "Google Calendar connection",
     icon: CalendarDays,
+  },
+  integrations: {
+    label: "Integrations",
+    description: "Connect external services",
+    icon: Plug,
   },
   permissions: {
     label: "Permissions",

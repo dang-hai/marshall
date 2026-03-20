@@ -1,5 +1,6 @@
-import { BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 import { randomUUID } from "crypto";
+import { dirname } from "path";
 import { mkdtemp, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -183,6 +184,33 @@ interface SpawnCodexOptions<T> {
 
 type CodexExecutor = <T>(options: SpawnCodexOptions<T>) => Promise<T>;
 
+function getNotionMcpServerPath(): string {
+  // In development, use the workspace path
+  // In production, the utilities package is bundled
+  const appPath = app.getAppPath();
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    // Development: use workspace path
+    return join(
+      dirname(dirname(appPath)),
+      "packages",
+      "utilities",
+      "dist",
+      "notion",
+      "mcp-server.js"
+    );
+  }
+
+  // Production: utilities is in node_modules
+  return join(appPath, "node_modules", "@marshall", "utilities", "dist", "notion", "mcp-server.js");
+}
+
+function buildMcpConfig(): string {
+  const mcpServerPath = getNotionMcpServerPath();
+  // TOML format for --config flag
+  return `mcp_servers.notion={command = "node", args = ["${mcpServerPath}"]}`;
+}
+
 function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
   const {
     prompt,
@@ -195,8 +223,10 @@ function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
     noResultError,
   } = options;
 
+  const mcpConfig = buildMcpConfig();
+
   const args = conversationId
-    ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", conversationId, "-"]
+    ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", "--config", mcpConfig, conversationId, "-"]
     : [
         "exec",
         "--json",
@@ -206,6 +236,8 @@ function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
         "read-only",
         "-m",
         "gpt-5.4-mini",
+        "--config",
+        mcpConfig,
         "--output-schema",
         schemaPath,
         "-",
