@@ -32,6 +32,7 @@ export interface NotchStatePayload {
   status: "idle" | "monitoring" | "analyzing" | "chatting" | "error";
   noteTitle: string | null;
   nudge: { text: string; suggestedPhrase: string | null } | null;
+  items: Array<{ id: string; text: string; status: string }>;
   itemCount: number;
   pendingItemCount: number;
   error: string | null;
@@ -171,6 +172,7 @@ export class NotchCompanionManager {
             suggestedPhrase: state.nudge.suggestedPhrase,
           }
         : null,
+      items: state.items.map((i) => ({ id: i.id, text: i.text, status: i.status })),
       itemCount: state.items.length,
       pendingItemCount: state.items.filter((i) => i.status !== "done").length,
       error: state.error,
@@ -189,6 +191,11 @@ export class NotchCompanionManager {
 
   private sendState(payload: NotchStatePayload): void {
     if (!this.client || this.client.readyState !== WebSocket.OPEN) {
+      console.log(
+        "[NotchCompanion] Cannot send state - client not connected (readyState:",
+        this.client?.readyState,
+        ")"
+      );
       return;
     }
 
@@ -198,6 +205,14 @@ export class NotchCompanionManager {
     };
 
     try {
+      console.log(
+        "[NotchCompanion] Sending state:",
+        payload.status,
+        "items:",
+        payload.items.length,
+        "nudge:",
+        !!payload.nudge
+      );
       this.client.send(JSON.stringify(message));
     } catch (error) {
       console.error("[NotchCompanion] Failed to send state:", error);
@@ -211,7 +226,9 @@ export class NotchCompanionManager {
    */
   private getCompanionPath(): string | null {
     // Development: look in build output
-    const devPath = join(__dirname, "../../../../notch-companion/.build/release/NotchCompanion");
+    // From out/main/ go up 3 levels to apps/, then into notch-companion
+    const devPath = join(__dirname, "../../../notch-companion/.build/release/NotchCompanion");
+    console.log(`[NotchCompanion] Looking for binary at: ${devPath}`);
     if (existsSync(devPath)) {
       return devPath;
     }
@@ -229,6 +246,10 @@ export class NotchCompanionManager {
       return altProdPath;
     }
 
+    console.log("[NotchCompanion] Binary not found. Checked paths:");
+    console.log("  - Dev:", devPath);
+    console.log("  - Prod:", prodPath);
+    console.log("  - Alt:", altProdPath);
     return null;
   }
 }

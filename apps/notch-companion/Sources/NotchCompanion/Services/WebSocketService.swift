@@ -1,10 +1,17 @@
 import AppKit
 import Foundation
 
+/// Connection state for the WebSocket
+enum ConnectionState {
+    case disconnected
+    case connecting
+    case connected
+}
+
 /// WebSocket client for receiving state updates from Electron
 class WebSocketService: ObservableObject {
     @Published var state: NotchStatePayload?
-    @Published var isConnected: Bool = false
+    @Published var connectionState: ConnectionState = .disconnected
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -21,25 +28,38 @@ class WebSocketService: ObservableObject {
     }
 
     private func performConnect() {
-        guard let url = URL(string: "ws://127.0.0.1:\(targetPort)/notch") else {
+        guard let url = URL(string: "ws://127.0.0.1:\(targetPort)") else {
             print("[WebSocket] Invalid URL")
             return
         }
 
-        print("[WebSocket] Connecting to \(url)")
+        print("[WebSocket] Connecting to \(url)...")
+        DispatchQueue.main.async { [weak self] in
+            self?.connectionState = .connecting
+            print("[WebSocket] State changed to: connecting")
+        }
 
         // Create a new session for each connection
         urlSession = URLSession(configuration: .default)
         webSocketTask = urlSession?.webSocketTask(with: url)
         webSocketTask?.resume()
 
-        // Start receiving messages
-        receiveMessage()
-
-        // Mark as connected after a short delay (optimistic)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.isConnected = true
-            print("[WebSocket] Connected")
+        // Send a ping to verify connection
+        webSocketTask?.sendPing { [weak self] error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("[WebSocket] Connection failed: \(error.localizedDescription)")
+                    self?.connectionState = .disconnected
+                    print("[WebSocket] State changed to: disconnected")
+                    self?.scheduleReconnect()
+                } else {
+                    print("[WebSocket] Connected successfully!")
+                    self?.connectionState = .connected
+                    print("[WebSocket] State changed to: connected")
+                    // Start receiving messages after confirmed connection
+                    self?.receiveMessage()
+                }
+            }
         }
     }
 
@@ -50,7 +70,7 @@ class WebSocketService: ObservableObject {
         webSocketTask = nil
         urlSession?.invalidateAndCancel()
         urlSession = nil
-        isConnected = false
+        connectionState = .disconnected
         print("[WebSocket] Disconnected")
     }
 
@@ -65,7 +85,7 @@ class WebSocketService: ObservableObject {
             case .failure(let error):
                 print("[WebSocket] Receive error: \(error.localizedDescription)")
                 DispatchQueue.main.async {
-                    self?.isConnected = false
+                    self?.connectionState = .disconnected
                     self?.scheduleReconnect()
                 }
             }
@@ -103,13 +123,15 @@ class WebSocketService: ObservableObject {
         switch message.type {
         case .state:
             if let payload = message.payload {
+                print("[WebSocket] Received state: status=\(payload.status), items=\(payload.items.count), nudge=\(payload.nudge != nil)")
                 DispatchQueue.main.async { [weak self] in
                     self?.state = payload
                 }
+            } else {
+                print("[WebSocket] Received state message but payload was nil")
             }
 
         case .ping:
-            // Respond with pong if needed
             print("[WebSocket] Received ping")
 
         case .shutdown:

@@ -45,11 +45,21 @@ struct NotchNudge: Decodable {
     let suggestedPhrase: String?
 }
 
+/// Action item from the AI monitor
+struct ActionItemPayload: Decodable, Identifiable {
+    let id: String
+    let text: String
+    let status: String
+
+    var isDone: Bool { status == "done" }
+}
+
 /// State payload sent from Electron
 struct NotchStatePayload: Decodable {
     let status: NotchStatus
     let noteTitle: String?
     let nudge: NotchNudge?
+    let items: [ActionItemPayload]
     let itemCount: Int
     let pendingItemCount: Int
     let error: String?

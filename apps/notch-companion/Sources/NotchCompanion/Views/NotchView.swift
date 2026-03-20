@@ -29,18 +29,19 @@ enum NotchSizing {
 // MARK: - View Model
 
 class NotchViewModel: ObservableObject {
-    @Published var status: NotchStatus = .monitoring
+    @Published var status: NotchStatus = .idle
     @Published var nudge: NotchNudge?
-    @Published var itemCount: Int = 5
-    @Published var pendingItemCount: Int = 3
-    @Published var noteTitle: String? = "Weekly Sync"
+    @Published var itemCount: Int = 0
+    @Published var pendingItemCount: Int = 0
+    @Published var noteTitle: String?
     @Published var error: String?
-    @Published var isConnected: Bool = true
+    @Published var connectionState: ConnectionState = .disconnected
     @Published var isExpanded: Bool = false
 
-    // Mock data for demo
+    // Calendar events (still mock for now - calendar integration is separate)
     @Published var events: [CalendarEvent] = CalendarEvent.mockEvents
-    @Published var actionItems: [ActionItem] = ActionItem.mockItems
+    // Action items from WebSocket
+    @Published var actionItems: [ActionItemPayload] = []
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -55,13 +56,14 @@ class NotchViewModel: ObservableObject {
                 self?.pendingItemCount = state.pendingItemCount
                 self?.noteTitle = state.noteTitle
                 self?.error = state.error
+                self?.actionItems = state.items
             }
             .store(in: &cancellables)
 
-        webSocketService.$isConnected
+        webSocketService.$connectionState
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] connected in
-                self?.isConnected = connected
+            .sink { [weak self] state in
+                self?.connectionState = state
             }
             .store(in: &cancellables)
     }
@@ -86,19 +88,7 @@ struct CalendarEvent: Identifiable {
     }
 }
 
-struct ActionItem: Identifiable {
-    let id = UUID()
-    let text: String
-    let isDone: Bool
-
-    static var mockItems: [ActionItem] {
-        [
-            ActionItem(text: "Send Q2 roadmap draft", isDone: false),
-            ActionItem(text: "Review design specs", isDone: true),
-            ActionItem(text: "Schedule follow-up meeting", isDone: false),
-        ]
-    }
-}
+// ActionItem is now ActionItemPayload from NotchState.swift
 
 // MARK: - Main Notch View
 
@@ -157,7 +147,7 @@ struct NotchView: View {
 
     private var closedLayout: some View {
         HStack(spacing: 8) {
-            StatusDot(status: viewModel.status, isConnected: viewModel.isConnected)
+            StatusDot(status: viewModel.status, connectionState: viewModel.connectionState)
 
             if let nudge = viewModel.nudge {
                 Text(nudge.text)
@@ -224,7 +214,7 @@ struct NotchView: View {
 
     private var expandedHeader: some View {
         HStack(spacing: 10) {
-            StatusDot(status: viewModel.status, isConnected: viewModel.isConnected)
+            StatusDot(status: viewModel.status, connectionState: viewModel.connectionState)
 
             Text(viewModel.noteTitle ?? "Marshall")
                 .font(.system(size: 12, weight: .semibold))
@@ -252,7 +242,7 @@ struct NotchView: View {
             if let nudge = viewModel.nudge {
                 NudgeCard(nudge: nudge)
             } else {
-                StatusCard(status: viewModel.status, isConnected: viewModel.isConnected)
+                StatusCard(status: viewModel.status, connectionState: viewModel.connectionState)
             }
 
             // Action items
@@ -311,7 +301,7 @@ struct NotchView: View {
 
 struct StatusDot: View {
     let status: NotchStatus
-    let isConnected: Bool
+    let connectionState: ConnectionState
 
     var body: some View {
         Circle()
@@ -320,12 +310,18 @@ struct StatusDot: View {
     }
 
     private var color: Color {
-        guard isConnected else { return .gray.opacity(0.5) }
-        switch status {
-        case .monitoring: return .green
-        case .analyzing, .chatting: return .blue
-        case .error: return .red
-        case .idle: return .gray
+        switch connectionState {
+        case .disconnected:
+            return .red
+        case .connecting:
+            return .orange
+        case .connected:
+            switch status {
+            case .monitoring: return .green
+            case .analyzing, .chatting: return .blue
+            case .error: return .red
+            case .idle: return .gray
+            }
         }
     }
 }
@@ -370,11 +366,11 @@ struct NudgeCard: View {
 
 struct StatusCard: View {
     let status: NotchStatus
-    let isConnected: Bool
+    let connectionState: ConnectionState
 
     var body: some View {
         HStack(spacing: 8) {
-            StatusDot(status: status, isConnected: isConnected)
+            StatusDot(status: status, connectionState: connectionState)
             Text(label)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.white.opacity(0.8))
@@ -397,7 +393,7 @@ struct StatusCard: View {
 }
 
 struct ActionItemRow: View {
-    let item: ActionItem
+    let item: ActionItemPayload
 
     var body: some View {
         HStack(spacing: 6) {
