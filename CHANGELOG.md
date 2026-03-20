@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.10](https://github.com/dang-hai/marshall/compare/v0.0.9...v0.0.10) (2026-03-20)
+
+
+### Bug Fixes
+
+* **ci:** deploy prebuilt assets and fix release upload ([b49e0c7](https://github.com/dang-hai/marshall/commit/b49e0c770b07b9f78bb95a2acfb6459b872884d5))
+
 ## [0.0.9](https://github.com/dang-hai/marshall/compare/v0.0.8...v0.0.9) (2026-03-20)
 
 
