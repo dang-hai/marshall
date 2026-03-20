@@ -261,28 +261,43 @@ struct NotchView: View {
         }
     }
 
-    // MARK: - Right Panel (Calendar)
+    // MARK: - Right Panel (Meeting Proposals)
 
     private var rightPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
-                Text("UPCOMING")
+                Text("MEETING PROPOSALS")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(.white.opacity(0.4))
                     .tracking(0.5)
 
                 Spacer()
 
-                Text(todayLabel)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
+                if !pendingProposals.isEmpty {
+                    Text("\(pendingProposals.count) pending")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                }
             }
 
-            // Events list
-            VStack(spacing: 4) {
-                ForEach(viewModel.events) { event in
-                    CalendarEventRow(event: event)
+            // Proposals list
+            if pendingProposals.isEmpty {
+                Text("No meeting proposals")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 20)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(pendingProposals) { proposal in
+                        MeetingProposalRow(
+                            proposal: proposal,
+                            onAccept: { viewModel.acceptProposal(proposal.id) },
+                            onRemind: { viewModel.remindProposal(proposal.id) },
+                            onDiscard: { viewModel.discardProposal(proposal.id) }
+                        )
+                    }
                 }
             }
 
@@ -290,10 +305,8 @@ struct NotchView: View {
         }
     }
 
-    private var todayLabel: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE, MMM d"
-        return formatter.string(from: Date())
+    private var pendingProposals: [MeetingProposalPayload] {
+        viewModel.meetingProposals.filter { $0.isPending }
     }
 }
 
@@ -410,44 +423,70 @@ struct ActionItemRow: View {
     }
 }
 
-struct CalendarEventRow: View {
-    let event: CalendarEvent
+struct MeetingProposalRow: View {
+    let proposal: MeetingProposalPayload
+    let onAccept: () -> Void
+    let onRemind: () -> Void
+    let onDiscard: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            // Color indicator
+            // Color indicator (yellow for pending)
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(event.color)
-                .frame(width: 3, height: 28)
+                .fill(Color.yellow)
+                .frame(width: 3, height: 36)
 
-            // Event info
+            // Proposal info
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.title)
+                Text(proposal.title)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
 
-                if let location = event.location {
-                    Text(location)
-                        .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.5))
-                        .lineLimit(1)
-                }
+                Text("\(proposal.formattedStartTime) - \(proposal.formattedEndTime)")
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.5))
             }
 
             Spacer(minLength: 0)
 
-            // Time
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(event.time)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white)
-                Text(event.endTime)
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.5))
+            // Action buttons
+            HStack(spacing: 4) {
+                Button(action: onAccept) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.green)
+                        .frame(width: 22, height: 22)
+                        .background(Color.green.opacity(0.2))
+                        .cornerRadius(4)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Accept")
+
+                Button(action: onRemind) {
+                    Image(systemName: "bell")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.orange)
+                        .frame(width: 22, height: 22)
+                        .background(Color.orange.opacity(0.2))
+                        .cornerRadius(4)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Remind Later")
+
+                Button(action: onDiscard) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.red)
+                        .frame(width: 22, height: 22)
+                        .background(Color.red.opacity(0.2))
+                        .cornerRadius(4)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Discard")
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .background(Color.white.opacity(0.05))
         .cornerRadius(6)

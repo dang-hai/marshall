@@ -149,4 +149,27 @@ class WebSocketService: ObservableObject {
             self?.performConnect()
         }
     }
+
+    /// Send an action to Electron (e.g., accept/remind/discard proposal)
+    func sendAction(_ action: String, proposalId: String) {
+        let message: [String: Any] = [
+            "type": "action",
+            "action": action,
+            "payload": ["proposalId": proposalId]
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: message),
+              let text = String(data: data, encoding: .utf8) else {
+            print("[WebSocket] Failed to serialize action message")
+            return
+        }
+
+        webSocketTask?.send(.string(text)) { error in
+            if let error = error {
+                print("[WebSocket] Send error: \(error.localizedDescription)")
+            } else {
+                print("[WebSocket] Sent action: \(action) for proposal: \(proposalId)")
+            }
+        }
+    }
 }

@@ -410,6 +410,11 @@ export class CodexMonitorMCPService {
 
   setNotchCompanion(companion: NotchCompanionManager) {
     this.notchCompanion = companion;
+    companion.setProposalCallbacks({
+      onAccept: (id) => this.acceptMeetingProposal(id),
+      onRemind: (id) => this.remindMeetingProposal(id),
+      onDiscard: (id) => this.discardMeetingProposal(id),
+    });
   }
 
   async updateSession(input: CodexMonitorSessionInput) {
@@ -960,7 +965,7 @@ export class CodexMonitorMCPService {
     this.syncNotificationWindow();
 
     // Broadcast to native notch companion
-    this.notchCompanion?.broadcastState(this.state);
+    this.notchCompanion?.broadcastState(this.state, this.getPendingMeetingProposals());
   }
 
   private syncNotificationWindow() {

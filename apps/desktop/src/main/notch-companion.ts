@@ -10,7 +10,7 @@ import { app } from "electron";
 import { join } from "path";
 import { existsSync } from "fs";
 import { WebSocketServer, WebSocket } from "ws";
-import type { CodexMonitorState } from "@marshall/shared";
+import type { CodexMonitorState, MeetingProposal } from "@marshall/shared";
 
 // Message types sent to Swift companion
 interface NotchStateMessage {
@@ -36,6 +36,20 @@ export interface NotchStatePayload {
   itemCount: number;
   pendingItemCount: number;
   error: string | null;
+  meetingProposals: Array<{
+    id: string;
+    title: string;
+    startAt: string;
+    endAt: string;
+    status: "pending" | "accepted" | "reminded" | "discarded";
+  }>;
+}
+
+// Message from Swift companion for actions
+interface NotchActionMessage {
+  type: "action";
+  action: string;
+  payload: { proposalId: string };
 }
 
 export class NotchCompanionManager {
@@ -44,6 +58,9 @@ export class NotchCompanionManager {
   private client: WebSocket | null = null;
   private lastState: NotchStatePayload | null = null;
   private isStarting = false;
+  private onAcceptProposal?: (id: string) => Promise<{ status: string; error?: string }>;
+  private onRemindProposal?: (id: string) => Promise<{ status: string; error?: string }>;
+  private onDiscardProposal?: (id: string) => Promise<{ status: string; error?: string }>;
 
   /**
    * Start the WebSocket server and spawn the Swift companion app.
@@ -82,6 +99,18 @@ export class NotchCompanionManager {
         if (this.lastState) {
           this.sendState(this.lastState);
         }
+
+        // Handle incoming messages from Swift companion
+        ws.on("message", (data) => {
+          try {
+            const message = JSON.parse(data.toString()) as NotchActionMessage;
+            if (message.type === "action") {
+              this.handleAction(message.action, message.payload);
+            }
+          } catch (error) {
+            console.error("[NotchCompanion] Failed to parse message:", error);
+          }
+        });
 
         ws.on("close", () => {
           console.log("[NotchCompanion] Client disconnected");
@@ -160,9 +189,22 @@ export class NotchCompanionManager {
   }
 
   /**
+   * Set callbacks for proposal actions from Swift companion.
+   */
+  setProposalCallbacks(callbacks: {
+    onAccept: (id: string) => Promise<{ status: string; error?: string }>;
+    onRemind: (id: string) => Promise<{ status: string; error?: string }>;
+    onDiscard: (id: string) => Promise<{ status: string; error?: string }>;
+  }): void {
+    this.onAcceptProposal = callbacks.onAccept;
+    this.onRemindProposal = callbacks.onRemind;
+    this.onDiscardProposal = callbacks.onDiscard;
+  }
+
+  /**
    * Broadcast state to the companion app.
    */
-  broadcastState(state: CodexMonitorState): void {
+  broadcastState(state: CodexMonitorState, meetingProposals: MeetingProposal[] = []): void {
     const payload: NotchStatePayload = {
       status: state.status,
       noteTitle: state.noteTitle,
@@ -176,10 +218,37 @@ export class NotchCompanionManager {
       itemCount: state.items.length,
       pendingItemCount: state.items.filter((i) => i.status !== "done").length,
       error: state.error,
+      meetingProposals: meetingProposals.map((p) => ({
+        id: p.id,
+        title: p.title,
+        startAt: p.startAt,
+        endAt: p.endAt,
+        status: p.status,
+      })),
     };
 
     this.lastState = payload;
     this.sendState(payload);
+  }
+
+  /**
+   * Handle action messages from Swift companion.
+   */
+  private handleAction(action: string, payload: { proposalId: string }): void {
+    console.log(`[NotchCompanion] Received action: ${action}, proposalId: ${payload.proposalId}`);
+    switch (action) {
+      case "acceptProposal":
+        this.onAcceptProposal?.(payload.proposalId);
+        break;
+      case "remindProposal":
+        this.onRemindProposal?.(payload.proposalId);
+        break;
+      case "discardProposal":
+        this.onDiscardProposal?.(payload.proposalId);
+        break;
+      default:
+        console.warn(`[NotchCompanion] Unknown action: ${action}`);
+    }
   }
 
   /**
