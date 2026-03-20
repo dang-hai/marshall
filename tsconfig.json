@@ -19,6 +19,7 @@
     { "path": "./packages/auth" },
     { "path": "./packages/api" },
     { "path": "./packages/transcription" },
+    { "path": "./packages/utilities" },
     { "path": "./apps/backend" },
     { "path": "./apps/desktop" },
     { "path": "./apps/marketing" }

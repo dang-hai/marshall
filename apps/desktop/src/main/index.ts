@@ -21,6 +21,9 @@ import { setupTranscriptionIPC } from "./transcription";
 import { setupSettingsIPC } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
 import { CodexMonitorService } from "./codex-monitor";
+import { setupIntegrationsIPC, setNotionToken } from "./integrations";
+import { setupNotionIntegrationIPC } from "./notion-integration";
+import type { StoredNotionToken } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -56,6 +59,14 @@ const pendingCalendarConnectionRequests = new Map<
   string,
   {
     resolve: () => void;
+    reject: (error: Error) => void;
+  }
+>();
+
+const pendingNotionConnectionRequests = new Map<
+  string,
+  {
+    resolve: (token: StoredNotionToken) => void;
     reject: (error: Error) => void;
   }
 >();
@@ -186,9 +197,71 @@ function handleCalendarCallback(url: string) {
   }
 }
 
+function handleNotionCallback(url: string) {
+  try {
+    const parsed = new URL(url);
+    const isNotionSuccess =
+      (parsed.host === "notion" && parsed.pathname === "/callback") ||
+      parsed.pathname === "/notion/callback" ||
+      parsed.pathname === "//notion/callback";
+    const isNotionError =
+      (parsed.host === "notion" && parsed.pathname === "/error") ||
+      parsed.pathname === "/notion/error" ||
+      parsed.pathname === "//notion/error";
+
+    if (!isNotionSuccess && !isNotionError) {
+      return;
+    }
+
+    const state = parsed.searchParams.get("state");
+    if (!state) {
+      return;
+    }
+
+    const pending = pendingNotionConnectionRequests.get(state);
+    if (!pending) {
+      console.log("[Notion] No pending request for state:", state);
+      return;
+    }
+
+    pendingNotionConnectionRequests.delete(state);
+
+    if (isNotionError) {
+      const error = parsed.searchParams.get("error") || "Notion connection failed";
+      pending.reject(new Error(error));
+    } else {
+      // Parse the token from the callback URL
+      const tokenParam = parsed.searchParams.get("token");
+      if (!tokenParam) {
+        pending.reject(new Error("No token received from Notion OAuth"));
+        return;
+      }
+
+      try {
+        const token = JSON.parse(decodeURIComponent(tokenParam)) as StoredNotionToken;
+        // Store the token
+        setNotionToken(token);
+        console.log("[Notion] Token stored for workspace:", token.workspaceName);
+        pending.resolve(token);
+      } catch {
+        pending.reject(new Error("Failed to parse Notion token"));
+        return;
+      }
+    }
+
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  } catch (error) {
+    console.error("[Notion] Error processing callback:", error);
+  }
+}
+
 function handleProtocolCallback(url: string) {
   handleAuthCallback(url);
   handleCalendarCallback(url);
+  handleNotionCallback(url);
 }
 
 // Handle deep link on macOS (app already running)
@@ -372,6 +445,12 @@ app.whenReady().then(() => {
   // Set up settings IPC handlers first (needed by transcription)
   setupSettingsIPC();
 
+  // Set up integrations IPC handlers (Notion, etc.)
+  setupIntegrationsIPC();
+
+  // Set up Notion integration IPC handlers (search, save, context)
+  setupNotionIntegrationIPC();
+
   // Desktop capturer IPC handler (required for Electron 30+)
   ipcMain.handle("desktop-capturer:get-sources", async (_event, options) => {
     return desktopCapturer.getSources(options);
@@ -471,6 +550,30 @@ app.whenReady().then(() => {
       void shell.openExternal(url).catch((error) => {
         pendingCalendarConnectionRequests.delete(state);
         reject(error instanceof Error ? error : new Error("Failed to open Google Calendar auth"));
+      });
+    });
+  });
+
+  ipcMain.handle("notion:connect", async () => {
+    const state = randomBytes(16).toString("hex");
+    const url = `${BETTER_AUTH_URL}/notion/connect?state=${encodeURIComponent(state)}&scheme=${encodeURIComponent(PROTOCOL)}`;
+
+    return new Promise<StoredNotionToken>((resolve, reject) => {
+      pendingNotionConnectionRequests.set(state, {
+        resolve,
+        reject,
+      });
+
+      setTimeout(() => {
+        if (pendingNotionConnectionRequests.has(state)) {
+          pendingNotionConnectionRequests.delete(state);
+          reject(new Error("Notion connection timed out"));
+        }
+      }, AUTH_REQUEST_TTL_MS);
+
+      void shell.openExternal(url).catch((error) => {
+        pendingNotionConnectionRequests.delete(state);
+        reject(error instanceof Error ? error : new Error("Failed to open Notion auth"));
       });
     });
   });
