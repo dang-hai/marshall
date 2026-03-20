@@ -1,7 +1,8 @@
+import { app } from "electron";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { mkdtemp, writeFile } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import type { MonitorAgent } from "../shared/settings";
 
 export interface AgentInfo {
@@ -105,6 +106,33 @@ export async function createTempSchemaFile(prefix: string, schema: object) {
   return schemaPath;
 }
 
+function getNotionMcpServerPath(): string {
+  // In development, use the workspace path
+  // In production, the utilities package is bundled
+  const appPath = app.getAppPath();
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    // Development: use workspace path
+    return join(
+      dirname(dirname(appPath)),
+      "packages",
+      "utilities",
+      "dist",
+      "notion",
+      "mcp-server.js"
+    );
+  }
+
+  // Production: utilities is in node_modules
+  return join(appPath, "node_modules", "@marshall", "utilities", "dist", "notion", "mcp-server.js");
+}
+
+function buildMcpConfig(): string {
+  const mcpServerPath = getNotionMcpServerPath();
+  // TOML format for --config flag
+  return `mcp_servers.notion={command = "node", args = ["${mcpServerPath}"]}`;
+}
+
 export function createCodexExecutor(): AgentExecutor {
   return function spawnCodexProcess<T>(options: AgentSpawnOptions<T>): Promise<T> {
     const {
@@ -118,8 +146,20 @@ export function createCodexExecutor(): AgentExecutor {
       noResultError,
     } = options;
 
+    const mcpConfig = buildMcpConfig();
+
     const args = conversationId
-      ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", conversationId, "-"]
+      ? [
+          "exec",
+          "resume",
+          "--json",
+          "-m",
+          "gpt-5.4-mini",
+          "--config",
+          mcpConfig,
+          conversationId,
+          "-",
+        ]
       : [
           "exec",
           "--json",
@@ -129,6 +169,8 @@ export function createCodexExecutor(): AgentExecutor {
           "read-only",
           "-m",
           "gpt-5.4-mini",
+          "--config",
+          mcpConfig,
           "--output-schema",
           schemaPath,
           "-",

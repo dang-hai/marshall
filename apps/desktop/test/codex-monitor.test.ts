@@ -5,14 +5,37 @@ mock.module("electron", () => ({
   default: {
     app: {
       getPath: () => "/tmp",
+      getAppPath: () => "/tmp/app",
       getName: () => "Marshall",
       getVersion: () => "0.0.0",
     },
+  },
+  app: {
+    getPath: () => "/tmp",
+    getAppPath: () => "/tmp/app",
+    getName: () => "Marshall",
+    getVersion: () => "0.0.0",
   },
   BrowserWindow: class BrowserWindow {
     static getAllWindows() {
       return [];
     }
+  },
+  ipcMain: {
+    handle: () => {},
+  },
+}));
+
+mock.module("@notionhq/client", () => ({
+  Client: class Client {
+    search() {
+      return { results: [] };
+    }
+    blocks = {
+      children: {
+        list: () => ({ results: [] }),
+      },
+    };
   },
 }));
 
