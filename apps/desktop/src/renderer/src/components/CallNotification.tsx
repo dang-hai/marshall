@@ -17,7 +17,7 @@ const APP_ICONS: Record<string, string> = {
 interface CallNotificationProps {
   call: DetectedCall;
   onDismiss: (callId: string) => void;
-  onStartTranscription: () => void;
+  onStartTranscription: (title: string) => void;
   onCreateNote: (title: string) => void;
 }
 
@@ -187,7 +187,7 @@ export function CallNotification({
   };
 
   const handleStartTranscription = () => {
-    onStartTranscription();
+    onStartTranscription(`${call.appName} Call Notes`);
     onDismiss(call.id);
   };
 
@@ -301,7 +301,7 @@ export function CallNotification({
 interface CallNotificationStackProps {
   calls: DetectedCall[];
   onDismiss: (callId: string) => void;
-  onStartTranscription: () => void;
+  onStartTranscription: (title: string) => void;
   onCreateNote: (title: string) => void;
 }
 
