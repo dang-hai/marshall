@@ -1,7 +1,11 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { detectCallFromProcess } from "../shared/call-detection";
+import {
+  detectCallFromProcess,
+  filterTrackedCallsToActiveApps,
+  hasTrackedCallForApp,
+} from "../shared/call-detection";
 
 const execAsync = promisify(exec);
 
@@ -184,9 +188,7 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
 
   // Check for new calls
   for (const appName of detectedApps) {
-    const existingCall = state.detectedCalls.find(
-      (call) => call.appName === appName && !call.dismissed
-    );
+    const existingCall = hasTrackedCallForApp(state.detectedCalls, appName);
 
     if (!existingCall) {
       const newCall: DetectedCall = {
@@ -209,15 +211,10 @@ async function checkForCalls(mainWindow: BrowserWindow): Promise<void> {
     mainWindow.webContents.send("call-detection:call-dismissed", inactiveCall.id);
   }
 
-  // Clean up old dismissed calls (older than 5 minutes)
-  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-  state.detectedCalls = state.detectedCalls.filter((call) => {
-    if (call.dismissed) {
-      return call.detectedAt > fiveMinutesAgo;
-    }
-
-    return detectedApps.has(call.appName);
-  });
+  // Keep tracked calls only while their app remains active, which prevents
+  // dismissed notifications from respawning during the same call but allows
+  // future calls from the same app to notify again.
+  state.detectedCalls = filterTrackedCallsToActiveApps(state.detectedCalls, detectedApps);
 }
 
 export function setupCallDetectionIPC(mainWindow: BrowserWindow): void {

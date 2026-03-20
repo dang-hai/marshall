@@ -11,6 +11,11 @@ export const CALL_APP_PATTERNS: Record<string, RegExp> = {
 
 const IGNORED_PROCESS_NAMES = new Set(["com.apple.FaceTime.FTConversationService"]);
 
+interface TrackedCallLike {
+  appName: string;
+  dismissed: boolean;
+}
+
 export function getProcessName(processEntry: string): string {
   const trimmed = processEntry.trim();
 
@@ -36,4 +41,15 @@ export function detectCallFromProcess(processEntry: string): { appName: string }
   }
 
   return null;
+}
+
+export function hasTrackedCallForApp(calls: TrackedCallLike[], appName: string): boolean {
+  return calls.some((call) => call.appName === appName);
+}
+
+export function filterTrackedCallsToActiveApps<T extends TrackedCallLike>(
+  calls: T[],
+  activeApps: Set<string>
+): T[] {
+  return calls.filter((call) => activeApps.has(call.appName));
 }
