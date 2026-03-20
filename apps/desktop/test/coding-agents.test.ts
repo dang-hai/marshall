@@ -1,12 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 
 mock.module("electron", () => ({
-  default: {
-    app: {
-      getPath: () => "/tmp",
-      getName: () => "Marshall",
-      getVersion: () => "0.0.0",
-    },
+  app: {
+    getPath: () => "/tmp",
+    getAppPath: () => "/tmp/app",
+    getName: () => "Marshall",
+    getVersion: () => "0.0.0",
   },
 }));
 
