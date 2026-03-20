@@ -44,6 +44,16 @@ const MIN_TRANSCRIPT_GROWTH_FOR_RECHECK = 180;
 const TRANSCRIPT_EXCERPT_LIMIT = 12000;
 const DEBUG_PREVIEW_LIMIT = 900;
 
+const ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    text: { type: "string" },
+    status: { type: "string", enum: ["pending", "done", "attention"] },
+  },
+  required: ["text", "status"],
+  additionalProperties: false,
+} as const;
+
 const RESULT_SCHEMA = {
   type: "object",
   properties: {
@@ -63,18 +73,7 @@ const RESULT_SCHEMA = {
         },
       ],
     },
-    items: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          text: { type: "string" },
-          status: { type: "string", enum: ["pending", "done", "attention"] },
-        },
-        required: ["text", "status"],
-        additionalProperties: false,
-      },
-    },
+    items: { type: "array", items: ITEM_SCHEMA },
     checkedPlanItems: {
       type: "array",
       items: { type: "string" },
@@ -92,21 +91,7 @@ const CHAT_RESULT_SCHEMA = {
   properties: {
     response: { type: "string" },
     items: {
-      anyOf: [
-        { type: "null" },
-        {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              text: { type: "string" },
-              status: { type: "string", enum: ["pending", "done", "attention"] },
-            },
-            required: ["text", "status"],
-            additionalProperties: false,
-          },
-        },
-      ],
+      anyOf: [{ type: "null" }, { type: "array", items: ITEM_SCHEMA }],
     },
   },
   required: ["response", "items"],
@@ -146,17 +131,10 @@ function buildTranscriptExcerpt(transcriptText: string) {
   return `${leading}\n...\n${trailing}`;
 }
 
-async function createSchemaFile() {
-  const schemaDirectory = await mkdtemp(join(tmpdir(), "marshall-codex-monitor-"));
-  const schemaPath = join(schemaDirectory, "result-schema.json");
-  await writeFile(schemaPath, JSON.stringify(RESULT_SCHEMA), "utf8");
-  return schemaPath;
-}
-
-async function createChatSchemaFile() {
-  const schemaDirectory = await mkdtemp(join(tmpdir(), "marshall-codex-chat-"));
-  const schemaPath = join(schemaDirectory, "chat-schema.json");
-  await writeFile(schemaPath, JSON.stringify(CHAT_RESULT_SCHEMA), "utf8");
+async function createTempSchemaFile(prefix: string, schema: object) {
+  const schemaDirectory = await mkdtemp(join(tmpdir(), prefix));
+  const schemaPath = join(schemaDirectory, "schema.json");
+  await writeFile(schemaPath, JSON.stringify(schema), "utf8");
   return schemaPath;
 }
 
@@ -189,6 +167,132 @@ function createEmptyDebugState(): CodexMonitorState["debug"] {
     lastPromptPreview: null,
     lastResponsePreview: null,
   };
+}
+
+interface SpawnCodexOptions<T> {
+  prompt: string;
+  conversationId: string | null;
+  schemaPath: string;
+  noteId: string;
+  onThreadStarted: (threadId: string) => void;
+  parseResult: (lastMessage: string) => T;
+  setProcess: (child: ChildProcessWithoutNullStreams | null) => void;
+  noResultError: string;
+}
+
+function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
+  const {
+    prompt,
+    conversationId,
+    schemaPath,
+    noteId,
+    onThreadStarted,
+    parseResult,
+    setProcess,
+    noResultError,
+  } = options;
+
+  const args = conversationId
+    ? ["exec", "resume", "--json", conversationId, "-"]
+    : [
+        "exec",
+        "--json",
+        "--color",
+        "never",
+        "--sandbox",
+        "read-only",
+        "--output-schema",
+        schemaPath,
+        "-",
+      ];
+
+  return new Promise<T>((resolve, reject) => {
+    const child = spawn("codex", args, {
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    setProcess(child);
+
+    let lastAgentMessage = "";
+    let stderr = "";
+
+    const handleStdout = (chunk: Buffer) => {
+      const text = chunk.toString("utf8");
+      for (const line of text.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("{")) continue;
+
+        try {
+          const parsed = JSON.parse(trimmed) as {
+            type?: string;
+            thread_id?: string;
+            item?: { type?: string; text?: string };
+          };
+
+          if (parsed.type === "thread.started" && parsed.thread_id) {
+            onThreadStarted(parsed.thread_id);
+            if (noteId) {
+              setConversationId(noteId, parsed.thread_id);
+            }
+          }
+
+          if (
+            parsed.type === "item.completed" &&
+            parsed.item?.type === "agent_message" &&
+            typeof parsed.item.text === "string"
+          ) {
+            lastAgentMessage = parsed.item.text;
+          }
+        } catch {
+          continue;
+        }
+      }
+    };
+
+    const handleStderr = (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    };
+
+    const cleanup = () => {
+      child.stdout.removeListener("data", handleStdout);
+      child.stderr.removeListener("data", handleStderr);
+    };
+
+    child.stdout.on("data", handleStdout);
+    child.stderr.on("data", handleStderr);
+    child.on("error", (err) => {
+      cleanup();
+      reject(err);
+    });
+    child.on("close", (code) => {
+      cleanup();
+
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
+        return;
+      }
+
+      if (!lastAgentMessage) {
+        reject(new Error(noResultError));
+        return;
+      }
+
+      try {
+        resolve(parseResult(lastAgentMessage));
+      } catch (error) {
+        reject(
+          new Error(
+            error instanceof Error
+              ? `Failed to parse Codex output: ${error.message}`
+              : "Failed to parse Codex output"
+          )
+        );
+      }
+    });
+
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
 }
 
 export class CodexMonitorService {
@@ -240,11 +344,13 @@ export class CodexMonitorService {
     }
 
     this.session = input;
+    const currentIsActive = isActiveCall(input.transcription.status);
+
     this.state = {
       ...this.state,
       noteId: input.noteId,
       noteTitle: input.noteTitle,
-      status: isActiveCall(input.transcription.status) ? "monitoring" : this.state.status,
+      status: currentIsActive ? "monitoring" : "idle",
       error: null,
       debug: {
         ...this.state.debug,
@@ -253,14 +359,6 @@ export class CodexMonitorService {
         checklistItemCount: extractChecklistItems(input.noteBodyText).length,
         sessionUpdatedAt: new Date().toISOString(),
       },
-    };
-    this.broadcastState();
-
-    const currentIsActive = isActiveCall(input.transcription.status);
-
-    this.state = {
-      ...this.state,
-      status: currentIsActive ? "monitoring" : "idle",
     };
     this.broadcastState();
 
@@ -422,7 +520,7 @@ export class CodexMonitorService {
   private async executeChatQuery(session: CodexMonitorSessionInput, userMessage: string) {
     const transcriptExcerpt = buildTranscriptExcerpt(session.transcription.transcriptText);
     const chatHistory = this.state.chatMessages
-      .slice(-6) // Keep last 6 messages for context
+      .slice(-6)
       .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
       .join("\n");
 
@@ -461,106 +559,25 @@ export class CodexMonitorService {
 
     const schemaPath = await this.getChatSchemaPath();
 
-    // Build args: use "resume" if we have an existing session, otherwise start fresh
-    // Note: resume only supports --json, not --color/--sandbox/--output-schema
-    const args = this.conversationId
-      ? ["exec", "resume", "--json", this.conversationId, "-"]
-      : [
-          "exec",
-          "--json",
-          "--color",
-          "never",
-          "--sandbox",
-          "read-only",
-          "--output-schema",
-          schemaPath,
-          "-",
-        ];
-
-    return await new Promise<ChatResult>((resolve, reject) => {
-      const child = spawn("codex", args, {
-        env: process.env,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      this.chatProcess = child;
-
-      let lastAgentMessage = "";
-      let stderr = "";
-
-      const handleStdout = (chunk: Buffer) => {
-        const text = chunk.toString("utf8");
-        for (const line of text.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("{")) {
-            continue;
-          }
-
-          try {
-            const parsed = JSON.parse(trimmed) as {
-              type?: string;
-              thread_id?: string;
-              item?: { type?: string; text?: string };
-            };
-
-            // Capture the thread_id from the first response and persist it
-            if (parsed.type === "thread.started" && parsed.thread_id) {
-              this.conversationId = parsed.thread_id;
-              if (session.noteId) {
-                setConversationId(session.noteId, parsed.thread_id);
-              }
-            }
-
-            if (
-              parsed.type === "item.completed" &&
-              parsed.item?.type === "agent_message" &&
-              typeof parsed.item.text === "string"
-            ) {
-              lastAgentMessage = parsed.item.text;
-            }
-          } catch {
-            continue;
-          }
-        }
-      };
-
-      const handleStderr = (chunk: Buffer) => {
-        stderr += chunk.toString("utf8");
-      };
-
-      const cleanup = () => {
-        child.stdout.removeListener("data", handleStdout);
-        child.stderr.removeListener("data", handleStderr);
-      };
-
-      child.stdout.on("data", handleStdout);
-      child.stderr.on("data", handleStderr);
-      child.on("error", (err) => {
-        cleanup();
-        reject(err);
-      });
-      child.on("close", (code) => {
-        cleanup();
-
-        if (code !== 0) {
-          reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
-          return;
-        }
-
-        if (!lastAgentMessage) {
-          reject(new Error("No response from assistant"));
-          return;
-        }
-
+    return spawnCodexProcess<ChatResult>({
+      prompt,
+      conversationId: this.conversationId,
+      schemaPath,
+      noteId: session.noteId,
+      onThreadStarted: (threadId) => {
+        this.conversationId = threadId;
+      },
+      parseResult: (lastMessage) => {
         try {
-          resolve(JSON.parse(lastAgentMessage) as ChatResult);
+          return JSON.parse(lastMessage) as ChatResult;
         } catch {
-          // If JSON parsing fails, treat the whole message as the response
-          resolve({ response: lastAgentMessage, items: null });
+          return { response: lastMessage, items: null };
         }
-      });
-
-      child.stdin.write(prompt);
-      child.stdin.end();
+      },
+      setProcess: (child) => {
+        this.chatProcess = child;
+      },
+      noResultError: "No response from assistant",
     });
   }
 
@@ -877,12 +894,12 @@ export class CodexMonitorService {
   }
 
   private async getSchemaPath() {
-    this.schemaPathPromise ??= createSchemaFile();
+    this.schemaPathPromise ??= createTempSchemaFile("marshall-codex-monitor-", RESULT_SCHEMA);
     return this.schemaPathPromise;
   }
 
   private async getChatSchemaPath() {
-    this.chatSchemaPathPromise ??= createChatSchemaFile();
+    this.chatSchemaPathPromise ??= createTempSchemaFile("marshall-codex-chat-", CHAT_RESULT_SCHEMA);
     return this.chatSchemaPathPromise;
   }
 
@@ -901,111 +918,19 @@ export class CodexMonitorService {
     };
     this.broadcastState();
 
-    // Build args: use "resume" if we have an existing session, otherwise start fresh
-    // Note: resume only supports --json, not --color/--sandbox/--output-schema
-    const args = this.conversationId
-      ? ["exec", "resume", "--json", this.conversationId, "-"]
-      : [
-          "exec",
-          "--json",
-          "--color",
-          "never",
-          "--sandbox",
-          "read-only",
-          "--output-schema",
-          schemaPath,
-          "-",
-        ];
-
-    return await new Promise<CodexMonitorResult>((resolve, reject) => {
-      const child = spawn("codex", args, {
-        env: process.env,
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      this.analysisProcess = child;
-
-      let lastAgentMessage = "";
-      let stderr = "";
-
-      const handleStdout = (chunk: Buffer) => {
-        const text = chunk.toString("utf8");
-        for (const line of text.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("{")) {
-            continue;
-          }
-
-          try {
-            const parsed = JSON.parse(trimmed) as {
-              type?: string;
-              thread_id?: string;
-              item?: { type?: string; text?: string };
-            };
-
-            // Capture the thread_id from the first response and persist it
-            if (parsed.type === "thread.started" && parsed.thread_id) {
-              this.conversationId = parsed.thread_id;
-              if (session.noteId) {
-                setConversationId(session.noteId, parsed.thread_id);
-              }
-            }
-
-            if (
-              parsed.type === "item.completed" &&
-              parsed.item?.type === "agent_message" &&
-              typeof parsed.item.text === "string"
-            ) {
-              lastAgentMessage = parsed.item.text;
-            }
-          } catch {
-            continue;
-          }
-        }
-      };
-
-      const handleStderr = (chunk: Buffer) => {
-        stderr += chunk.toString("utf8");
-      };
-
-      const cleanup = () => {
-        child.stdout.removeListener("data", handleStdout);
-        child.stderr.removeListener("data", handleStderr);
-      };
-
-      child.stdout.on("data", handleStdout);
-      child.stderr.on("data", handleStderr);
-      child.on("error", (err) => {
-        cleanup();
-        reject(err);
-      });
-      child.on("close", (code) => {
-        cleanup();
-
-        if (code !== 0) {
-          reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
-          return;
-        }
-
-        if (!lastAgentMessage) {
-          reject(new Error("Codex returned no structured result"));
-          return;
-        }
-
-        try {
-          resolve(JSON.parse(lastAgentMessage) as CodexMonitorResult);
-        } catch (error) {
-          reject(
-            new Error(
-              error instanceof Error
-                ? `Failed to parse Codex output: ${error.message}`
-                : "Failed to parse Codex output"
-            )
-          );
-        }
-      });
-
-      child.stdin.write(prompt);
-      child.stdin.end();
+    return spawnCodexProcess<CodexMonitorResult>({
+      prompt,
+      conversationId: this.conversationId,
+      schemaPath,
+      noteId: session.noteId,
+      onThreadStarted: (threadId) => {
+        this.conversationId = threadId;
+      },
+      parseResult: (lastMessage) => JSON.parse(lastMessage) as CodexMonitorResult,
+      setProcess: (child) => {
+        this.analysisProcess = child;
+      },
+      noResultError: "Codex returned no structured result",
     });
   }
 

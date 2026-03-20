@@ -15,6 +15,9 @@ interface DeepgramConnection {
   pendingChunks: (ArrayBuffer | Uint8Array)[];
 }
 
+// Limit pending chunks to ~3 seconds of audio at typical chunk sizes to prevent memory leaks
+const MAX_PENDING_CHUNKS = 100;
+
 // Store active connections and their Deepgram sockets
 const activeConnections = new Map<string, DeepgramConnection>();
 
@@ -173,9 +176,11 @@ export function createTranscriptionRoutes() {
         if (message instanceof ArrayBuffer || message instanceof Uint8Array) {
           if (connection.dgSocket?.readyState === WebSocket.OPEN) {
             connection.dgSocket.send(message);
-          } else {
-            // Queue audio chunks until Deepgram connection is ready
+          } else if (connection.pendingChunks.length < MAX_PENDING_CHUNKS) {
+            // Queue audio chunks until Deepgram connection is ready (bounded to prevent memory leaks)
             connection.pendingChunks.push(message);
+          } else if (connection.pendingChunks.length === MAX_PENDING_CHUNKS) {
+            console.warn(`[Transcription] Buffer full, dropping audio chunks: ${connectionId}`);
           }
         } else if (typeof message === "string") {
           // Handle control messages
