@@ -210,24 +210,25 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
         } satisfies DeepgramPartialTranscription);
         break;
 
-      case "final":
+      case "final": {
         console.log("[DeepgramTranscriber] Emitting final partial:", data.text);
-        if (data.text && data.text.trim()) {
-          const segments = buildSpeakerSegments(data.words, data.text);
-          const formattedText = formatSpeakerTranscript(segments, data.text);
+        const segments = buildSpeakerSegments(data.words, data.text);
+        const formattedText = formatSpeakerTranscript(segments, data.text);
 
+        if (formattedText) {
           this.allText.push(formattedText);
           this.allSegments.push(...segments);
         }
 
         this.emit("transcription:partial", {
-          text: formatSpeakerTranscript(buildSpeakerSegments(data.words, data.text), data.text),
+          text: formattedText,
           isFinal: true,
           confidence: data.confidence,
           words: data.words,
           timestamp: Date.now(),
         } satisfies DeepgramPartialTranscription);
         break;
+      }
 
       case "speech_started":
         console.log("[DeepgramTranscriber] Speech started");
