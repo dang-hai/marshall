@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.6](https://github.com/dang-hai/marshall/compare/v0.0.5...v0.0.6) (2026-03-20)
+
+
+### Features
+
+* close pr on worktree teardown ([d57079b](https://github.com/dang-hai/marshall/commit/d57079bcf35052229373e7b3c56052bfd2aaa0e2))
+* per-worktree electron protocol for multi-workspace auth ([d023378](https://github.com/dang-hai/marshall/commit/d023378be8f92ea649393ddde32d6f74421bd349))
+
+
+### Bug Fixes
+
+* **desktop:** add timed call notification dismissal ([2510b0d](https://github.com/dang-hai/marshall/commit/2510b0d0755ab20e5a85b3cd1f6aabaa9cd4edc3))
+* **desktop:** bundle conf in main build ([#46](https://github.com/dang-hai/marshall/issues/46)) ([0acb383](https://github.com/dang-hai/marshall/commit/0acb3832b4f0d6043ff68b607d4420691c3ce95d))
+* **desktop:** launch transcription from call notifications ([af7e838](https://github.com/dang-hai/marshall/commit/af7e8383a064d5835729f5327a76e69f5b494c2b))
+* **desktop:** show full codex debug prompt ([#48](https://github.com/dang-hai/marshall/issues/48)) ([13e7c7c](https://github.com/dang-hai/marshall/commit/13e7c7c31ef206c173aaf1937595f385823650d6))
+
 ## [0.0.5](https://github.com/dang-hai/marshall/compare/v0.0.4...v0.0.5) (2026-03-20)
 
 
