@@ -12,6 +12,7 @@ import type {
   CodexMonitorItemStatus,
   CodexMonitorChatMessage,
 } from "@marshall/shared";
+import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
 
 interface CodexMonitorServiceOptions {
   createNotificationWindow: () => BrowserWindow;
@@ -210,6 +211,7 @@ export class CodexMonitorService {
   private chatProcess: ChildProcessWithoutNullStreams | null = null;
   private notificationWindow: BrowserWindow | null = null;
   private analysisTimer: NodeJS.Timeout | null = null;
+  private conversationId: string | null = null;
   private scheduledAnalysisMode: "live" | "final" | null = null;
   private analysisProcess: ChildProcessWithoutNullStreams | null = null;
   private lastAnalyzedTranscriptLength = 0;
@@ -315,6 +317,7 @@ export class CodexMonitorService {
     };
     this.lastNudgeSignature = null;
     this.windowDismissed = false;
+    this.conversationId = null;
     this.broadcastState();
     return { status: "cleared" };
   }
@@ -426,18 +429,33 @@ export class CodexMonitorService {
     ].join("\n");
 
     const schemaPath = await this.getChatSchemaPath();
-    const args = [
-      "exec",
-      "--json",
-      "--color",
-      "never",
-      "--sandbox",
-      "read-only",
-      "--ephemeral",
-      "--output-schema",
-      schemaPath,
-      "-",
-    ];
+
+    // Build args: use "resume" if we have an existing session, otherwise start fresh
+    const args = this.conversationId
+      ? [
+          "exec",
+          "resume",
+          this.conversationId,
+          "--json",
+          "--color",
+          "never",
+          "--sandbox",
+          "read-only",
+          "--output-schema",
+          schemaPath,
+          "-",
+        ]
+      : [
+          "exec",
+          "--json",
+          "--color",
+          "never",
+          "--sandbox",
+          "read-only",
+          "--output-schema",
+          schemaPath,
+          "-",
+        ];
 
     return await new Promise<ChatResult>((resolve, reject) => {
       const child = spawn("codex", args, {
@@ -460,8 +478,17 @@ export class CodexMonitorService {
           try {
             const parsed = JSON.parse(trimmed) as {
               type?: string;
+              thread_id?: string;
               item?: { type?: string; text?: string };
             };
+
+            // Capture the thread_id from the first response and persist it
+            if (parsed.type === "thread.started" && parsed.thread_id) {
+              this.conversationId = parsed.thread_id;
+              if (session.noteId) {
+                setConversationId(session.noteId, parsed.thread_id);
+              }
+            }
 
             if (
               parsed.type === "item.completed" &&
@@ -515,6 +542,16 @@ export class CodexMonitorService {
     this.lastFinalizedTranscriptSignature = null;
     this.lastNudgeSignature = null;
     this.windowDismissed = false;
+
+    // Load existing session if available, otherwise start fresh (codex will assign ID)
+    const existingConversationId = getConversationId(noteId);
+    if (existingConversationId) {
+      this.conversationId = existingConversationId;
+      updateLastUsed(noteId);
+    } else {
+      this.conversationId = null;
+    }
+
     this.state = {
       status: "monitoring",
       noteId,
@@ -831,18 +868,33 @@ export class CodexMonitorService {
       },
     };
     this.broadcastState();
-    const args = [
-      "exec",
-      "--json",
-      "--color",
-      "never",
-      "--sandbox",
-      "read-only",
-      "--ephemeral",
-      "--output-schema",
-      schemaPath,
-      "-",
-    ];
+
+    // Build args: use "resume" if we have an existing session, otherwise start fresh
+    const args = this.conversationId
+      ? [
+          "exec",
+          "resume",
+          this.conversationId,
+          "--json",
+          "--color",
+          "never",
+          "--sandbox",
+          "read-only",
+          "--output-schema",
+          schemaPath,
+          "-",
+        ]
+      : [
+          "exec",
+          "--json",
+          "--color",
+          "never",
+          "--sandbox",
+          "read-only",
+          "--output-schema",
+          schemaPath,
+          "-",
+        ];
 
     return await new Promise<CodexMonitorResult>((resolve, reject) => {
       const child = spawn("codex", args, {
@@ -865,8 +917,17 @@ export class CodexMonitorService {
           try {
             const parsed = JSON.parse(trimmed) as {
               type?: string;
+              thread_id?: string;
               item?: { type?: string; text?: string };
             };
+
+            // Capture the thread_id from the first response and persist it
+            if (parsed.type === "thread.started" && parsed.thread_id) {
+              this.conversationId = parsed.thread_id;
+              if (session.noteId) {
+                setConversationId(session.noteId, parsed.thread_id);
+              }
+            }
 
             if (
               parsed.type === "item.completed" &&
