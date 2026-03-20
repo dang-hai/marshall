@@ -453,18 +453,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("calendar:connect-google", async () => {
     const state = randomBytes(16).toString("hex");
-    const payload = await authenticatedJsonRequest("/api/calendar/google/connect", {
-      method: "POST",
-      body: JSON.stringify({
-        scheme: PROTOCOL,
-        state,
-      }),
-    });
-
-    const { url } = payload as { url?: string };
-    if (!url) {
-      throw new Error("Missing Google Calendar authorization URL");
-    }
+    const url = `${BETTER_AUTH_URL}/calendar/connect?desktop_state=${encodeURIComponent(state)}&desktop_scheme=${encodeURIComponent(PROTOCOL)}`;
 
     return new Promise<boolean>((resolve, reject) => {
       pendingCalendarConnectionRequests.set(state, {

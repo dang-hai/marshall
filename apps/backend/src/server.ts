@@ -204,6 +204,182 @@ function signInPage(baseUrl: string) {
 </html>`;
 }
 
+function calendarConnectPage(baseUrl: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect Google Calendar - Marshall</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    .container {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 48px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+    h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    p { color: rgba(255,255,255,0.65); font-size: 14px; line-height: 1.6; }
+    .subtitle { margin-bottom: 32px; }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 24px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn svg { width: 20px; height: 20px; }
+    .spinner {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .message {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+      text-align: left;
+    }
+    .message.error { background: rgba(239, 68, 68, 0.2); color: #fca5a5; display: block; }
+    .message.info { background: rgba(59, 130, 246, 0.16); color: #bfdbfe; display: block; }
+    .footer { margin-top: 28px; font-size: 12px; color: rgba(255,255,255,0.45); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Connect Google Calendar</h1>
+    <p class="subtitle">Grant Marshall read-only access to your upcoming Google Calendar events.</p>
+
+    <button id="googleCalendarBtn" class="btn" onclick="connectGoogleCalendar()">
+      <svg viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      <span>Continue with Google</span>
+      <div class="spinner" id="googleCalendarSpinner"></div>
+    </button>
+
+    <div id="message" class="message"></div>
+
+    <div class="footer">
+      Marshall only requests read-only Google Calendar access in this flow.
+    </div>
+  </div>
+
+  <script type="module">
+    import { createAuthClient } from "https://esm.sh/better-auth@1.5.5/client";
+
+    const authClient = createAuthClient({
+      baseURL: "${baseUrl}",
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const desktopState = params.get("desktop_state");
+    const desktopScheme = params.get("desktop_scheme");
+
+    const callbackURL =
+      desktopState && desktopScheme
+        ? "${baseUrl}/auth/desktop/calendar-success?state=" +
+          encodeURIComponent(desktopState) +
+          "&scheme=" +
+          encodeURIComponent(desktopScheme)
+        : "${baseUrl}";
+
+    const errorCallbackURL =
+      desktopState && desktopScheme
+        ? "${baseUrl}/auth/desktop/calendar-error?state=" +
+          encodeURIComponent(desktopState) +
+          "&scheme=" +
+          encodeURIComponent(desktopScheme) +
+          "&error=calendar_connect_failed"
+        : "${baseUrl}";
+
+    async function connectGoogleCalendar() {
+      const btn = document.getElementById("googleCalendarBtn");
+      const spinner = document.getElementById("googleCalendarSpinner");
+      const message = document.getElementById("message");
+
+      if (btn) btn.disabled = true;
+      if (spinner) spinner.style.display = "block";
+      if (message) {
+        message.className = "message";
+        message.style.display = "none";
+      }
+
+      try {
+        await authClient.signIn.social({
+          provider: "google",
+          callbackURL,
+          errorCallbackURL,
+          scopes: [
+            "openid",
+            "email",
+            "profile",
+            "${GOOGLE_CALENDAR_READONLY_SCOPE}",
+          ],
+        });
+      } catch (error) {
+        if (message) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Google Calendar connect failed.";
+          message.textContent = errorMessage;
+          message.className = "message error";
+        }
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.style.display = "none";
+      }
+    }
+
+    window.connectGoogleCalendar = connectGoogleCalendar;
+
+    if (!desktopState || !desktopScheme) {
+      const message = document.getElementById("message");
+      if (message) {
+        message.textContent = "Missing desktop callback information. Start this flow from Marshall.";
+        message.className = "message error";
+      }
+    } else {
+      connectGoogleCalendar();
+    }
+  </script>
+</body>
+</html>`;
+}
+
 // Success page that redirects to desktop app
 function desktopSuccessPage(scheme: string, token: string, state: string) {
   const redirectUrl = `${scheme}://auth/callback?token=${encodeURIComponent(token)}&state=${encodeURIComponent(state)}`;
@@ -317,16 +493,6 @@ function buildGoogleCalendarConnectionStatus(
   };
 }
 
-function googleCalendarCallbackUrl(baseUrl: string, scheme: string, state: string, error?: string) {
-  const url = new URL(`${baseUrl}/auth/desktop/calendar-${error ? "error" : "success"}`);
-  url.searchParams.set("scheme", scheme);
-  url.searchParams.set("state", state);
-  if (error) {
-    url.searchParams.set("error", error);
-  }
-  return url.toString();
-}
-
 function serializeNoteTranscription(
   row: typeof noteTranscription.$inferSelect
 ): NoteTranscriptionSnapshot {
@@ -417,6 +583,11 @@ export function createBackendApp({
       // Sign-in page for desktop auth
       .get("/sign-in", () => {
         return new Response(signInPage(baseUrl), {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      })
+      .get("/calendar/connect", () => {
+        return new Response(calendarConnectPage(baseUrl), {
           headers: { "Content-Type": "text/html; charset=utf-8" },
         });
       })
@@ -576,49 +747,6 @@ export function createBackendApp({
           return { error: "Failed to get Google Calendar status" };
         }
       })
-      .post(
-        "/api/calendar/google/connect",
-        async ({ body, request, set }) => {
-          try {
-            const session = await getAuthenticatedSession(auth, request, set);
-            if (!session) {
-              return { error: "Not authenticated" };
-            }
-
-            const result = await auth.api.linkSocialAccount({
-              headers: request.headers,
-              body: {
-                provider: GOOGLE_CALENDAR_PROVIDER_ID,
-                scopes: [GOOGLE_CALENDAR_READONLY_SCOPE],
-                callbackURL: googleCalendarCallbackUrl(
-                  baseUrl,
-                  body.scheme || electronProtocol,
-                  body.state
-                ),
-                errorCallbackURL: googleCalendarCallbackUrl(
-                  baseUrl,
-                  body.scheme || electronProtocol,
-                  body.state,
-                  "calendar_connect_failed"
-                ),
-                disableRedirect: true,
-              },
-            });
-
-            return { url: result.url };
-          } catch (error) {
-            console.error("[API] Error starting Google Calendar connect flow:", error);
-            set.status = 500;
-            return { error: "Failed to start Google Calendar connect flow" };
-          }
-        },
-        {
-          body: t.Object({
-            scheme: t.Optional(t.String()),
-            state: t.String(),
-          }),
-        }
-      )
       .get(
         "/api/calendar/google/upcoming",
         async ({ query, request, set }) => {
