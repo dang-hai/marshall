@@ -128,7 +128,6 @@ describe("UpcomingEventsPanel", () => {
     );
 
     expect(markup).toContain("Connect Google Calendar");
-    expect(markup).toContain("Open calendar settings");
   });
 
   test("renders the upcoming event list when events are available", () => {

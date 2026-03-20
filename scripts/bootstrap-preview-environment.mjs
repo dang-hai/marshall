@@ -13,7 +13,6 @@ import {
 
 const PREVIEW_WORKFLOW_NAME = "Neon Preview Branches";
 const BOOTSTRAP_COMMIT_MESSAGE = "chore: initialize preview environment";
-const BOOTSTRAP_PR_TITLE = "chore: initialize preview environment";
 const BOOTSTRAP_PR_BODY = `## Summary
 - initialize the Neon preview database for this branch
 
@@ -171,7 +170,7 @@ function createDraftPullRequest({
       "--head",
       gitBranch,
       "--title",
-      BOOTSTRAP_PR_TITLE,
+      gitBranch,
       "--body",
       BOOTSTRAP_PR_BODY,
     ],
