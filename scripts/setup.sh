@@ -43,13 +43,18 @@ fi
 echo "Resolving Neon database URL for the current branch..."
 DATABASE_URL="$(node scripts/bootstrap-preview-environment.mjs)"
 
+echo "Generating worktree-specific Electron protocol..."
+ELECTRON_PROTOCOL="$(node scripts/get-electron-protocol.mjs)"
+echo "Using protocol: $ELECTRON_PROTOCOL"
+
 ENV_FILE="$ROOT_DIR/.env"
-ENV_DATABASE_URL="$DATABASE_URL" node --input-type=module - "$ENV_FILE" "$ROOT_DIR/.neon" <<'EOF'
+ENV_DATABASE_URL="$DATABASE_URL" ENV_ELECTRON_PROTOCOL="$ELECTRON_PROTOCOL" node --input-type=module - "$ENV_FILE" "$ROOT_DIR/.neon" <<'EOF'
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const envFile = process.argv[2];
 const neonContextFile = process.argv[3];
 const nextDatabaseUrl = process.env.ENV_DATABASE_URL;
+const electronProtocol = process.env.ENV_ELECTRON_PROTOCOL;
 let current = readFileSync(envFile, "utf8");
 
 function replaceOrAppend(content, key, value) {
@@ -61,6 +66,7 @@ function replaceOrAppend(content, key, value) {
 }
 
 current = replaceOrAppend(current, "DATABASE_URL", nextDatabaseUrl);
+current = replaceOrAppend(current, "BETTER_AUTH_ELECTRON_PROTOCOL", electronProtocol);
 
 if (existsSync(neonContextFile)) {
   const neonContext = JSON.parse(readFileSync(neonContextFile, "utf8"));
