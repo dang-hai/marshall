@@ -81,6 +81,30 @@ jobs:
             --config.mac.notarize.teamId="$APPLE_TEAM_ID"
         working-directory: apps/desktop
 
+      - name: Smoke test packaged app
+        run: |
+          # Find the built app (use arm64 on Apple Silicon runners)
+          APP_PATH="apps/desktop/dist/mac-arm64/Marshall.app"
+          if [ ! -d "$APP_PATH" ]; then
+            APP_PATH="apps/desktop/dist/mac/Marshall.app"
+          fi
+
+          echo "Testing app at: $APP_PATH"
+
+          # Run app with timeout, capture stderr for module errors
+          # The app will fail to fully start (no display), but module loading happens first
+          STDERR_FILE=$(mktemp)
+          timeout 10s "$APP_PATH/Contents/MacOS/Marshall" 2>"$STDERR_FILE" || true
+
+          # Check for module resolution errors
+          if grep -q "Cannot find module" "$STDERR_FILE"; then
+            echo "::error::App failed to start due to missing module:"
+            cat "$STDERR_FILE"
+            exit 1
+          fi
+
+          echo "Smoke test passed - no module resolution errors"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
