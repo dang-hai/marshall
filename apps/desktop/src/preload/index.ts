@@ -4,6 +4,8 @@ import type {
   CodexMonitorSessionInput,
   CodexMonitorState,
   CreateNoteInput,
+  GoogleCalendarConnectionStatus,
+  GoogleCalendarEvent,
   NoteRecord,
   NoteTranscriptionSnapshot,
   SaveNoteTranscriptionInput,
@@ -41,6 +43,12 @@ contextBridge.exposeInMainWorld("authAPI", {
   getUser: () => ipcRenderer.invoke("auth:get-user"),
   // Sign out
   signOut: () => ipcRenderer.invoke("auth:sign-out"),
+});
+
+contextBridge.exposeInMainWorld("calendarAPI", {
+  getStatus: () => ipcRenderer.invoke("calendar:get-status"),
+  getUpcomingEvents: (limit?: number) => ipcRenderer.invoke("calendar:get-upcoming-events", limit),
+  connectGoogle: () => ipcRenderer.invoke("calendar:connect-google"),
 });
 
 // Desktop Capturer API for system audio capture (via IPC - required for Electron 30+)
@@ -291,6 +299,11 @@ declare global {
       getToken: () => Promise<string | null>;
       getUser: () => Promise<AuthUser | null>;
       signOut: () => Promise<boolean>;
+    };
+    calendarAPI: {
+      getStatus: () => Promise<GoogleCalendarConnectionStatus>;
+      getUpcomingEvents: (limit?: number) => Promise<GoogleCalendarEvent[]>;
+      connectGoogle: () => Promise<boolean>;
     };
     callDetectionAPI: {
       startMonitoring: () => Promise<{ status: string }>;

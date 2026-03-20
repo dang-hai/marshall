@@ -78,6 +78,13 @@ export function AppShell({
         return;
       }
 
+      if (path === DESKTOP_NAVIGATION_ROUTES.settingsCalendar) {
+        setActiveView("settings");
+        setActiveSettingsSection("calendar");
+        setIsProfileMenuOpen(false);
+        return;
+      }
+
       if (path === DESKTOP_NAVIGATION_ROUTES.settings) {
         setActiveView("settings");
         setActiveSettingsSection("account");

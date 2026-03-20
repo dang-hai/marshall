@@ -20,10 +20,13 @@ import {
 import type {
   CodexMonitorState,
   CodexMonitorNotePatch,
+  GoogleCalendarConnectionStatus,
+  GoogleCalendarEvent,
   NoteRecord,
   NoteTranscriptionStatus,
   SaveNoteTranscriptionInput,
 } from "@marshall/shared";
+import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
 import { Button } from "./ui/button";
 import { CodexMonitorDebugPanel } from "./CodexMonitorDebugPanel";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
@@ -62,6 +65,59 @@ const timestampFormatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+const dateGroupFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+});
+
+const upcomingEventDayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+
+const upcomingEventTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+const eventDayNumberFormatter = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+});
+
+const eventMonthFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+});
+
+const eventWeekdayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+});
+
+// Default calendar accent color
+const CALENDAR_ACCENT_COLOR = "#3b82f6"; // blue
+
+function parseCalendarDate(value: string, isAllDay: boolean) {
+  return new Date(isAllDay ? `${value}T12:00:00` : value);
+}
+
+export function formatUpcomingEventSchedule(event: GoogleCalendarEvent) {
+  const start = parseCalendarDate(event.startAt, event.isAllDay);
+  const dayLabel = upcomingEventDayFormatter.format(start);
+
+  if (event.isAllDay) {
+    return `${dayLabel} · All day`;
+  }
+
+  const startLabel = upcomingEventTimeFormatter.format(start);
+  if (!event.endAt) {
+    return `${dayLabel} · ${startLabel}`;
+  }
+
+  const end = parseCalendarDate(event.endAt, false);
+  return `${dayLabel} · ${startLabel} - ${upcomingEventTimeFormatter.format(end)}`;
+}
+
 export function resolveTranscriptionTargetNoteId({
   activeNoteId,
   currentTargetNoteId,
@@ -90,6 +146,43 @@ function formatStoredTimestamp(timestamp: string | number) {
   return typeof timestamp === "number"
     ? formatTimestamp(timestamp)
     : formatTimestamp(Date.parse(timestamp));
+}
+
+function getDateGroupLabel(timestamp: string | number): string {
+  const date = typeof timestamp === "number" ? new Date(timestamp) : new Date(timestamp);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const noteDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (noteDate.getTime() === today.getTime()) {
+    return "Today";
+  }
+  if (noteDate.getTime() === yesterday.getTime()) {
+    return "Yesterday";
+  }
+  return dateGroupFormatter.format(date);
+}
+
+interface NotesByDateGroup {
+  label: string;
+  notes: NoteRecord[];
+}
+
+function groupNotesByDate(notes: NoteRecord[]): NotesByDateGroup[] {
+  const groups: Map<string, NoteRecord[]> = new Map();
+
+  for (const note of notes) {
+    const label = getDateGroupLabel(note.updatedAt);
+    const existing = groups.get(label) ?? [];
+    existing.push(note);
+    groups.set(label, existing);
+  }
+
+  return Array.from(groups.entries()).map(([label, groupNotes]) => ({
+    label,
+    notes: groupNotes,
+  }));
 }
 
 function loadStoredNotes(): LegacyQuickNote[] {
@@ -236,6 +329,129 @@ export function getFloatingRecorderNote(
 
   return notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null;
 }
+function formatEventTime(event: GoogleCalendarEvent) {
+  if (event.isAllDay) {
+    return "All day";
+  }
+
+  const start = parseCalendarDate(event.startAt, false);
+  const startLabel = upcomingEventTimeFormatter.format(start);
+
+  if (!event.endAt) {
+    return startLabel;
+  }
+
+  const end = parseCalendarDate(event.endAt, false);
+  return `${startLabel} – ${upcomingEventTimeFormatter.format(end)}`;
+}
+
+interface EventCardProps {
+  event: GoogleCalendarEvent;
+}
+
+function EventCard({ event }: EventCardProps) {
+  const start = parseCalendarDate(event.startAt, event.isAllDay);
+  const dayNumber = eventDayNumberFormatter.format(start);
+  const month = eventMonthFormatter.format(start).toUpperCase();
+  const weekday = eventWeekdayFormatter.format(start).toLowerCase();
+
+  return (
+    <article className="group flex h-16 cursor-default overflow-hidden rounded-xl border border-border/30 bg-card/50 transition-colors hover:border-border/60 hover:bg-card">
+      {/* Date block */}
+      <div className="flex shrink-0 items-center gap-2 bg-muted/30 pl-3 pr-3">
+        <span className="w-9 text-right font-serif text-3xl font-semibold tabular-nums tracking-normal text-foreground">
+          {dayNumber}
+        </span>
+        <div className="flex w-8 flex-col items-start justify-center leading-none">
+          <span className="text-[9px] font-semibold tracking-wider text-muted-foreground">
+            {month}
+          </span>
+          <span className="text-[9px] font-medium tracking-wide text-muted-foreground/70">
+            {weekday}
+          </span>
+        </div>
+      </div>
+
+      {/* Colored accent bar */}
+      <div className="w-1 shrink-0" style={{ backgroundColor: CALENDAR_ACCENT_COLOR }} />
+
+      {/* Event details */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center px-3.5 py-2">
+        <p className="truncate text-sm font-medium leading-snug text-foreground">{event.title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatEventTime(event)}
+          {event.location && <span className="ml-1.5 opacity-70">· {event.location}</span>}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+interface UpcomingEventsPanelProps {
+  events: GoogleCalendarEvent[];
+  error: string | null;
+  isLoading: boolean;
+  onOpenSettings: () => void;
+  onRefresh: () => void;
+  status: GoogleCalendarConnectionStatus | null;
+}
+
+export function UpcomingEventsPanel({
+  events,
+  error,
+  isLoading,
+  onOpenSettings,
+  onRefresh,
+  status,
+}: UpcomingEventsPanelProps) {
+  return (
+    <section className="space-y-3">
+      {isLoading && events.length === 0 ? (
+        <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="rounded-xl border border-rose-200/60 bg-rose-50/50 px-4 py-3">
+          <p className="text-sm text-rose-600">{error}</p>
+          {!status?.connected && (
+            <Button type="button" size="sm" onClick={onOpenSettings} className="mt-2">
+              Connect calendar
+            </Button>
+          )}
+        </div>
+      ) : !status?.connected ? (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="flex h-16 w-full items-center justify-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 transition-colors hover:border-border hover:bg-muted/20"
+        >
+          <CalendarDays className="h-5 w-5 text-muted-foreground/60" />
+          <span className="text-sm text-muted-foreground">Connect Google Calendar</span>
+        </button>
+      ) : events.length === 0 ? (
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">No upcoming events</p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="h-7 px-2 text-xs"
+          >
+            {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Refresh"}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {events.map((event) => (
+            <EventCard key={event.id} event={event} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function getTranscriptionLaunchNote(
   notes: NoteRecord[],
@@ -246,6 +462,10 @@ export function getTranscriptionLaunchNote(
 
 export function HomePanel() {
   const [notes, setNotes] = useState<NoteRecord[]>([]);
+  const [calendarStatus, setCalendarStatus] = useState<GoogleCalendarConnectionStatus | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
@@ -360,6 +580,35 @@ export function HomePanel() {
     };
   }, [migrateLegacyNotes]);
 
+  const loadUpcomingEvents = useCallback(async () => {
+    setIsLoadingCalendar(true);
+    setCalendarError(null);
+
+    try {
+      const status = await window.calendarAPI.getStatus();
+      setCalendarStatus(status);
+
+      if (!status.connected) {
+        setUpcomingEvents([]);
+        return;
+      }
+
+      const events = await window.calendarAPI.getUpcomingEvents(5);
+      setUpcomingEvents(events);
+    } catch (error) {
+      setCalendarError(
+        error instanceof Error ? error.message : "Failed to load upcoming calendar events"
+      );
+      setUpcomingEvents([]);
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUpcomingEvents();
+  }, [loadUpcomingEvents]);
+
   const activeNote = useMemo(
     () => notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null,
     [notes, activeNoteId]
@@ -417,8 +666,11 @@ export function HomePanel() {
     return () => window.cancelAnimationFrame(animationFrameId);
   }, [activeNoteId]);
 
-  const noteCountLabel =
-    visibleNotes.length === 1 ? "1 note captured" : `${visibleNotes.length} notes captured`;
+  const groupedNotes = useMemo(() => groupNotesByDate(visibleNotes), [visibleNotes]);
+
+  const openCalendarSettings = useCallback(() => {
+    window.electronAPI.navigate(DESKTOP_NAVIGATION_ROUTES.settingsCalendar);
+  }, []);
 
   const openNote = (noteId: string) => {
     setOpenMenuId(null);
@@ -915,129 +1167,106 @@ export function HomePanel() {
   return (
     <>
       <div className="flex min-h-full flex-1 flex-col">
-        <div className="flex items-start justify-between gap-6 border-b border-border/50 pb-6">
-          <div className="space-y-3">
-            <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
-              Welcome to Marshall
-            </p>
-            <div className="space-y-2">
-              <h1 className="font-serif text-2xl font-medium tracking-tight text-foreground">
-                Keep important context within reach
-              </h1>
-              <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
-                Capture a quick note before, during, or after a call so the important detail does
-                not get lost.
-              </p>
-            </div>
-          </div>
-
-          <Button type="button" className="shrink-0" onClick={() => createNote()}>
-            <span>{isCreatingNote ? "Creating..." : "+ Quick Note"}</span>
+        {/* Header - minimal */}
+        <div className="flex items-center justify-between gap-6 pb-5">
+          <h1 className="font-serif text-xl font-medium tracking-tight text-foreground">
+            Marshall
+          </h1>
+          <Button type="button" size="sm" onClick={() => createNote()}>
+            {isCreatingNote ? "Creating..." : "+ Note"}
           </Button>
         </div>
 
-        <div className="grid flex-1 gap-6 pt-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
-          <div className="space-y-3">
-            {isLoadingNotes ? (
-              <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Loading notes...</span>
-                </div>
-              </div>
-            ) : visibleNotes.length > 0 ? (
-              visibleNotes.map((note) => (
-                <article
-                  key={note.id}
-                  className="rounded-xl border border-border/60 bg-card/90 px-5 py-4 shadow-soft transition-all hover:border-border hover:bg-card hover:shadow-lifted"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <button
-                      type="button"
-                      onClick={() => openNote(note.id)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <p className="truncate font-serif text-base font-medium text-foreground">
-                          {note.title.trim() || "New note"}
-                        </p>
-                        <p className="shrink-0 text-2xs tracking-wide text-muted-foreground/70">
-                          {formatStoredTimestamp(note.updatedAt)}
-                        </p>
-                      </div>
-                      <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-                        {summarizeBody(note.body)}
-                      </p>
-                    </button>
+        {/* Calendar events */}
+        <div className="pb-6">
+          <UpcomingEventsPanel
+            events={upcomingEvents}
+            error={calendarError}
+            isLoading={isLoadingCalendar}
+            onOpenSettings={openCalendarSettings}
+            onRefresh={() => void loadUpcomingEvents()}
+            status={calendarStatus}
+          />
+        </div>
 
-                    <div className="relative shrink-0" data-note-menu-root="true">
+        {/* Notes grouped by date */}
+        <div className="flex-1 space-y-6">
+          {isLoadingNotes ? (
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : groupedNotes.length > 0 ? (
+            groupedNotes.map((group) => (
+              <section key={group.label} className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+                  {group.label}
+                </p>
+                {group.notes.map((note) => (
+                  <article
+                    key={note.id}
+                    className="rounded-xl border border-border/60 bg-card/90 px-5 py-4 shadow-soft transition-all hover:border-border hover:bg-card hover:shadow-lifted"
+                  >
+                    <div className="flex items-start justify-between gap-4">
                       <button
                         type="button"
-                        aria-label="Note actions"
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        onClick={() =>
-                          setOpenMenuId((currentMenuId) =>
-                            currentMenuId === note.id ? null : note.id
-                          )
-                        }
+                        onClick={() => openNote(note.id)}
+                        className="min-w-0 flex-1 text-left"
                       >
-                        <Ellipsis className="h-4 w-4" />
+                        <p className="truncate font-serif text-base font-medium text-foreground">
+                          {note.title.trim() || "Untitled"}
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                          {summarizeBody(note.body)}
+                        </p>
                       </button>
 
-                      {openMenuId === note.id && (
-                        <div className="absolute right-0 top-10 z-10 min-w-36 rounded-lg border border-border/70 bg-popover p-1 shadow-lifted">
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
-                            onClick={() => moveNoteToTrash(note.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span>Move to trash</span>
-                          </button>
-                        </div>
-                      )}
+                      <div className="relative shrink-0" data-note-menu-root="true">
+                        <button
+                          type="button"
+                          aria-label="Note actions"
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          onClick={() =>
+                            setOpenMenuId((currentMenuId) =>
+                              currentMenuId === note.id ? null : note.id
+                            )
+                          }
+                        >
+                          <Ellipsis className="h-4 w-4" />
+                        </button>
+
+                        {openMenuId === note.id && (
+                          <div className="absolute right-0 top-10 z-10 min-w-36 rounded-lg border border-border/70 bg-popover p-1 shadow-lifted">
+                            <button
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
+                              onClick={() => moveNoteToTrash(note.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
-                <div className="max-w-xs text-center">
-                  <p className="font-serif text-base font-medium text-foreground">No notes yet</p>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    Use the + Quick Note button in the top right to open a fresh note document.
-                  </p>
-                </div>
-              </div>
-            )}
+                  </article>
+                ))}
+              </section>
+            ))
+          ) : (
+            <button
+              type="button"
+              onClick={() => createNote()}
+              className="flex h-32 w-full items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 transition-colors hover:border-border hover:bg-muted/20"
+            >
+              <span className="text-sm text-muted-foreground">Create your first note</span>
+            </button>
+          )}
 
-            {notesError && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-                {notesError}
-              </div>
-            )}
-          </div>
-
-          <aside className="h-fit rounded-xl border border-border/60 bg-card/70 p-5 shadow-soft">
-            <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
-              Home
-            </p>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-lg bg-muted/50 px-4 py-3">
-                <p className="text-2xs tracking-wide text-muted-foreground">Quick note status</p>
-                <p className="mt-1.5 font-serif text-lg font-medium text-foreground">
-                  {noteCountLabel}
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-border/50 px-4 py-3">
-                <p className="text-xs font-medium text-foreground">Suggested use</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  Open a note when you need a blank page for context, decisions, or follow-ups.
-                </p>
-              </div>
+          {notesError && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {notesError}
             </div>
-          </aside>
+          )}
         </div>
       </div>
       {recorderNote && (
