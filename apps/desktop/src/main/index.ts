@@ -24,6 +24,7 @@ import { AIAgentMonitorMCPService } from "./ai-agent-monitor-mcp";
 import { detectAvailableAgents } from "./coding-agents";
 import { setupIntegrationsIPC, setNotionToken } from "./integrations";
 import { setupNotionIntegrationIPC } from "./notion-integration";
+import { NotchCompanionManager } from "./notch-companion";
 import type { NoteRecord, StoredNotionToken } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
@@ -40,6 +41,7 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let aiAgentNotificationWindow: BrowserWindow | null = null;
 let aiAgentMonitorInstance: AIAgentMonitorMCPService | null = null;
+let notchCompanionInstance: NotchCompanionManager | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -721,6 +723,17 @@ app.whenReady().then(() => {
 
   aiAgentMonitorInstance = aiAgentMonitor;
 
+  // Initialize NotchCompanion (native macOS notch overlay)
+  if (process.platform === "darwin") {
+    notchCompanionInstance = new NotchCompanionManager();
+    notchCompanionInstance.start().catch((error) => {
+      console.error("[NotchCompanion] Failed to start:", error);
+    });
+
+    // Wire up state broadcasting
+    aiAgentMonitor.setNotchCompanion(notchCompanionInstance);
+  }
+
   createWindow();
   tray = createTray(mainWindow);
 
@@ -754,7 +767,16 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   stopCallDetection();
+  notchCompanionInstance?.stop();
   if (tray) {
     tray.destroy();
   }
 });
+
+// Handle SIGTERM/SIGINT for clean shutdown (e.g., when mprocs exits)
+const cleanup = () => {
+  notchCompanionInstance?.stop();
+  app.quit();
+};
+process.on("SIGTERM", cleanup);
+process.on("SIGINT", cleanup);

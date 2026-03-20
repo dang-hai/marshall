@@ -23,6 +23,7 @@ import type {
   MeetingProposal,
 } from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
+import type { NotchCompanionManager } from "./notch-companion";
 import type { MonitorAgent } from "../shared/settings";
 
 // ============================================================================
@@ -535,6 +536,7 @@ export class AIAgentMonitorMCPService {
   private pendingDocumentOps: AgentOperation[] = [];
   private pendingMeetingProposals: Map<string, MeetingProposal> = new Map();
   private pendingChatMessage: string | null = null;
+  private notchCompanion: NotchCompanionManager | null = null;
   private lastMeetingProposalSignature: string | null = null;
 
   constructor(options: AIAgentMonitorMCPServiceOptions) {
@@ -574,6 +576,15 @@ export class AIAgentMonitorMCPService {
 
   getState() {
     return this.state;
+  }
+
+  setNotchCompanion(companion: NotchCompanionManager) {
+    this.notchCompanion = companion;
+    companion.setProposalCallbacks({
+      onAccept: (id) => this.acceptMeetingProposal(id),
+      onRemind: (id) => this.remindMeetingProposal(id),
+      onDiscard: (id) => this.discardMeetingProposal(id),
+    });
   }
 
   async updateSession(input: AIAgentMonitorSessionInput) {
@@ -1141,6 +1152,9 @@ export class AIAgentMonitorMCPService {
       }
     }
     this.syncNotificationWindow();
+
+    // Broadcast to native notch companion
+    this.notchCompanion?.broadcastState(this.state, this.getPendingMeetingProposals());
   }
 
   private syncNotificationWindow() {
