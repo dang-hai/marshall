@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build shared package
+        run: bun run --filter @marshall/shared build
+
       - name: Test desktop
         run: bun test
         working-directory: apps/desktop
