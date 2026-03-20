@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useReducer, KeyboardEvent } from "react";
 import { Mic, X, Phone, FileText, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { DetectedCall } from "../hooks/useCallDetection";
@@ -17,8 +17,92 @@ const APP_ICONS: Record<string, string> = {
 interface CallNotificationProps {
   call: DetectedCall;
   onDismiss: (callId: string) => void;
-  onStartTranscription: () => void;
+  onStartTranscription: (title: string) => void;
   onCreateNote: (title: string) => void;
+}
+
+export const CALL_NOTIFICATION_TIMEOUT_MS = 8_000;
+
+export interface CallNotificationTimerState {
+  remainingMs: number;
+  hasStartedQuickNote: boolean;
+  hasTimedOut: boolean;
+  isHovered: boolean;
+}
+
+type CallNotificationTimerAction =
+  | { type: "hover-start" }
+  | { type: "hover-end" }
+  | { type: "quick-note-start" }
+  | { type: "tick"; elapsedMs: number };
+
+export function createCallNotificationTimerState(
+  timeoutMs: number = CALL_NOTIFICATION_TIMEOUT_MS
+): CallNotificationTimerState {
+  return {
+    remainingMs: timeoutMs,
+    hasStartedQuickNote: false,
+    hasTimedOut: false,
+    isHovered: false,
+  };
+}
+
+export function reduceCallNotificationTimer(
+  state: CallNotificationTimerState,
+  action: CallNotificationTimerAction
+): CallNotificationTimerState {
+  switch (action.type) {
+    case "hover-start":
+      if (state.hasStartedQuickNote || state.hasTimedOut) {
+        return state;
+      }
+      return { ...state, isHovered: true };
+    case "hover-end":
+      if (state.hasStartedQuickNote || state.hasTimedOut) {
+        return state;
+      }
+      return { ...state, isHovered: false };
+    case "quick-note-start":
+      if (state.hasStartedQuickNote || state.hasTimedOut) {
+        return state;
+      }
+      return { ...state, hasStartedQuickNote: true, isHovered: false };
+    case "tick": {
+      if (
+        state.isHovered ||
+        state.hasStartedQuickNote ||
+        state.hasTimedOut ||
+        action.elapsedMs <= 0
+      ) {
+        return state;
+      }
+
+      const remainingMs = Math.max(0, state.remainingMs - action.elapsedMs);
+
+      return {
+        ...state,
+        remainingMs,
+        hasTimedOut: remainingMs === 0,
+      };
+    }
+    default:
+      return state;
+  }
+}
+
+export function isCallNotificationTimerActive(state: CallNotificationTimerState): boolean {
+  return !state.isHovered && !state.hasStartedQuickNote && !state.hasTimedOut;
+}
+
+export function getCallNotificationProgressPercent(
+  remainingMs: number,
+  timeoutMs: number = CALL_NOTIFICATION_TIMEOUT_MS
+): number {
+  if (timeoutMs <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, (remainingMs / timeoutMs) * 100));
 }
 
 export function CallNotification({
@@ -30,6 +114,11 @@ export function CallNotification({
   const [isExpanded, setIsExpanded] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [timerState, dispatchTimer] = useReducer(
+    reduceCallNotificationTimer,
+    undefined,
+    createCallNotificationTimerState
+  );
 
   useEffect(() => {
     if (isExpanded && inputRef.current) {
@@ -37,11 +126,54 @@ export function CallNotification({
     }
   }, [isExpanded]);
 
+  const isTimerActive = isCallNotificationTimerActive(timerState);
+
+  useEffect(() => {
+    if (!isTimerActive) {
+      return;
+    }
+
+    let frameId = 0;
+    let previousTickAt = performance.now();
+
+    const tick = (now: number) => {
+      dispatchTimer({ type: "tick", elapsedMs: now - previousTickAt });
+      previousTickAt = now;
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isTimerActive]);
+
+  useEffect(() => {
+    if (!timerState.hasTimedOut) {
+      return;
+    }
+
+    onDismiss(call.id);
+  }, [call.id, onDismiss, timerState.hasTimedOut]);
+
   const handleCreateNote = () => {
     const title = noteTitle.trim() || `${call.appName} Call Notes`;
     onCreateNote(title);
     setNoteTitle("");
     onDismiss(call.id);
+  };
+
+  const handleQuickNoteToggle = () => {
+    setIsExpanded((current) => {
+      const nextIsExpanded = !current;
+
+      if (nextIsExpanded) {
+        dispatchTimer({ type: "quick-note-start" });
+      }
+
+      return nextIsExpanded;
+    });
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -55,20 +187,23 @@ export function CallNotification({
   };
 
   const handleStartTranscription = () => {
-    onStartTranscription();
+    onStartTranscription(`${call.appName} Call Notes`);
     onDismiss(call.id);
   };
 
   const appIcon = APP_ICONS[call.appName] || "📞";
+  const progressPercent = getCallNotificationProgressPercent(timerState.remainingMs);
 
   return (
     <div
       className={cn(
-        "app-no-drag overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-lg backdrop-blur-sm transition-all duration-300 ease-out",
+        "app-no-drag relative overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-lg backdrop-blur-sm transition-all duration-300 ease-out",
         isExpanded ? "w-80" : "w-72"
       )}
       role="alert"
       aria-live="polite"
+      onMouseEnter={() => dispatchTimer({ type: "hover-start" })}
+      onMouseLeave={() => dispatchTimer({ type: "hover-end" })}
     >
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
@@ -99,7 +234,7 @@ export function CallNotification({
         <button
           type="button"
           className="flex w-full items-center justify-between px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent/50"
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={handleQuickNoteToggle}
         >
           <span className="flex items-center gap-2">
             <FileText className="h-3.5 w-3.5" />
@@ -146,6 +281,19 @@ export function CallNotification({
           Start Transcribing
         </button>
       </div>
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-border/30"
+      >
+        <div
+          className={cn(
+            "h-full bg-primary/70 transition-[width]",
+            isTimerActive ? "duration-100" : "duration-200"
+          )}
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -153,7 +301,7 @@ export function CallNotification({
 interface CallNotificationStackProps {
   calls: DetectedCall[];
   onDismiss: (callId: string) => void;
-  onStartTranscription: () => void;
+  onStartTranscription: (title: string) => void;
   onCreateNote: (title: string) => void;
 }
 

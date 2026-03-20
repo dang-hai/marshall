@@ -237,6 +237,13 @@ export function getFloatingRecorderNote(
   return notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null;
 }
 
+export function getTranscriptionLaunchNote(
+  notes: NoteRecord[],
+  activeNoteId: string | null
+): NoteRecord | null {
+  return getFloatingRecorderNote(notes, activeNoteId);
+}
+
 export function HomePanel() {
   const [notes, setNotes] = useState<NoteRecord[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
@@ -245,6 +252,10 @@ export function HomePanel() {
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
   const [showPlanMeetingModal, setShowPlanMeetingModal] = useState(false);
+  const [autoStartRecorderRequest, setAutoStartRecorderRequest] = useState<{
+    noteId: string;
+    token: number;
+  } | null>(null);
   const [codexMonitorState, setCodexMonitorState] = useState<CodexMonitorState>({
     status: "idle",
     noteId: null,
@@ -472,8 +483,10 @@ export function HomePanel() {
         setOpenMenuId(null);
         applySavedNote(note);
         setActiveNoteId(note.id);
+        return note;
       } catch (error) {
         setNotesError(error instanceof Error ? error.message : "Failed to create note");
+        return null;
       } finally {
         setIsCreatingNote(false);
       }
@@ -484,7 +497,7 @@ export function HomePanel() {
   // Listen for create note events from call notifications
   useEffect(() => {
     const handleCreateNote = (event: CustomEvent<{ title: string }>) => {
-      createNote({ title: event.detail.title });
+      void createNote({ title: event.detail.title });
     };
 
     window.addEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
@@ -493,6 +506,44 @@ export function HomePanel() {
       window.removeEventListener(MARSHALL_EVENTS.CREATE_NOTE, handleCreateNote as EventListener);
     };
   }, [createNote]);
+
+  const handleStartTranscriptionRequest = useCallback(
+    async (title?: string) => {
+      const targetNote = getTranscriptionLaunchNote(notes, activeNoteId);
+
+      if (targetNote) {
+        setActiveNoteId(targetNote.id);
+        setAutoStartRecorderRequest({ noteId: targetNote.id, token: Date.now() });
+        return;
+      }
+
+      const createdNote = await createNote({ title: title?.trim() || "Call Notes" });
+      if (!createdNote) {
+        return;
+      }
+
+      setAutoStartRecorderRequest({ noteId: createdNote.id, token: Date.now() });
+    },
+    [activeNoteId, createNote, notes]
+  );
+
+  useEffect(() => {
+    const handleStartTranscription = (event: CustomEvent<{ title?: string }>) => {
+      void handleStartTranscriptionRequest(event.detail?.title);
+    };
+
+    window.addEventListener(
+      MARSHALL_EVENTS.START_TRANSCRIPTION,
+      handleStartTranscription as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        MARSHALL_EVENTS.START_TRANSCRIPTION,
+        handleStartTranscription as EventListener
+      );
+    };
+  }, [handleStartTranscriptionRequest]);
 
   useEffect(() => {
     let mounted = true;
@@ -659,6 +710,10 @@ export function HomePanel() {
     },
     [handleSnapshotChange, recorderNoteId]
   );
+
+  const handleAutoStartRecorderHandled = useCallback((token: number) => {
+    setAutoStartRecorderRequest((current) => (current?.token === token ? null : current));
+  }, []);
 
   const syncBodyHtml = () => {
     if (!bodyRef.current) {
@@ -836,6 +891,12 @@ export function HomePanel() {
         </div>
         <FloatingTranscriptionRecorder
           noteId={recorderNote?.id ?? activeNote.id}
+          autoStartToken={
+            autoStartRecorderRequest?.noteId === (recorderNote?.id ?? activeNote.id)
+              ? autoStartRecorderRequest.token
+              : null
+          }
+          onAutoStartHandled={handleAutoStartRecorderHandled}
           noteBodyHtml={recorderNote?.body ?? activeNote.body}
           noteTitle={recorderNote?.title ?? activeNote.title}
           persistedSnapshot={recorderNote?.transcription ?? activeNote.transcription}
@@ -981,6 +1042,12 @@ export function HomePanel() {
       </div>
       {recorderNote && (
         <FloatingTranscriptionRecorder
+          autoStartToken={
+            autoStartRecorderRequest?.noteId === recorderNote.id
+              ? autoStartRecorderRequest.token
+              : null
+          }
+          onAutoStartHandled={handleAutoStartRecorderHandled}
           noteId={recorderNote.id}
           noteBodyHtml={recorderNote.body}
           noteTitle={recorderNote.title}

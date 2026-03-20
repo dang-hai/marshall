@@ -27,7 +27,7 @@ interface AppShellProps {
   user?: DisplayUser | null;
   onSignOut?: () => Promise<void>;
   onCreateNote?: (title: string) => void;
-  onStartTranscription?: () => void;
+  onStartTranscription?: (title: string) => void;
 }
 
 export function AppShell({
@@ -60,11 +60,14 @@ export function AppShell({
     [onCreateNote]
   );
 
-  const handleStartTranscription = useCallback(() => {
-    onStartTranscription?.();
-    // Navigate to home where the transcription recorder is
-    setActiveView("home");
-  }, [onStartTranscription]);
+  const handleStartTranscription = useCallback(
+    (title: string) => {
+      onStartTranscription?.(title);
+      // Navigate to home where the transcription recorder is
+      setActiveView("home");
+    },
+    [onStartTranscription]
+  );
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigate((path) => {
@@ -261,12 +264,10 @@ function MainDesktopApp() {
     window.dispatchEvent(new CustomEvent(MARSHALL_EVENTS.CREATE_NOTE, { detail: { title } }));
   }, []);
 
-  const handleStartTranscription = useCallback(() => {
-    // Dispatch custom event that FloatingTranscriptionRecorder can listen to
-    // Use setTimeout to ensure the event fires after React has re-rendered
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(MARSHALL_EVENTS.START_TRANSCRIPTION));
-    }, 100);
+  const handleStartTranscription = useCallback((title: string) => {
+    window.dispatchEvent(
+      new CustomEvent(MARSHALL_EVENTS.START_TRANSCRIPTION, { detail: { title } })
+    );
   }, []);
 
   // Show loading state while checking authentication

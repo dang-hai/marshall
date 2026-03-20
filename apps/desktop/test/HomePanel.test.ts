@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { NoteRecord } from "@marshall/shared";
-import { getFloatingRecorderNote } from "../src/renderer/src/components/HomePanel";
+import {
+  getFloatingRecorderNote,
+  getTranscriptionLaunchNote,
+} from "../src/renderer/src/components/HomePanel";
 
 function createNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
   return {
@@ -105,5 +108,54 @@ describe("getFloatingRecorderNote", () => {
     expect(getFloatingRecorderNote([trashedRecordingNote, selectedNote], "note-selected")?.id).toBe(
       "note-selected"
     );
+  });
+});
+
+describe("getTranscriptionLaunchNote", () => {
+  test("prefers the in-progress transcription note when one exists", () => {
+    const recordingNote = createNote({
+      id: "note-recording",
+      transcription: {
+        id: "tx-recording",
+        noteId: "note-recording",
+        status: "recording",
+        provider: "local",
+        mode: "streaming",
+        language: "en",
+        model: "base.en",
+        transcriptText: "Live transcript",
+        finalText: "",
+        interimText: "Live transcript",
+        segments: [],
+        lastSegmentIndex: 0,
+        durationSeconds: 3,
+        recordingDurationSeconds: 3,
+        error: null,
+        startedAt: "2026-03-19T10:04:57.000Z",
+        completedAt: null,
+        lastPartialAt: "2026-03-19T10:05:00.000Z",
+        createdAt: "2026-03-19T10:04:57.000Z",
+        updatedAt: "2026-03-19T10:05:00.000Z",
+      },
+    });
+    const selectedNote = createNote({
+      id: "note-selected",
+    });
+
+    expect(getTranscriptionLaunchNote([recordingNote, selectedNote], "note-selected")?.id).toBe(
+      "note-recording"
+    );
+  });
+
+  test("uses the active note when there is no active transcription session", () => {
+    const selectedNote = createNote({
+      id: "note-selected",
+    });
+
+    expect(getTranscriptionLaunchNote([selectedNote], "note-selected")?.id).toBe("note-selected");
+  });
+
+  test("returns null when there is no note to open", () => {
+    expect(getTranscriptionLaunchNote([], null)).toBeNull();
   });
 });
