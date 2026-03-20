@@ -58,6 +58,41 @@ function ChatMessage({ message }: { message: CodexMonitorChatMessage }) {
   );
 }
 
+function StatusIndicator({ state }: { state: CodexMonitorState }) {
+  const isComputing = state.status === "analyzing" || state.status === "chatting";
+  const isPending = state.debug.pendingAnalysis;
+  const isMonitoring = state.status === "monitoring";
+
+  if (isComputing) {
+    return (
+      <span className="flex items-center gap-1.5" title="Processing...">
+        <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+        <span className="text-xs text-blue-400">Processing</span>
+      </span>
+    );
+  }
+
+  if (isPending) {
+    return (
+      <span className="flex items-center gap-1.5" title="Update pending...">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+        <span className="text-xs text-amber-400">Pending</span>
+      </span>
+    );
+  }
+
+  if (isMonitoring) {
+    return (
+      <span className="flex items-center gap-1.5" title="Listening...">
+        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <span className="text-xs text-emerald-500">Listening</span>
+      </span>
+    );
+  }
+
+  return null;
+}
+
 export function CodexNotificationWindowView({
   state,
   onDismiss,
@@ -126,6 +161,7 @@ export function CodexNotificationWindowView({
                 {pendingCount}
               </span>
             )}
+            <StatusIndicator state={state} />
           </div>
           <div className="app-no-drag flex items-center gap-1">
             <button

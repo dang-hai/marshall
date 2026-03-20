@@ -368,28 +368,45 @@ export function FloatingTranscriptionRecorder({
     onSnapshotChangeRef.current = onSnapshotChange;
   }, [onSnapshotChange]);
 
+  // Track noteId to detect note changes vs snapshot updates
+  const prevNoteIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    // Skip re-hydration if we're the ones who saved this snapshot
+    const isNoteChange = prevNoteIdRef.current !== noteId;
+    prevNoteIdRef.current = noteId;
+
     const incomingFingerprint = persistedSnapshot ? JSON.stringify(persistedSnapshot) : null;
-    if (incomingFingerprint === lastPersistedFingerprintRef.current) {
+
+    // For note changes: always hydrate and reset UI
+    if (isNoteChange) {
+      launchSessionRef.current += 1;
+      hydrateSnapshot(persistedSnapshot);
+      startedAtRef.current = persistedSnapshot?.startedAt ?? null;
+      completedAtRef.current = persistedSnapshot?.completedAt ?? null;
+      lastPartialAtRef.current = persistedSnapshot?.lastPartialAt ?? null;
+      setIsExpanded(false);
+      setIsBootstrapping(false);
+      setIsDownloadingModel(false);
+      setIsModelDialogOpen(false);
+      lastPersistedFingerprintRef.current = incomingFingerprint;
       return;
     }
 
-    // Skip if transcription is in progress
+    // For snapshot updates on same note: hydrate if not recording and snapshot is new
     if (isRecording || isTranscribing) {
       return;
     }
 
-    launchSessionRef.current += 1;
+    // Skip if we're the ones who saved this snapshot
+    if (incomingFingerprint === lastPersistedFingerprintRef.current) {
+      return;
+    }
 
+    // New snapshot arrived (e.g., async fetch completed) - hydrate it
     hydrateSnapshot(persistedSnapshot);
     startedAtRef.current = persistedSnapshot?.startedAt ?? null;
     completedAtRef.current = persistedSnapshot?.completedAt ?? null;
     lastPartialAtRef.current = persistedSnapshot?.lastPartialAt ?? null;
-    setIsExpanded(false);
-    setIsBootstrapping(false);
-    setIsDownloadingModel(false);
-    setIsModelDialogOpen(false);
     lastPersistedFingerprintRef.current = incomingFingerprint;
   }, [hydrateSnapshot, noteId, persistedSnapshot, isRecording, isTranscribing]);
 

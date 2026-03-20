@@ -431,20 +431,9 @@ export class CodexMonitorService {
     const schemaPath = await this.getChatSchemaPath();
 
     // Build args: use "resume" if we have an existing session, otherwise start fresh
+    // Note: resume only supports --json, not --color/--sandbox/--output-schema
     const args = this.conversationId
-      ? [
-          "exec",
-          "resume",
-          this.conversationId,
-          "--json",
-          "--color",
-          "never",
-          "--sandbox",
-          "read-only",
-          "--output-schema",
-          schemaPath,
-          "-",
-        ]
+      ? ["exec", "resume", "--json", this.conversationId, "-"]
       : [
           "exec",
           "--json",
@@ -467,7 +456,7 @@ export class CodexMonitorService {
       let lastAgentMessage = "";
       let stderr = "";
 
-      const handleChunk = (chunk: Buffer) => {
+      const handleStdout = (chunk: Buffer) => {
         const text = chunk.toString("utf8");
         for (const line of text.split("\n")) {
           const trimmed = line.trim();
@@ -503,12 +492,24 @@ export class CodexMonitorService {
         }
       };
 
-      child.stdout.on("data", handleChunk);
-      child.stderr.on("data", (chunk) => {
+      const handleStderr = (chunk: Buffer) => {
         stderr += chunk.toString("utf8");
+      };
+
+      const cleanup = () => {
+        child.stdout.removeListener("data", handleStdout);
+        child.stderr.removeListener("data", handleStderr);
+      };
+
+      child.stdout.on("data", handleStdout);
+      child.stderr.on("data", handleStderr);
+      child.on("error", (err) => {
+        cleanup();
+        reject(err);
       });
-      child.on("error", reject);
       child.on("close", (code) => {
+        cleanup();
+
         if (code !== 0) {
           reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
           return;
@@ -870,20 +871,9 @@ export class CodexMonitorService {
     this.broadcastState();
 
     // Build args: use "resume" if we have an existing session, otherwise start fresh
+    // Note: resume only supports --json, not --color/--sandbox/--output-schema
     const args = this.conversationId
-      ? [
-          "exec",
-          "resume",
-          this.conversationId,
-          "--json",
-          "--color",
-          "never",
-          "--sandbox",
-          "read-only",
-          "--output-schema",
-          schemaPath,
-          "-",
-        ]
+      ? ["exec", "resume", "--json", this.conversationId, "-"]
       : [
           "exec",
           "--json",
@@ -906,7 +896,7 @@ export class CodexMonitorService {
       let lastAgentMessage = "";
       let stderr = "";
 
-      const handleChunk = (chunk: Buffer) => {
+      const handleStdout = (chunk: Buffer) => {
         const text = chunk.toString("utf8");
         for (const line of text.split("\n")) {
           const trimmed = line.trim();
@@ -942,12 +932,24 @@ export class CodexMonitorService {
         }
       };
 
-      child.stdout.on("data", handleChunk);
-      child.stderr.on("data", (chunk) => {
+      const handleStderr = (chunk: Buffer) => {
         stderr += chunk.toString("utf8");
+      };
+
+      const cleanup = () => {
+        child.stdout.removeListener("data", handleStdout);
+        child.stderr.removeListener("data", handleStderr);
+      };
+
+      child.stdout.on("data", handleStdout);
+      child.stderr.on("data", handleStderr);
+      child.on("error", (err) => {
+        cleanup();
+        reject(err);
       });
-      child.on("error", reject);
       child.on("close", (code) => {
+        cleanup();
+
         if (code !== 0) {
           reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
           return;
