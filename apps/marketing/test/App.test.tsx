@@ -6,13 +6,15 @@ describe("marketing app", () => {
   test("renders the hero, legal links, and download CTA", () => {
     const markup = renderToStaticMarkup(<App />);
 
-    expect(markup).toContain("End every call with clear decisions and owners.");
+    expect(markup).toContain("Meetings that actually end with decisions.");
     expect(markup).toContain("How it works");
-    expect(markup).toContain("Ready when you are.");
-    expect(markup).toContain("A quiet nudge appears before your call.");
-    expect(markup).toContain("Works with tools you already use.");
+    expect(markup).toContain("Walk in prepared, not scrambling.");
+    expect(markup).toContain(
+      "Marshall surfaces relevant context 5 minutes before your call starts."
+    );
+    expect(markup).toContain("Fits into the way you already work.");
     expect(markup).toContain("Google Calendar");
-    expect(markup).toContain("Download Marshall for macOS. Your audio stays on-device.");
+    expect(markup).toContain("Download for macOS and run your first meeting in under a minute.");
     expect(markup).toContain('href="/privacy/"');
     expect(markup).toContain('href="/terms/"');
     expect(markup).toContain('href="#download"');
