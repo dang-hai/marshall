@@ -524,7 +524,7 @@ export async function handleToolCall(
     case "update_document":
       return handleUpdateDocument(context, params as Parameters<typeof handleUpdateDocument>[1]);
     case "propose_meeting":
-      return handleProposeMeeting(context, params as ProposeMeetingInput);
+      return handleProposeMeeting(context, params as unknown as ProposeMeetingInput);
     default:
       return {
         content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
@@ -551,6 +551,7 @@ export function buildMinimalAgentPrompt(params: {
 - \`list_notes\`: Browse the user's other notes for context
 - \`get_note\`: Read a specific note
 - \`update_document\`: Update the note (check items, add notes, etc.)
+- \`propose_meeting\`: Propose a follow-up meeting for user to review and schedule
 
 ## Your Job
 1. Monitor the conversation by checking the transcript periodically
@@ -558,7 +559,8 @@ export function buildMinimalAgentPrompt(params: {
    - Check off agenda items when completed
    - Add notes capturing key points
    - Add action items when mentioned
-3. ${params.mode === "final" ? "Provide a summary of the call" : "Stay attentive for anything the user should address"}
+3. When a follow-up meeting is discussed, propose it with \`propose_meeting\`
+4. ${params.mode === "final" ? "Provide a summary of the call" : "Stay attentive for anything the user should address"}
 
 ## Guidelines
 - Be proactive but not overwhelming

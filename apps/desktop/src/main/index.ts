@@ -20,7 +20,8 @@ import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
 import { setupSettingsIPC } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
-import { CodexMonitorService } from "./codex-monitor";
+import { CodexMonitorMCPService } from "./codex-monitor-mcp";
+import type { NoteRecord } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -35,7 +36,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let codexNotificationWindow: BrowserWindow | null = null;
-let codexMonitorInstance: CodexMonitorService | null = null;
+let codexMonitorInstance: CodexMonitorMCPService | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -347,8 +348,29 @@ function setupCodexMonitorWindowHandlers(window: BrowserWindow) {
 }
 
 app.whenReady().then(() => {
-  const codexMonitor = new CodexMonitorService({
+  const codexMonitor = new CodexMonitorMCPService({
     createNotificationWindow: createCodexNotificationWindow,
+    fetchNotes: async (params) => {
+      try {
+        const query = new URLSearchParams();
+        if (params.limit) query.set("limit", String(params.limit));
+        if (params.search) query.set("search", params.search);
+        const queryStr = query.toString();
+        const path = queryStr ? `/api/notes?${queryStr}` : "/api/notes";
+        const payload = await authenticatedJsonRequest(path);
+        return (payload as { notes: NoteRecord[] }).notes;
+      } catch {
+        return [];
+      }
+    },
+    fetchNote: async (noteId) => {
+      try {
+        const payload = await authenticatedJsonRequest(`/api/notes/${noteId}`);
+        return (payload as { note: NoteRecord }).note;
+      } catch {
+        return null;
+      }
+    },
   });
 
   // Set up permission handlers for media access

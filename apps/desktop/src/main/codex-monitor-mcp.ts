@@ -19,7 +19,9 @@ import type {
   CodexMonitorItemStatus,
   AgentOperation,
   NoteRecord,
+  MeetingProposal,
 } from "@marshall/shared";
+import type { ProposeMeetingInput } from "@marshall/shared";
 import {
   MARSHALL_MCP_TOOLS,
   handleToolCall,
@@ -151,7 +153,8 @@ async function createTempFile(prefix: string, filename: string, content: string)
 function buildMCPContext(
   session: CodexMonitorSessionInput,
   options: CodexMonitorMCPServiceOptions,
-  pendingOps: AgentOperation[]
+  pendingOps: AgentOperation[],
+  emitMeetingProposal: (proposal: MeetingProposal) => void
 ): MarshallMCPContext {
   return {
     userId: "", // Would come from session in real implementation
@@ -170,6 +173,21 @@ function buildMCPContext(
     applyOperations: async (_noteId, ops) => {
       // Collect operations to apply after agent finishes
       pendingOps.push(...ops);
+    },
+    proposeMeeting: async (input: ProposeMeetingInput) => {
+      const proposal: MeetingProposal = {
+        id: randomUUID(),
+        title: input.title,
+        startAt: input.startAt,
+        endAt: input.endAt,
+        participants: input.participants || [],
+        location: input.location || null,
+        description: input.description || null,
+        createdAt: new Date().toISOString(),
+        status: "pending",
+      };
+      emitMeetingProposal(proposal);
+      return proposal;
     },
   };
 }
@@ -498,6 +516,19 @@ export class CodexMonitorMCPService {
     return { status: "disposed" };
   }
 
+  async sendChat(message: string) {
+    // In MCP mode, chat is handled through the agent's tools
+    // The agent can use get_transcript to answer questions
+    if (!this.session) {
+      return { status: "error", error: "No active session" };
+    }
+
+    // For now, trigger an analysis that will use tools to answer
+    // TODO: Implement dedicated chat flow with MCP tools
+    this.scheduleAnalysis(false, 0);
+    return { status: "queued", message: `Chat message "${message}" will be processed` };
+  }
+
   // ============================================================================
   // Private Methods
   // ============================================================================
@@ -606,7 +637,12 @@ export class CodexMonitorMCPService {
       this.pendingDocumentOps = [];
 
       // Build MCP context
-      const context = buildMCPContext(currentSession, this.options, this.pendingDocumentOps);
+      const context = buildMCPContext(
+        currentSession,
+        this.options,
+        this.pendingDocumentOps,
+        (proposal) => this.emitMeetingProposal(proposal)
+      );
 
       // Build minimal prompt (agent will use tools for data)
       const prompt = buildMinimalAgentPrompt({
@@ -758,6 +794,14 @@ export class CodexMonitorMCPService {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
         window.webContents.send("codex-monitor:note-patch", patch);
+      }
+    }
+  }
+
+  private emitMeetingProposal(proposal: MeetingProposal) {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send("codex-monitor:meeting-proposal", proposal);
       }
     }
   }
