@@ -765,3 +765,11 @@ app.on("before-quit", () => {
     tray.destroy();
   }
 });
+
+// Handle SIGTERM/SIGINT for clean shutdown (e.g., when mprocs exits)
+const cleanup = () => {
+  notchCompanionInstance?.stop();
+  app.quit();
+};
+process.on("SIGTERM", cleanup);
+process.on("SIGINT", cleanup);
