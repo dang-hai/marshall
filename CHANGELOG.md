@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.7](https://github.com/dang-hai/marshall/compare/v0.0.6...v0.0.7) (2026-03-20)
+
+
+### Features
+
+* **utilities:** add notion cli and mcp server with electron integration ([#53](https://github.com/dang-hai/marshall/issues/53)) ([8fbb321](https://github.com/dang-hai/marshall/commit/8fbb321d6c161ad7ad34ce171743abeb12e09726))
+
+
+### Bug Fixes
+
+* **desktop:** update upcoming events panel test to match component ([d08fbc5](https://github.com/dang-hai/marshall/commit/d08fbc522130e4e3c71047c0e78ac3a9ecd8fdce))
+* **scripts:** use branch name as initial pull request title ([e8c1cad](https://github.com/dang-hai/marshall/commit/e8c1cadf54cae941f72df595dedaaabe485bb29e))
+
 ## [0.0.6](https://github.com/dang-hai/marshall/compare/v0.0.5...v0.0.6) (2026-03-20)
 
 
