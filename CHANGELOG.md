@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.0.5](https://github.com/dang-hai/marshall/compare/v0.0.4...v0.0.5) (2026-03-20)
+
+
+### Features
+
+* add mprocs for interactive workspace log viewing ([f13a47a](https://github.com/dang-hai/marshall/commit/f13a47a8833ccc1952f4a0f3e053bd1d717e65cd))
+* **desktop:** add chat input to codex notification window ([4da6be7](https://github.com/dang-hai/marshall/commit/4da6be73842021b82e93724f7d3748f58c9ae8c7))
+* **desktop:** add codex live call monitor ([e7d9b95](https://github.com/dang-hai/marshall/commit/e7d9b955af299df6a7f319ead7cb9e8f4bb0f9e9))
+* **desktop:** persist codex sessions for conversation continuity ([4793132](https://github.com/dang-hai/marshall/commit/479313281f4ca1dd72eb804e5aeae28f715eb9b9))
+* **desktop:** redesign codex notification window with stable item tracking ([7f6f507](https://github.com/dang-hai/marshall/commit/7f6f50751c65e189ef79c9000e80bb3c0fcbd25a))
+* **transcription:** add audio buffering and interim transcription support ([8d65ef0](https://github.com/dang-hai/marshall/commit/8d65ef0b9692dd3b366a64d3d2c6bc39d68323fb))
+
+
+### Bug Fixes
+
+* **desktop:** avoid facetime false positives ([#38](https://github.com/dang-hai/marshall/issues/38)) ([6a7a1dc](https://github.com/dang-hai/marshall/commit/6a7a1dc7536c0552acbc6da0906e7cb32e3dff6e))
+* **desktop:** hydrate transcription state when persisted snapshot arrives ([3f88d4f](https://github.com/dang-hai/marshall/commit/3f88d4fd803524aa93b4033391cefa9185c83e8f))
+* **desktop:** hydrate transcription state when persisted snapshot arrives ([a2abddb](https://github.com/dang-hai/marshall/commit/a2abddbfb9e0c2389f758d86f89a6cee417d6d13))
+* **desktop:** hydrate transcription state when persisted snapshot arrives ([a3823a6](https://github.com/dang-hai/marshall/commit/a3823a64b8d75b09d08720b4a411464f56b35595))
+* **desktop:** make notification window header draggable ([cdd0964](https://github.com/dang-hai/marshall/commit/cdd0964d8090292afcdadffc527cf12d11fa5f0d))
+* keep active transcription running across window close ([bd1cf2d](https://github.com/dang-hai/marshall/commit/bd1cf2dee918831deb0ec6e82cd95f2bdcf96e2a))
+* persist note transcription across editor close ([#40](https://github.com/dang-hai/marshall/issues/40)) ([3b507cc](https://github.com/dang-hai/marshall/commit/3b507cce3bd1aea352caa7465725de476b9b5db3))
+
 ## [0.0.4](https://github.com/dang-hai/marshall/compare/v0.0.3...v0.0.4) (2026-03-19)
 
 
