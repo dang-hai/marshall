@@ -58,7 +58,7 @@ export interface NotionPage {
   id: string;
   title: string;
   url: string;
-  lastEditedTime: string;
+  lastEditedTime?: string;
   icon?: string;
   excerpt?: string;
 }
