@@ -6,10 +6,16 @@ import type {
   CreateNoteInput,
   GoogleCalendarConnectionStatus,
   GoogleCalendarEvent,
+  MeetingNoteData,
   MeetingProposal,
   NoteRecord,
+  NotionConnectionStatus,
+  NotionDatabase,
+  NotionMeetingContext,
+  NotionPage,
   NoteTranscriptionSnapshot,
   SaveNoteTranscriptionInput,
+  StoredNotionToken,
   UpdateNoteInput,
 } from "@marshall/shared";
 import type { DesktopNavigationRoute } from "../shared/navigation";
@@ -50,6 +56,28 @@ contextBridge.exposeInMainWorld("calendarAPI", {
   getStatus: () => ipcRenderer.invoke("calendar:get-status"),
   getUpcomingEvents: (limit?: number) => ipcRenderer.invoke("calendar:get-upcoming-events", limit),
   connectGoogle: () => ipcRenderer.invoke("calendar:connect-google"),
+});
+
+// Notion API
+contextBridge.exposeInMainWorld("notionAPI", {
+  // Connection management
+  getStatus: () => ipcRenderer.invoke("notion:get-status"),
+  getToken: () => ipcRenderer.invoke("notion:get-token"),
+  connect: () => ipcRenderer.invoke("notion:connect"),
+  disconnect: () => ipcRenderer.invoke("notion:disconnect"),
+
+  // Search & Context
+  searchRelated: (query: string) => ipcRenderer.invoke("notion:search-related", query),
+  getMeetingContext: (meetingTitle: string) =>
+    ipcRenderer.invoke("notion:get-meeting-context", meetingTitle),
+  getPageContent: (pageId: string) => ipcRenderer.invoke("notion:get-page-content", pageId),
+
+  // Save to Notion
+  listDatabases: () => ipcRenderer.invoke("notion:list-databases"),
+  saveMeetingToDatabase: (databaseId: string, data: MeetingNoteData) =>
+    ipcRenderer.invoke("notion:save-meeting-to-database", databaseId, data),
+  saveMeetingAsPage: (parentPageId: string, data: MeetingNoteData) =>
+    ipcRenderer.invoke("notion:save-meeting-as-page", parentPageId, data),
 });
 
 // Desktop Capturer API for system audio capture (via IPC - required for Electron 30+)
@@ -334,6 +362,29 @@ declare global {
       getStatus: () => Promise<GoogleCalendarConnectionStatus>;
       getUpcomingEvents: (limit?: number) => Promise<GoogleCalendarEvent[]>;
       connectGoogle: () => Promise<boolean>;
+    };
+    notionAPI: {
+      // Connection management
+      getStatus: () => Promise<NotionConnectionStatus>;
+      getToken: () => Promise<string | null>;
+      connect: () => Promise<StoredNotionToken>;
+      disconnect: () => Promise<{ status: string }>;
+
+      // Search & Context
+      searchRelated: (query: string) => Promise<NotionPage[]>;
+      getMeetingContext: (meetingTitle: string) => Promise<NotionMeetingContext>;
+      getPageContent: (pageId: string) => Promise<string>;
+
+      // Save to Notion
+      listDatabases: () => Promise<NotionDatabase[]>;
+      saveMeetingToDatabase: (
+        databaseId: string,
+        data: MeetingNoteData
+      ) => Promise<{ pageId: string; url: string }>;
+      saveMeetingAsPage: (
+        parentPageId: string,
+        data: MeetingNoteData
+      ) => Promise<{ pageId: string; url: string }>;
     };
     callDetectionAPI: {
       startMonitoring: () => Promise<{ status: string }>;

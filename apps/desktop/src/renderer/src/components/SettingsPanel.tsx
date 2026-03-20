@@ -1,6 +1,10 @@
 import { Check, ChevronRight, FolderOpen, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import type { DisplayUser, GoogleCalendarConnectionStatus } from "@marshall/shared";
+import type {
+  DisplayUser,
+  GoogleCalendarConnectionStatus,
+  NotionConnectionStatus,
+} from "@marshall/shared";
 import {
   defaultAppSettings,
   type AppSettings,
@@ -160,6 +164,29 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
   const [isCalendarActionLoading, setIsCalendarActionLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
 
+  // Notion integration state
+  const [notionConnection, setNotionConnection] = useState<NotionConnectionStatus | null>(null);
+  const [isNotionLoading, setIsNotionLoading] = useState(section === "integrations");
+  const [isNotionActionLoading, setIsNotionActionLoading] = useState(false);
+  const [notionError, setNotionError] = useState<string | null>(null);
+
+  const loadNotionStatus = useCallback(async () => {
+    setIsNotionLoading(true);
+    setNotionError(null);
+
+    try {
+      const status = await window.notionAPI.getStatus();
+      setNotionConnection(status);
+      return status;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load Notion status";
+      setNotionError(message);
+      return null;
+    } finally {
+      setIsNotionLoading(false);
+    }
+  }, []);
+
   const loadCalendarStatus = useCallback(async () => {
     setIsCalendarLoading(true);
     setCalendarError(null);
@@ -209,6 +236,12 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
     }
   }, [loadCalendarStatus, section]);
 
+  useEffect(() => {
+    if (section === "integrations") {
+      void loadNotionStatus();
+    }
+  }, [loadNotionStatus, section]);
+
   const setTranscriptionProvider = (provider: TranscriptionProvider) => {
     void updateSection("transcription", { provider });
   };
@@ -225,6 +258,36 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
       setCalendarError(message);
     } finally {
       setIsCalendarActionLoading(false);
+    }
+  };
+
+  const connectNotion = async () => {
+    setIsNotionActionLoading(true);
+    setNotionError(null);
+
+    try {
+      await window.notionAPI.connect();
+      await loadNotionStatus();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to connect Notion";
+      setNotionError(message);
+    } finally {
+      setIsNotionActionLoading(false);
+    }
+  };
+
+  const disconnectNotion = async () => {
+    setIsNotionActionLoading(true);
+    setNotionError(null);
+
+    try {
+      await window.notionAPI.disconnect();
+      await loadNotionStatus();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to disconnect Notion";
+      setNotionError(message);
+    } finally {
+      setIsNotionActionLoading(false);
     }
   };
 
@@ -439,6 +502,128 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
           </>
         )}
 
+        {section === "integrations" && (
+          <>
+            <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
+              <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Notion
+              </p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-foreground">Connect your workspace</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Connect Notion to search pages, edit content, and sync meeting notes directly to
+                    your workspace.
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-2xs font-medium",
+                    notionConnection?.connected
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {notionConnection?.connected ? "Connected" : "Not connected"}
+                </span>
+              </div>
+              <div className="mt-4 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <p className="text-xs font-medium text-foreground">Connection status</p>
+                {isNotionLoading ? (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Checking Notion access...</span>
+                  </div>
+                ) : notionConnection?.connected ? (
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      Connected to workspace{" "}
+                      <span className="font-medium text-foreground">
+                        {notionConnection.workspaceName || "Unknown"}
+                      </span>
+                    </p>
+                    {notionConnection.ownerEmail && (
+                      <p>Authorized by {notionConnection.ownerEmail}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>Notion workspace has not been connected yet.</p>
+                    <p>Use the button below to authorize access in your browser.</p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {notionConnection?.connected ? (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={() => void connectNotion()}
+                      disabled={isNotionLoading || isNotionActionLoading}
+                    >
+                      {isNotionActionLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                          <span>Reconnecting...</span>
+                        </>
+                      ) : (
+                        <span>Reconnect Notion</span>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void disconnectNotion()}
+                      disabled={isNotionLoading || isNotionActionLoading}
+                    >
+                      Disconnect
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => void connectNotion()}
+                    disabled={isNotionLoading || isNotionActionLoading}
+                  >
+                    {isNotionActionLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        <span>Connecting...</span>
+                      </>
+                    ) : (
+                      <span>Connect Notion</span>
+                    )}
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void loadNotionStatus()}
+                  disabled={isNotionLoading || isNotionActionLoading}
+                >
+                  Refresh status
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
+              <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                CLI Access
+              </p>
+              <h3 className="text-sm font-medium text-foreground">Use with command line</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Once connected, the Notion CLI automatically uses your stored token.
+              </p>
+              <div className="mt-3 rounded-lg bg-muted/50 p-3 font-mono text-xs text-muted-foreground">
+                <p className="text-foreground"># Check connection status</p>
+                <p>notion status --json</p>
+                <p className="mt-2 text-foreground"># Search your workspace</p>
+                <p>notion search "meeting notes" --json</p>
+              </div>
+            </div>
+          </>
+        )}
+
         {section === "permissions" && (
           <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
             <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -470,6 +655,11 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
         {calendarError && section === "calendar" && (
           <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             {calendarError}
+          </div>
+        )}
+        {notionError && section === "integrations" && (
+          <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            {notionError}
           </div>
         )}
       </div>

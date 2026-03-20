@@ -33,6 +33,55 @@ export interface GoogleCalendarConnectionStatus {
   scopes: string[];
 }
 
+export interface NotionConnectionStatus {
+  connected: boolean;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  workspaceIcon: string | null;
+  botId: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+}
+
+export interface StoredNotionToken {
+  accessToken: string;
+  botId: string;
+  workspaceId: string;
+  workspaceName: string | null;
+  workspaceIcon: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  createdAt: string;
+}
+
+export interface NotionPage {
+  id: string;
+  title: string;
+  url: string;
+  lastEditedTime: string;
+  icon?: string;
+  excerpt?: string;
+}
+
+export interface NotionDatabase {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
+export interface NotionMeetingContext {
+  pages: NotionPage[];
+  context: string;
+}
+
+export interface MeetingNoteData {
+  title: string;
+  date: string;
+  summary: string | null;
+  items: CodexMonitorItem[];
+  transcript?: string;
+}
+
 export interface GoogleCalendarEvent {
   id: string;
   title: string;

@@ -20,7 +20,16 @@ export function createConfiguredBackendApp(env: BackendEnv = process.env) {
   const db = createDb(requireEnv(env, "DATABASE_URL"));
   const auth = createAuthFromEnv(db, env);
 
-  return createBackendApp({ auth, db, baseUrl, electronProtocol });
+  // Notion OAuth config (optional)
+  const notion =
+    env.NOTION_CLIENT_ID?.trim() && env.NOTION_CLIENT_SECRET?.trim()
+      ? {
+          clientId: env.NOTION_CLIENT_ID.trim(),
+          clientSecret: env.NOTION_CLIENT_SECRET.trim(),
+        }
+      : undefined;
+
+  return createBackendApp({ auth, db, baseUrl, electronProtocol, notion });
 }
 
 const app = createConfiguredBackendApp();

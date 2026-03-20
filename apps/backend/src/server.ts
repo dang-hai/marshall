@@ -24,16 +24,33 @@ import {
   serializeGoogleCalendarEvent,
   type CreateGoogleCalendarEventInput,
 } from "./calendar";
+import {
+  buildNotionAuthUrl,
+  exchangeNotionCode,
+  parseNotionTokenResponse,
+  type NotionOAuthConfig,
+  type StoredNotionToken,
+} from "./notion";
 
 export interface BackendAppOptions {
   auth: Auth;
   db?: Database;
   baseUrl?: string;
   electronProtocol?: string;
+  notion?: {
+    clientId: string;
+    clientSecret: string;
+  };
 }
 
 // Store pending desktop auth requests (state -> redirect info)
 const pendingDesktopAuth = new Map<string, { scheme: string; createdAt: number }>();
+
+// Store pending Notion OAuth requests (state -> callback info)
+const pendingNotionAuth = new Map<
+  string,
+  { scheme: string; createdAt: number; resolve?: (token: StoredNotionToken) => void }
+>();
 
 /** Maximum time to wait for desktop auth completion */
 const AUTH_REQUEST_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -44,6 +61,11 @@ setInterval(() => {
   for (const [state, info] of pendingDesktopAuth) {
     if (now - info.createdAt > AUTH_REQUEST_TTL_MS) {
       pendingDesktopAuth.delete(state);
+    }
+  }
+  for (const [state, info] of pendingNotionAuth) {
+    if (now - info.createdAt > AUTH_REQUEST_TTL_MS) {
+      pendingNotionAuth.delete(state);
     }
   }
 }, AUTH_REQUEST_TTL_MS);
@@ -559,6 +581,7 @@ export function createBackendApp({
   db,
   baseUrl = "http://localhost:3000",
   electronProtocol = "marshall",
+  notion,
 }: BackendAppOptions) {
   return (
     new Elysia()
@@ -694,6 +717,111 @@ export function createBackendApp({
           redirectLabel: "return to Marshall",
           redirectUrl: `${scheme}://calendar/error?state=${encodeURIComponent(state)}&error=${encodeURIComponent(error)}`,
         });
+      })
+      // Notion OAuth: initiate flow
+      .get("/notion/connect", ({ query, set }) => {
+        if (!notion) {
+          set.status = 501;
+          return { error: "Notion integration is not configured" };
+        }
+
+        const state = query.state as string | undefined;
+        const scheme = (query.scheme as string | undefined) || electronProtocol;
+
+        if (!state) {
+          set.status = 400;
+          return { error: "Missing state parameter" };
+        }
+
+        // Store pending request
+        pendingNotionAuth.set(state, { scheme, createdAt: Date.now() });
+
+        const notionConfig: NotionOAuthConfig = {
+          clientId: notion.clientId,
+          clientSecret: notion.clientSecret,
+          redirectUri: `${baseUrl}/auth/desktop/notion-callback`,
+        };
+
+        const authUrl = buildNotionAuthUrl(notionConfig, state);
+        console.log(`[Notion OAuth] Initiating: state=${state}, scheme=${scheme}`);
+        return Response.redirect(authUrl, 302);
+      })
+      // Notion OAuth: callback from Notion
+      .get("/auth/desktop/notion-callback", async ({ query, set }) => {
+        const code = query.code as string | undefined;
+        const state = query.state as string | undefined;
+        const error = query.error as string | undefined;
+
+        if (error) {
+          console.error(`[Notion OAuth] Error from Notion:`, error);
+          const pending = state ? pendingNotionAuth.get(state) : undefined;
+          const scheme = pending?.scheme || electronProtocol;
+          pendingNotionAuth.delete(state || "");
+
+          set.headers["Content-Type"] = "text/html; charset=utf-8";
+          return desktopCalendarRedirectPage({
+            title: "Notion connection failed",
+            description: `Notion authorization was denied or failed: ${error}`,
+            redirectLabel: "return to Marshall",
+            redirectUrl: `${scheme}://notion/error?state=${encodeURIComponent(state || "")}&error=${encodeURIComponent(error)}`,
+          });
+        }
+
+        if (!code || !state) {
+          set.status = 400;
+          return { error: "Missing code or state parameter" };
+        }
+
+        const pending = pendingNotionAuth.get(state);
+        if (!pending) {
+          set.status = 400;
+          return { error: "Invalid or expired state parameter" };
+        }
+
+        if (!notion) {
+          set.status = 501;
+          return { error: "Notion integration is not configured" };
+        }
+
+        try {
+          const notionConfig: NotionOAuthConfig = {
+            clientId: notion.clientId,
+            clientSecret: notion.clientSecret,
+            redirectUri: `${baseUrl}/auth/desktop/notion-callback`,
+          };
+
+          const tokenResponse = await exchangeNotionCode(notionConfig, code);
+          const storedToken = parseNotionTokenResponse(tokenResponse);
+
+          console.log(
+            `[Notion OAuth] Success: workspace=${storedToken.workspaceName}, bot=${storedToken.botId}`
+          );
+
+          // Encode the token data to pass to desktop app
+          const tokenData = encodeURIComponent(JSON.stringify(storedToken));
+
+          set.headers["Content-Type"] = "text/html; charset=utf-8";
+          return desktopCalendarRedirectPage({
+            title: "Notion connected",
+            description: `Marshall is now connected to your Notion workspace "${storedToken.workspaceName || "Unknown"}".`,
+            redirectLabel: "open Marshall",
+            redirectUrl: `${pending.scheme}://notion/callback?state=${encodeURIComponent(state)}&token=${tokenData}`,
+          });
+        } catch (err) {
+          console.error(`[Notion OAuth] Token exchange failed:`, err);
+          pendingNotionAuth.delete(state);
+
+          set.headers["Content-Type"] = "text/html; charset=utf-8";
+          return desktopCalendarRedirectPage({
+            title: "Notion connection failed",
+            description:
+              err instanceof Error ? err.message : "Failed to complete Notion authorization.",
+            redirectLabel: "return to Marshall",
+            redirectUrl: `${pending.scheme}://notion/error?state=${encodeURIComponent(state)}&error=token_exchange_failed`,
+          });
+        } finally {
+          pendingNotionAuth.delete(state);
+        }
       })
       // Get current user from session token (for desktop app)
       .get("/api/user/me", async ({ request, set }) => {
