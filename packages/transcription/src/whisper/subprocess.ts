@@ -127,6 +127,7 @@ export class WhisperProcess extends EventEmitter {
               text: stdout.trim(),
               language: this.config.language || "en",
               segments: [],
+              utterances: [],
               duration: (Date.now() - this.startTime) / 1000,
             });
           }
@@ -143,15 +144,17 @@ export class WhisperProcess extends EventEmitter {
     // Try to parse as JSON first
     try {
       const json = JSON.parse(output);
+      const segments =
+        json.transcription?.map((s: { offsets: { from: number; to: number }; text: string }) => ({
+          start: s.offsets?.from || 0,
+          end: s.offsets?.to || 0,
+          text: s.text || "",
+        })) || [];
       return {
         text: json.text || json.transcription?.map((s: { text: string }) => s.text).join(" ") || "",
         language: json.language || this.config.language || "en",
-        segments:
-          json.transcription?.map((s: { offsets: { from: number; to: number }; text: string }) => ({
-            start: s.offsets?.from || 0,
-            end: s.offsets?.to || 0,
-            text: s.text || "",
-          })) || [],
+        segments,
+        utterances: this.segmentsToUtterances(segments),
         duration: (Date.now() - this.startTime) / 1000,
       };
     } catch {
@@ -176,9 +179,24 @@ export class WhisperProcess extends EventEmitter {
         text: fullText.trim() || output.trim(),
         language: this.config.language || "en",
         segments,
+        utterances: this.segmentsToUtterances(segments),
         duration: (Date.now() - this.startTime) / 1000,
       };
     }
+  }
+
+  private segmentsToUtterances(
+    segments: TranscriptionResult["segments"]
+  ): TranscriptionResult["utterances"] {
+    return segments
+      .filter((segment) => segment.text.trim())
+      .map((segment, index) => ({
+        id: `utt-${index}-${segment.start.toFixed(3)}-${segment.end.toFixed(3)}`,
+        start: segment.start,
+        end: segment.end,
+        text: segment.text.trim(),
+        speaker: segment.speaker ?? null,
+      }));
   }
 
   private parseTimestamp(ts: string): number {

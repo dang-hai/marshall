@@ -19,6 +19,15 @@ describe("useTranscription helpers", () => {
       finalText: "Hello from the first take.",
       interimText: "",
       segments: [{ start: 0, end: 1.2, text: "Hello from the first take." }],
+      utterances: [
+        {
+          id: "utt-0",
+          start: 0,
+          end: 1.2,
+          text: "Hello from the first take.",
+          speaker: null,
+        },
+      ],
       lastSegmentIndex: 0,
       durationSeconds: 1.2,
       recordingDurationSeconds: 1.2,
@@ -34,6 +43,15 @@ describe("useTranscription helpers", () => {
       text: "Hello from the first take.",
       language: "en",
       segments: [{ start: 0, end: 1.2, text: "Hello from the first take." }],
+      utterances: [
+        {
+          id: "utt-0",
+          start: 0,
+          end: 1.2,
+          text: "Hello from the first take.",
+          speaker: null,
+        },
+      ],
       duration: 1.2,
     });
   });
@@ -54,6 +72,22 @@ describe("useTranscription helpers", () => {
         { start: 0, end: 1.2, text: "Let us kick this off.", speaker: "Speaker 1" },
         { start: 1.2, end: 2.4, text: "I can take the follow up.", speaker: "Speaker 2" },
       ],
+      utterances: [
+        {
+          id: "utt-1",
+          start: 0,
+          end: 1.2,
+          text: "Let us kick this off.",
+          speaker: "Speaker 1",
+        },
+        {
+          id: "utt-2",
+          start: 1.2,
+          end: 2.4,
+          text: "I can take the follow up.",
+          speaker: "Speaker 2",
+        },
+      ],
       lastSegmentIndex: 1,
       durationSeconds: 2.4,
       recordingDurationSeconds: 2.4,
@@ -72,6 +106,22 @@ describe("useTranscription helpers", () => {
         { start: 0, end: 1.2, text: "Let us kick this off.", speaker: "Speaker 1" },
         { start: 1.2, end: 2.4, text: "I can take the follow up.", speaker: "Speaker 2" },
       ],
+      utterances: [
+        {
+          id: "utt-1",
+          start: 0,
+          end: 1.2,
+          text: "Let us kick this off.",
+          speaker: "Speaker 1",
+        },
+        {
+          id: "utt-2",
+          start: 1.2,
+          end: 2.4,
+          text: "I can take the follow up.",
+          speaker: "Speaker 2",
+        },
+      ],
       duration: 2.4,
     });
   });
@@ -81,12 +131,30 @@ describe("useTranscription helpers", () => {
       text: "Hello from the first take.",
       language: "en",
       segments: [{ start: 0, end: 1.2, text: "Hello from the first take." }],
+      utterances: [
+        {
+          id: "utt-base",
+          start: 0,
+          end: 1.2,
+          text: "Hello from the first take.",
+          speaker: null,
+        },
+      ],
       duration: 1.2,
     };
     const resumed: TranscriptionResult = {
       text: "And this is the follow up.",
       language: "en",
       segments: [{ start: 0, end: 0.8, text: "And this is the follow up." }],
+      utterances: [
+        {
+          id: "utt-resumed",
+          start: 0,
+          end: 0.8,
+          text: "And this is the follow up.",
+          speaker: null,
+        },
+      ],
       duration: 0.8,
     };
 
@@ -97,6 +165,22 @@ describe("useTranscription helpers", () => {
         { start: 0, end: 1.2, text: "Hello from the first take." },
         { start: 1.2, end: 2, text: "And this is the follow up." },
       ],
+      utterances: [
+        {
+          id: "utt-base",
+          start: 0,
+          end: 1.2,
+          text: "Hello from the first take.",
+          speaker: null,
+        },
+        {
+          id: "utt-resumed",
+          start: 1.2,
+          end: 2,
+          text: "And this is the follow up.",
+          speaker: null,
+        },
+      ],
       duration: 2,
     });
   });
@@ -106,12 +190,30 @@ describe("useTranscription helpers", () => {
       text: "Speaker 1: Hello from the first take.",
       language: "en",
       segments: [{ start: 0, end: 1.2, text: "Hello from the first take.", speaker: "Speaker 1" }],
+      utterances: [
+        {
+          id: "utt-speaker-1",
+          start: 0,
+          end: 1.2,
+          text: "Hello from the first take.",
+          speaker: "Speaker 1",
+        },
+      ],
       duration: 1.2,
     };
     const resumed: TranscriptionResult = {
       text: "Speaker 2: And this is the follow up.",
       language: "en",
       segments: [{ start: 0, end: 0.8, text: "And this is the follow up.", speaker: "Speaker 2" }],
+      utterances: [
+        {
+          id: "utt-speaker-2",
+          start: 0,
+          end: 0.8,
+          text: "And this is the follow up.",
+          speaker: "Speaker 2",
+        },
+      ],
       duration: 0.8,
     };
 
@@ -121,6 +223,22 @@ describe("useTranscription helpers", () => {
       segments: [
         { start: 0, end: 1.2, text: "Hello from the first take.", speaker: "Speaker 1" },
         { start: 1.2, end: 2, text: "And this is the follow up.", speaker: "Speaker 2" },
+      ],
+      utterances: [
+        {
+          id: "utt-speaker-1",
+          start: 0,
+          end: 1.2,
+          text: "Hello from the first take.",
+          speaker: "Speaker 1",
+        },
+        {
+          id: "utt-speaker-2",
+          start: 1.2,
+          end: 2,
+          text: "And this is the follow up.",
+          speaker: "Speaker 2",
+        },
       ],
       duration: 2,
     });

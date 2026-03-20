@@ -59,6 +59,14 @@ export interface NoteTranscriptionSegment {
   speaker?: string | null;
 }
 
+export interface NoteTranscriptionUtterance {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null;
+}
+
 export interface SaveNoteTranscriptionInput {
   status: NoteTranscriptionStatus;
   provider: NoteTranscriptionProvider;
@@ -69,6 +77,7 @@ export interface SaveNoteTranscriptionInput {
   finalText: string;
   interimText: string;
   segments: NoteTranscriptionSegment[];
+  utterances: NoteTranscriptionUtterance[];
   lastSegmentIndex: number | null;
   durationSeconds: number;
   recordingDurationSeconds: number;

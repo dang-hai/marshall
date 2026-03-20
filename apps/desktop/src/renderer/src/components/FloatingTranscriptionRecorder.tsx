@@ -9,6 +9,7 @@ import {
   useTranscription,
   type ModelInfo,
   type TranscriptionResult,
+  type TranscriptionUtterance,
 } from "../hooks/useTranscription";
 import { cn } from "../lib/utils";
 import { extractPlainTextFromHtml } from "../lib/note-body";
@@ -40,6 +41,7 @@ function getSnapshotContentFingerprint(
     snapshot.finalText,
     snapshot.interimText,
     JSON.stringify(snapshot.segments),
+    JSON.stringify(snapshot.utterances),
     snapshot.lastSegmentIndex,
     snapshot.durationSeconds,
     snapshot.recordingDurationSeconds,
@@ -96,6 +98,7 @@ export interface FloatingTranscriptionRecorderViewProps {
   onOpenSettings: () => void;
   onRecordAgain: () => void;
   onStopRecording: () => void;
+  interimText: string;
   partialText: string;
   progress: number;
   resolvedModel: RecorderResolvedModel;
@@ -168,6 +171,7 @@ export function FloatingTranscriptionRecorderView({
   onOpenSettings,
   onRecordAgain,
   onStopRecording,
+  interimText,
   partialText,
   progress,
   resolvedModel,
@@ -175,20 +179,34 @@ export function FloatingTranscriptionRecorderView({
   transcript,
 }: FloatingTranscriptionRecorderViewProps) {
   const transcriptRef = useRef<HTMLDivElement>(null);
-  const liveTranscript = partialText.trim();
-  // During recording, show live partialText (which includes old + new text)
-  // After recording, show finalized transcript.text
-  const displayedTranscript = isRecording
-    ? liveTranscript
-    : transcript?.text?.trim() || liveTranscript;
+  const baseUtterances = transcript?.utterances ?? [];
+  const fallbackText =
+    baseUtterances.length === 0
+      ? (isRecording ? partialText : transcript?.text || partialText).trim()
+      : "";
+  const displayedUtterances: TranscriptionUtterance[] =
+    baseUtterances.length > 0
+      ? baseUtterances
+      : fallbackText
+        ? [
+            {
+              id: "fallback",
+              start: 0,
+              end: transcript?.duration ?? 0,
+              text: fallbackText,
+              speaker: null,
+            },
+          ]
+        : [];
+  const volatileText = baseUtterances.length > 0 ? interimText.trim() : "";
   const showPreparingState = isBootstrapping && !isRecording && !isTranscribing;
-  const hasContent = Boolean(displayedTranscript);
+  const hasContent = displayedUtterances.length > 0 || Boolean(volatileText);
 
   useEffect(() => {
     if (transcriptRef.current && isRecording) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
     }
-  }, [displayedTranscript, isRecording]);
+  }, [displayedUtterances, volatileText, isRecording]);
 
   return (
     <>
@@ -268,12 +286,37 @@ export function FloatingTranscriptionRecorderView({
                     )}
                   >
                     {hasContent ? (
-                      <p className="font-serif text-[15px] leading-relaxed text-stone-700 whitespace-pre-wrap">
-                        {displayedTranscript}
-                        {isRecording && (
-                          <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-stone-300" />
+                      <div className="space-y-3">
+                        {displayedUtterances.map((utterance) => (
+                          <div
+                            key={utterance.id}
+                            className="rounded-2xl border border-stone-200/80 bg-white/90 px-3 py-2 shadow-sm"
+                          >
+                            {utterance.speaker && (
+                              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
+                                {utterance.speaker}
+                              </p>
+                            )}
+                            <p className="font-serif text-[15px] leading-relaxed text-stone-700 whitespace-pre-wrap">
+                              {utterance.text}
+                            </p>
+                          </div>
+                        ))}
+
+                        {volatileText && (
+                          <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 px-3 py-2">
+                            <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
+                              Listening
+                            </p>
+                            <p className="font-serif text-[15px] leading-relaxed text-stone-600 whitespace-pre-wrap">
+                              {volatileText}
+                              {isRecording && (
+                                <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-stone-300" />
+                              )}
+                            </p>
+                          </div>
                         )}
-                      </p>
+                      </div>
                     ) : (
                       <p className="text-center text-sm text-stone-400">
                         {showPreparingState ? "Starting..." : "Your words will appear here."}
@@ -485,6 +528,7 @@ export function FloatingTranscriptionRecorder({
 
   const buildSnapshot = useCallback(() => {
     const segments = transcript?.segments.length ? transcript.segments : [];
+    const utterances = transcript?.utterances.length ? transcript.utterances : [];
     const transcriptText = transcript?.text?.trim() || partialText.trim();
     const hasAnyText = Boolean(transcriptText || finalText.trim() || interimText.trim());
 
@@ -511,6 +555,7 @@ export function FloatingTranscriptionRecorder({
       finalText,
       interimText,
       segments,
+      utterances,
       lastSegmentIndex,
       durationSeconds: transcript?.duration ?? 0,
       recordingDurationSeconds: Math.max(audioCapture.duration, transcript?.duration ?? 0),
@@ -713,6 +758,7 @@ export function FloatingTranscriptionRecorder({
       onOpenSettings={handleOpenSettings}
       onRecordAgain={startLiveRecording}
       onStopRecording={handleStopRecording}
+      interimText={interimText}
       partialText={partialText}
       progress={progress}
       resolvedModel={resolvedModel}

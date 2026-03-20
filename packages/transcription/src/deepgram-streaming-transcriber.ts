@@ -30,6 +30,7 @@ export interface DeepgramTranscriptionResult {
   text: string;
   language: string;
   segments: DeepgramSegment[];
+  utterances: DeepgramUtterance[];
   duration: number;
 }
 
@@ -42,6 +43,14 @@ export interface DeepgramWord {
 }
 
 export interface DeepgramSegment {
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null;
+}
+
+export interface DeepgramUtterance {
+  id: string;
   start: number;
   end: number;
   text: string;
@@ -136,6 +145,20 @@ export function formatSpeakerTranscript(
     )
     .join("\n")
     .trim();
+}
+
+export function buildSpeakerUtterances(
+  segments: DeepgramSegment[] = []
+): DeepgramTranscriptionResult["utterances"] {
+  return segments
+    .filter((segment) => segment.text.trim())
+    .map((segment, index) => ({
+      id: `utt-${index}-${segment.start.toFixed(3)}-${segment.end.toFixed(3)}`,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text.trim(),
+      speaker: segment.speaker ?? null,
+    }));
 }
 
 export class DeepgramStreamingTranscriber extends EventEmitter {
@@ -300,6 +323,7 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
       text,
       language: this.config.language || "en",
       segments: this.allSegments,
+      utterances: buildSpeakerUtterances(this.allSegments),
       duration,
     };
 

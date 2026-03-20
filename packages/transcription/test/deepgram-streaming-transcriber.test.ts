@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   buildSpeakerSegments,
+  buildSpeakerUtterances,
   formatSpeakerTranscript,
 } from "../src/deepgram-streaming-transcriber";
 
@@ -25,5 +26,17 @@ describe("deepgram speaker formatting", () => {
         { start: 0.5, end: 0.7, text: "Hi!", speaker: "Speaker 2" },
       ])
     ).toBe("Speaker 1: Hello there.\nSpeaker 2: Hi!");
+  });
+
+  it("builds utterances from speaker segments", () => {
+    expect(
+      buildSpeakerUtterances([
+        { start: 0, end: 0.4, text: "Hello there.", speaker: "Speaker 1" },
+        { start: 0.5, end: 0.7, text: "Hi!", speaker: "Speaker 2" },
+      ])
+    ).toEqual([
+      { id: "utt-0-0.000-0.400", start: 0, end: 0.4, text: "Hello there.", speaker: "Speaker 1" },
+      { id: "utt-1-0.500-0.700", start: 0.5, end: 0.7, text: "Hi!", speaker: "Speaker 2" },
+    ]);
   });
 });

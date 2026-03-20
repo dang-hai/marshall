@@ -23,6 +23,7 @@ const baseProps: FloatingTranscriptionRecorderViewProps = {
   onOpenSettings: () => {},
   onRecordAgain: () => {},
   onStopRecording: () => {},
+  interimText: "",
   partialText: "",
   progress: 0,
   resolvedModel: {
@@ -72,11 +73,21 @@ describe("floating transcription recorder", () => {
           duration: 21.3,
           language: "en",
           segments: [],
+          utterances: [
+            {
+              id: "utt-1",
+              start: 0,
+              end: 10.2,
+              speaker: "Speaker 1",
+              text: "Final transcript from the completed Whisper pass.",
+            },
+          ],
           text: "Final transcript from the completed Whisper pass.",
         }}
       />
     );
 
+    expect(markup).toContain("Speaker 1");
     expect(markup).toContain("Final transcript from the completed Whisper pass.");
     expect(markup).toContain("Record again");
   });

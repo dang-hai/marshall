@@ -15,6 +15,13 @@
       "when": 1773939921122,
       "tag": "0001_goofy_vanisher",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1774000000000,
+      "tag": "0002_nosy_utterances",
+      "breakpoints": true
     }
   ]
 }

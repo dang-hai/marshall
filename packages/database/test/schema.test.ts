@@ -1,12 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { getTableColumns } from "drizzle-orm";
 import {
   NOTE_TRANSCRIPTION_MODES,
   NOTE_TRANSCRIPTION_PROVIDERS,
   NOTE_TRANSCRIPTION_STATUSES,
-  note,
-  noteTranscription,
-} from "../src/schema";
+} from "@marshall/shared";
+import { getTableColumns } from "drizzle-orm";
+import { note, noteTranscription } from "../src/schema";
 
 describe("database schema", () => {
   it("defines notes as user-owned documents", () => {
@@ -38,6 +37,7 @@ describe("database schema", () => {
       "finalText",
       "interimText",
       "segments",
+      "utterances",
       "lastSegmentIndex",
       "durationSeconds",
       "recordingDurationSeconds",
