@@ -76,6 +76,21 @@ const upcomingEventTimeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+const eventDayNumberFormatter = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+});
+
+const eventMonthFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+});
+
+const eventWeekdayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+});
+
+// Default calendar accent color
+const CALENDAR_ACCENT_COLOR = "#3b82f6"; // blue
+
 function parseCalendarDate(value: string, isAllDay: boolean) {
   return new Date(isAllDay ? `${value}T12:00:00` : value);
 }
@@ -271,6 +286,64 @@ export function getFloatingRecorderNote(
 
   return notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null;
 }
+function formatEventTime(event: GoogleCalendarEvent) {
+  if (event.isAllDay) {
+    return "All day";
+  }
+
+  const start = parseCalendarDate(event.startAt, false);
+  const startLabel = upcomingEventTimeFormatter.format(start);
+
+  if (!event.endAt) {
+    return startLabel;
+  }
+
+  const end = parseCalendarDate(event.endAt, false);
+  return `${startLabel} – ${upcomingEventTimeFormatter.format(end)}`;
+}
+
+interface EventCardProps {
+  event: GoogleCalendarEvent;
+}
+
+function EventCard({ event }: EventCardProps) {
+  const start = parseCalendarDate(event.startAt, event.isAllDay);
+  const dayNumber = eventDayNumberFormatter.format(start);
+  const month = eventMonthFormatter.format(start).toUpperCase();
+  const weekday = eventWeekdayFormatter.format(start).toLowerCase();
+
+  return (
+    <article className="group flex h-16 overflow-hidden rounded-xl border border-border/40 bg-card/80 shadow-sm transition-all hover:border-border/70 hover:shadow-md">
+      {/* Date block */}
+      <div className="flex shrink-0 items-center gap-0.5 bg-muted/30 pl-3 pr-2">
+        <span className="w-9 text-right font-serif text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+          {dayNumber}
+        </span>
+        <div className="flex w-8 flex-col items-start justify-center leading-none">
+          <span className="text-[9px] font-semibold tracking-wider text-muted-foreground">
+            {month}
+          </span>
+          <span className="text-[9px] font-medium tracking-wide text-muted-foreground/70">
+            {weekday}
+          </span>
+        </div>
+      </div>
+
+      {/* Colored accent bar */}
+      <div className="w-1 shrink-0" style={{ backgroundColor: CALENDAR_ACCENT_COLOR }} />
+
+      {/* Event details */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center px-3.5 py-2">
+        <p className="truncate text-sm font-medium leading-snug text-foreground">{event.title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatEventTime(event)}
+          {event.location && <span className="ml-1.5 opacity-70">· {event.location}</span>}
+        </p>
+      </div>
+    </article>
+  );
+}
+
 interface UpcomingEventsPanelProps {
   events: GoogleCalendarEvent[];
   error: string | null;
@@ -289,68 +362,70 @@ export function UpcomingEventsPanel({
   status,
 }: UpcomingEventsPanelProps) {
   return (
-    <div className="rounded-lg border border-border/50 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-medium text-foreground">Upcoming events</p>
-          <p className="mt-1 text-2xs text-muted-foreground">
+          <h2 className="text-sm font-medium text-foreground">Upcoming events</h2>
+          <p className="mt-0.5 text-2xs text-muted-foreground">
             {status?.connected
               ? "From your connected Google Calendar"
-              : "Connect Google Calendar to preview your next 5 events"}
+              : "Connect your calendar to see what's next"}
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
+          {isLoading ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
           Refresh
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          <span>Loading calendar events...</span>
+      {isLoading && events.length === 0 ? (
+        <div className="flex h-20 items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>Loading calendar events...</span>
+          </div>
         </div>
       ) : error ? (
-        <div className="mt-3 space-y-2">
+        <div className="rounded-xl border border-rose-200/60 bg-rose-50/50 px-4 py-3">
           <p className="text-sm text-rose-600">{error}</p>
           {!status?.connected && (
-            <Button type="button" size="sm" onClick={onOpenSettings}>
+            <Button type="button" size="sm" onClick={onOpenSettings} className="mt-2">
               Open calendar settings
             </Button>
           )}
         </div>
       ) : !status?.connected ? (
-        <div className="mt-3 space-y-2">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Grant read-only access in Settings and Marshall will keep your next meetings visible on
-            Home.
-          </p>
-          <Button type="button" size="sm" onClick={onOpenSettings}>
-            Open calendar settings
-          </Button>
+        <div className="flex h-20 items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-6">
+          <div className="flex items-center gap-4">
+            <CalendarDays className="h-5 w-5 text-muted-foreground/60" />
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Connect Google Calendar to see what's next
+              </p>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={onOpenSettings}
+                className="h-auto p-0 text-xs"
+              >
+                Open calendar settings
+              </Button>
+            </div>
+          </div>
         </div>
       ) : events.length === 0 ? (
-        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          No upcoming events found on your primary Google Calendar.
-        </p>
+        <div className="flex h-20 items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10">
+          <p className="text-sm text-muted-foreground">No upcoming events</p>
+        </div>
       ) : (
-        <div className="mt-3 space-y-2.5">
+        <div className="space-y-2">
           {events.map((event) => (
-            <article
-              key={event.id}
-              className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
-            >
-              <p className="text-xs font-medium text-foreground">{event.title}</p>
-              <p className="mt-1 text-2xs text-muted-foreground">
-                {formatUpcomingEventSchedule(event)}
-              </p>
-              {event.location && (
-                <p className="mt-1 truncate text-2xs text-muted-foreground">{event.location}</p>
-              )}
-            </article>
+            <EventCard key={event.id} event={event} />
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1069,6 +1144,7 @@ export function HomePanel() {
   return (
     <>
       <div className="flex min-h-full flex-1 flex-col">
+        {/* Header */}
         <div className="flex items-start justify-between gap-6 border-b border-border/50 pb-6">
           <div className="space-y-3">
             <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
@@ -1090,8 +1166,26 @@ export function HomePanel() {
           </Button>
         </div>
 
+        {/* Upcoming Events - prominently at the top */}
+        <div className="border-b border-border/30 py-6">
+          <UpcomingEventsPanel
+            events={upcomingEvents}
+            error={calendarError}
+            isLoading={isLoadingCalendar}
+            onOpenSettings={openCalendarSettings}
+            onRefresh={() => void loadUpcomingEvents()}
+            status={calendarStatus}
+          />
+        </div>
+
+        {/* Notes section */}
         <div className="grid flex-1 gap-6 pt-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
           <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-foreground">Your notes</h2>
+              <span className="text-2xs text-muted-foreground">{noteCountLabel}</span>
+            </div>
+
             {isLoadingNotes ? (
               <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -1174,25 +1268,9 @@ export function HomePanel() {
 
           <aside className="h-fit rounded-xl border border-border/60 bg-card/70 p-5 shadow-soft">
             <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
-              Home
+              Quick tips
             </p>
             <div className="mt-4 space-y-3">
-              <div className="rounded-lg bg-muted/50 px-4 py-3">
-                <p className="text-2xs tracking-wide text-muted-foreground">Quick note status</p>
-                <p className="mt-1.5 font-serif text-lg font-medium text-foreground">
-                  {noteCountLabel}
-                </p>
-              </div>
-
-              <UpcomingEventsPanel
-                events={upcomingEvents}
-                error={calendarError}
-                isLoading={isLoadingCalendar}
-                onOpenSettings={openCalendarSettings}
-                onRefresh={() => void loadUpcomingEvents()}
-                status={calendarStatus}
-              />
-
               <div className="rounded-lg border border-border/50 px-4 py-3">
                 <p className="text-xs font-medium text-foreground">Suggested use</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">

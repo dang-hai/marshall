@@ -789,10 +789,12 @@ export function createBackendApp({
             });
 
             const limit = Math.min(Math.max(Number(query.limit ?? 5) || 5, 1), 10);
+            // Fetch more events than needed since we filter out all-day events
+            const fetchLimit = Math.min(limit * 4, 50);
             const calendarUrl = new URL(
               "https://www.googleapis.com/calendar/v3/calendars/primary/events"
             );
-            calendarUrl.searchParams.set("maxResults", String(limit));
+            calendarUrl.searchParams.set("maxResults", String(fetchLimit));
             calendarUrl.searchParams.set("orderBy", "startTime");
             calendarUrl.searchParams.set("singleEvents", "true");
             calendarUrl.searchParams.set("timeMin", new Date().toISOString());
@@ -814,7 +816,8 @@ export function createBackendApp({
             const events = (payload.items ?? [])
               .flatMap((item) => {
                 const event = serializeGoogleCalendarEvent(item as Record<string, unknown>);
-                return event ? [event] : [];
+                // Filter out all-day events - we only want timed events
+                return event && !event.isAllDay ? [event] : [];
               })
               .slice(0, limit);
 
