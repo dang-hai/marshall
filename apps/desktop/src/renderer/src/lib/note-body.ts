@@ -1,4 +1,4 @@
-import type { CodexMonitorNotePatch, MeetingProposal } from "@marshall/shared";
+import type { AIAgentMonitorNotePatch, MeetingProposal } from "@marshall/shared";
 import { applyDocumentOperations, extractDocumentContext } from "@marshall/shared";
 
 export const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
@@ -313,7 +313,7 @@ function formatMeetingProposalText(proposal: MeetingProposal): string {
   return `${statusIcon} ${proposal.title} — ${formatMeetingTime(proposal.startAt, proposal.endAt)}${participants}`;
 }
 
-function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNotePatch) {
+function applyAIAgentNotePatchWithoutDom(bodyHtml: string, patch: AIAgentMonitorNotePatch) {
   let nextHtml = bodyHtml;
 
   patch.checkedPlanItems.forEach((item) => {
@@ -416,7 +416,7 @@ function markdownToHtml(markdown: string): string {
   return htmlLines.join("");
 }
 
-export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePatch) {
+export function applyAIAgentNotePatch(bodyHtml: string, patch: AIAgentMonitorNotePatch) {
   // First, check if we have document operations to apply
   if (patch.documentOps && patch.documentOps.length > 0) {
     // Extract plain text, apply document ops, convert back to HTML
@@ -431,7 +431,7 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
 
       // Apply follow-ups and summary on top
       if (typeof DOMParser === "undefined") {
-        return applyCodexNotePatchWithoutDom(updatedHtml, {
+        return applyAIAgentNotePatchWithoutDom(updatedHtml, {
           ...patch,
           checkedPlanItems: [], // Already handled by documentOps
         });
@@ -458,7 +458,7 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
 
   // Fallback to legacy behavior
   if (typeof DOMParser === "undefined") {
-    return applyCodexNotePatchWithoutDom(bodyHtml, patch);
+    return applyAIAgentNotePatchWithoutDom(bodyHtml, patch);
   }
 
   const body = parseBodyHtml(bodyHtml);

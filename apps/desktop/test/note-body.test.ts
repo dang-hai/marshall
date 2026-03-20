@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { applyCodexNotePatch } from "../src/renderer/src/lib/note-body";
+import { applyAIAgentNotePatch } from "../src/renderer/src/lib/note-body";
 
-describe("applyCodexNotePatch", () => {
+describe("applyAIAgentNotePatch", () => {
   test("checks off matching markdown checklist items and appends generated sections", () => {
     const bodyHtml = [
       '<div class="min-h-[1.85rem]"># Kickoff</div>',
@@ -9,7 +9,7 @@ describe("applyCodexNotePatch", () => {
       '<div class="min-h-[1.85rem]">- [ ] Align on timeline</div>',
     ].join("");
 
-    const nextHtml = applyCodexNotePatch(bodyHtml, {
+    const nextHtml = applyAIAgentNotePatch(bodyHtml, {
       noteId: "note-1",
       checkedPlanItems: ["Confirm launch owner"],
       items: [
@@ -41,7 +41,7 @@ describe("applyCodexNotePatch", () => {
       '<div data-marshall-section="summary" data-marshall-role="body" class="min-h-[1.85rem]">Old summary</div>',
     ].join("");
 
-    const nextHtml = applyCodexNotePatch(bodyHtml, {
+    const nextHtml = applyAIAgentNotePatch(bodyHtml, {
       noteId: "note-1",
       checkedPlanItems: [],
       items: [

@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
-  CodexMonitorNotePatch,
-  CodexMonitorSessionInput,
-  CodexMonitorState,
+  AIAgentMonitorNotePatch,
+  AIAgentMonitorSessionInput,
+  AIAgentMonitorState,
   CreateNoteInput,
   GoogleCalendarConnectionStatus,
   GoogleCalendarEvent,
@@ -126,44 +126,44 @@ contextBridge.exposeInMainWorld("notesAPI", {
     ipcRenderer.invoke("notes:save-transcription", noteId, input),
 });
 
-contextBridge.exposeInMainWorld("codexMonitorAPI", {
-  updateSession: (input: CodexMonitorSessionInput) =>
-    ipcRenderer.invoke("codex-monitor:update-session", input),
-  clearSession: (noteId?: string) => ipcRenderer.invoke("codex-monitor:clear-session", noteId),
-  getState: () => ipcRenderer.invoke("codex-monitor:get-state"),
-  dismissWindow: () => ipcRenderer.invoke("codex-monitor:dismiss-window"),
-  showWindow: () => ipcRenderer.invoke("codex-monitor:show-window"),
-  sendChat: (message: string) => ipcRenderer.invoke("codex-monitor:send-chat", message),
-  onState: (callback: (state: CodexMonitorState) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, state: CodexMonitorState) =>
+contextBridge.exposeInMainWorld("aiAgentMonitorAPI", {
+  updateSession: (input: AIAgentMonitorSessionInput) =>
+    ipcRenderer.invoke("ai-agent-monitor:update-session", input),
+  clearSession: (noteId?: string) => ipcRenderer.invoke("ai-agent-monitor:clear-session", noteId),
+  getState: () => ipcRenderer.invoke("ai-agent-monitor:get-state"),
+  dismissWindow: () => ipcRenderer.invoke("ai-agent-monitor:dismiss-window"),
+  showWindow: () => ipcRenderer.invoke("ai-agent-monitor:show-window"),
+  sendChat: (message: string) => ipcRenderer.invoke("ai-agent-monitor:send-chat", message),
+  onState: (callback: (state: AIAgentMonitorState) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: AIAgentMonitorState) =>
       callback(state);
-    ipcRenderer.on("codex-monitor:state", handler);
-    return () => ipcRenderer.removeListener("codex-monitor:state", handler);
+    ipcRenderer.on("ai-agent-monitor:state", handler);
+    return () => ipcRenderer.removeListener("ai-agent-monitor:state", handler);
   },
-  onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, patch: CodexMonitorNotePatch) =>
+  onNotePatch: (callback: (patch: AIAgentMonitorNotePatch) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, patch: AIAgentMonitorNotePatch) =>
       callback(patch);
-    ipcRenderer.on("codex-monitor:note-patch", handler);
-    return () => ipcRenderer.removeListener("codex-monitor:note-patch", handler);
+    ipcRenderer.on("ai-agent-monitor:note-patch", handler);
+    return () => ipcRenderer.removeListener("ai-agent-monitor:note-patch", handler);
   },
   onMeetingProposal: (callback: (proposal: MeetingProposal) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, proposal: MeetingProposal) =>
       callback(proposal);
-    ipcRenderer.on("codex-monitor:meeting-proposal", handler);
-    return () => ipcRenderer.removeListener("codex-monitor:meeting-proposal", handler);
+    ipcRenderer.on("ai-agent-monitor:meeting-proposal", handler);
+    return () => ipcRenderer.removeListener("ai-agent-monitor:meeting-proposal", handler);
   },
   onMeetingProposalUpdate: (callback: (proposal: MeetingProposal) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, proposal: MeetingProposal) =>
       callback(proposal);
-    ipcRenderer.on("codex-monitor:meeting-proposal-update", handler);
-    return () => ipcRenderer.removeListener("codex-monitor:meeting-proposal-update", handler);
+    ipcRenderer.on("ai-agent-monitor:meeting-proposal-update", handler);
+    return () => ipcRenderer.removeListener("ai-agent-monitor:meeting-proposal-update", handler);
   },
   acceptMeetingProposal: (proposalId: string, participants?: string[]) =>
-    ipcRenderer.invoke("codex-monitor:accept-meeting-proposal", proposalId, participants),
+    ipcRenderer.invoke("ai-agent-monitor:accept-meeting-proposal", proposalId, participants),
   remindMeetingProposal: (proposalId: string, participants?: string[]) =>
-    ipcRenderer.invoke("codex-monitor:remind-meeting-proposal", proposalId, participants),
+    ipcRenderer.invoke("ai-agent-monitor:remind-meeting-proposal", proposalId, participants),
   discardMeetingProposal: (proposalId: string) =>
-    ipcRenderer.invoke("codex-monitor:discard-meeting-proposal", proposalId),
+    ipcRenderer.invoke("ai-agent-monitor:discard-meeting-proposal", proposalId),
 });
 
 // Coding Agents API
@@ -453,15 +453,15 @@ declare global {
         input: SaveNoteTranscriptionInput
       ) => Promise<NoteTranscriptionSnapshot>;
     };
-    codexMonitorAPI?: {
-      updateSession: (input: CodexMonitorSessionInput) => Promise<{ status: string }>;
+    aiAgentMonitorAPI?: {
+      updateSession: (input: AIAgentMonitorSessionInput) => Promise<{ status: string }>;
       clearSession: (noteId?: string) => Promise<{ status: string }>;
-      getState: () => Promise<CodexMonitorState>;
+      getState: () => Promise<AIAgentMonitorState>;
       dismissWindow: () => Promise<{ status: string }>;
       showWindow: () => Promise<{ status: string }>;
       sendChat: (message: string) => Promise<{ status: string; response?: string; error?: string }>;
-      onState: (callback: (state: CodexMonitorState) => void) => () => void;
-      onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => () => void;
+      onState: (callback: (state: AIAgentMonitorState) => void) => () => void;
+      onNotePatch: (callback: (patch: AIAgentMonitorNotePatch) => void) => () => void;
       onMeetingProposal: (callback: (proposal: MeetingProposal) => void) => () => void;
       onMeetingProposalUpdate: (callback: (proposal: MeetingProposal) => void) => () => void;
       acceptMeetingProposal: (

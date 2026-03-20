@@ -2,12 +2,12 @@ import { BrowserWindow } from "electron";
 import { randomUUID } from "crypto";
 import type { ChildProcessWithoutNullStreams } from "child_process";
 import type {
-  CodexMonitorNotePatch,
-  CodexMonitorSessionInput,
-  CodexMonitorState,
-  CodexMonitorItem,
-  CodexMonitorItemStatus,
-  CodexMonitorChatMessage,
+  AIAgentMonitorNotePatch,
+  AIAgentMonitorSessionInput,
+  AIAgentMonitorState,
+  AIAgentMonitorItem,
+  AIAgentMonitorItemStatus,
+  AIAgentMonitorChatMessage,
   AgentOperation,
 } from "@marshall/shared";
 import { buildAgentPrompt, extractDocumentContext } from "@marshall/shared";
@@ -15,23 +15,23 @@ import { getConversationId, setConversationId, updateLastUsed } from "./codex-se
 import { createTempSchemaFile, getAgentExecutor, type AgentExecutor } from "./coding-agents";
 import type { MonitorAgent } from "../shared/settings";
 
-interface CodexMonitorServiceOptions {
+interface AIAgentMonitorServiceOptions {
   createNotificationWindow: () => BrowserWindow;
   executeProcess?: AgentExecutor;
   getSelectedAgent?: () => MonitorAgent;
 }
 
-interface CodexMonitorResultItem {
+interface AIAgentMonitorResultItem {
   text: string;
-  status: CodexMonitorItemStatus;
+  status: AIAgentMonitorItemStatus;
 }
 
-interface CodexMonitorResult {
+interface AIAgentMonitorResult {
   nudge: {
     text: string;
     suggestedPhrase: string | null;
   } | null;
-  items: CodexMonitorResultItem[];
+  items: AIAgentMonitorResultItem[];
   checkedPlanItems: string[];
   documentOps: AgentOperation[];
   summary: string | null;
@@ -39,7 +39,7 @@ interface CodexMonitorResult {
 
 interface ChatResult {
   response: string;
-  items: CodexMonitorResultItem[] | null;
+  items: AIAgentMonitorResultItem[] | null;
 }
 
 const LIVE_ANALYSIS_DELAY_MS = 4000;
@@ -130,7 +130,7 @@ const CHAT_RESULT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function isActiveCall(status: CodexMonitorSessionInput["transcription"]["status"]) {
+function isActiveCall(status: AIAgentMonitorSessionInput["transcription"]["status"]) {
   return status === "recording" || status === "transcribing";
 }
 
@@ -176,7 +176,7 @@ function truncatePreview(value: string | null | undefined, limit = DEBUG_PREVIEW
   return `${normalized.slice(0, limit)}...`;
 }
 
-function createEmptyDebugState(): CodexMonitorState["debug"] {
+function createEmptyDebugState(): AIAgentMonitorState["debug"] {
   return {
     transcriptionStatus: null,
     transcriptLength: 0,
@@ -194,14 +194,14 @@ function createEmptyDebugState(): CodexMonitorState["debug"] {
   };
 }
 
-export class CodexMonitorService {
+export class AIAgentMonitorService {
   private readonly createNotificationWindow: () => BrowserWindow;
   private readonly executeProcessOverride: AgentExecutor | undefined;
   private readonly getSelectedAgent: () => MonitorAgent;
   private schemaPathPromise: Promise<string> | null = null;
   private chatSchemaPathPromise: Promise<string> | null = null;
-  private session: CodexMonitorSessionInput | null = null;
-  private state: CodexMonitorState = {
+  private session: AIAgentMonitorSessionInput | null = null;
+  private state: AIAgentMonitorState = {
     status: "idle",
     noteId: null,
     noteTitle: null,
@@ -225,7 +225,7 @@ export class CodexMonitorService {
   private rerunRequested = false;
   private windowDismissed = false;
 
-  constructor(options: CodexMonitorServiceOptions) {
+  constructor(options: AIAgentMonitorServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
     this.executeProcessOverride = options.executeProcess;
     this.getSelectedAgent = options.getSelectedAgent ?? (() => "codex");
@@ -242,7 +242,7 @@ export class CodexMonitorService {
     return this.state;
   }
 
-  async updateSession(input: CodexMonitorSessionInput) {
+  async updateSession(input: AIAgentMonitorSessionInput) {
     const previousSession = this.session;
     const previousWasActive = previousSession
       ? isActiveCall(previousSession.transcription.status)
@@ -376,7 +376,7 @@ export class CodexMonitorService {
       return { status: "error", error: "Chat already in progress" };
     }
 
-    const userMessage: CodexMonitorChatMessage = {
+    const userMessage: AIAgentMonitorChatMessage = {
       id: randomUUID(),
       role: "user",
       text: message.trim(),
@@ -395,7 +395,7 @@ export class CodexMonitorService {
     try {
       const result = await this.executeChatQuery(this.session, message);
 
-      const assistantMessage: CodexMonitorChatMessage = {
+      const assistantMessage: AIAgentMonitorChatMessage = {
         id: randomUUID(),
         role: "assistant",
         text: result.response.trim(),
@@ -427,7 +427,7 @@ export class CodexMonitorService {
     }
   }
 
-  private async executeChatQuery(session: CodexMonitorSessionInput, userMessage: string) {
+  private async executeChatQuery(session: AIAgentMonitorSessionInput, userMessage: string) {
     const transcriptExcerpt = buildTranscriptExcerpt(session.transcription.transcriptText);
     const chatHistory = this.state.chatMessages
       .slice(-6)
@@ -503,7 +503,7 @@ export class CodexMonitorService {
     this.lastNudgeSignature = null;
     this.windowDismissed = false;
 
-    // Load existing session if available, otherwise start fresh (codex will assign ID)
+    // Load existing session if available, otherwise start fresh (agent will assign ID)
     const existingConversationId = getConversationId(noteId);
     if (existingConversationId) {
       this.conversationId = existingConversationId;
@@ -598,14 +598,14 @@ export class CodexMonitorService {
         analysisCount: this.state.debug.analysisCount + 1,
         lastMode: finalize ? "final" : "live",
         lastStartedAt: new Date().toISOString(),
-        lastOutcome: `Running ${finalize ? "final" : "live"} Codex analysis`,
+        lastOutcome: `Running ${finalize ? "final" : "live"} agent analysis`,
       },
     };
     this.broadcastState();
 
     try {
       const schemaPath = await this.getSchemaPath();
-      const result = await this.executeCodex(currentSession, finalize, schemaPath);
+      const result = await this.executeAgent(currentSession, finalize, schemaPath);
       if (!this.session || this.session.noteId !== currentSession.noteId) {
         return;
       }
@@ -633,12 +633,12 @@ export class CodexMonitorService {
           analysisInFlight: false,
           lastCompletedAt: new Date().toISOString(),
           lastOutcome: nextNudge
-            ? "Codex returned a nudge"
+            ? "Agent returned a nudge"
             : summary
-              ? "Codex returned the final summary"
+              ? "Agent returned the final summary"
               : mergedItems.length > 0 || checkedPlanItems.length > 0
-                ? "Codex updated items or checklist"
-                : "Codex returned no nudge",
+                ? "Agent updated items or checklist"
+                : "Agent returned no nudge",
           lastResponsePreview: truncatePreview(JSON.stringify(result, null, 2)),
         },
       };
@@ -665,13 +665,13 @@ export class CodexMonitorService {
       this.state = {
         ...this.state,
         status: "error",
-        error: error instanceof Error ? error.message : "Codex monitoring failed",
+        error: error instanceof Error ? error.message : "Agent monitoring failed",
         debug: {
           ...this.state.debug,
           pendingAnalysis: false,
           analysisInFlight: false,
           lastCompletedAt: new Date().toISOString(),
-          lastOutcome: error instanceof Error ? error.message : "Codex monitoring failed",
+          lastOutcome: error instanceof Error ? error.message : "Agent monitoring failed",
         },
       };
       this.broadcastState();
@@ -689,8 +689,8 @@ export class CodexMonitorService {
     }
   }
 
-  private mergeItems(nextItems: CodexMonitorResultItem[]): CodexMonitorItem[] {
-    const merged: CodexMonitorItem[] = [];
+  private mergeItems(nextItems: AIAgentMonitorResultItem[]): AIAgentMonitorItem[] {
+    const merged: AIAgentMonitorItem[] = [];
     const seenSignatures = new Set<string>();
 
     // First, process existing items and update their status if mentioned
@@ -738,7 +738,7 @@ export class CodexMonitorService {
     });
   }
 
-  private buildNudge(result: CodexMonitorResult) {
+  private buildNudge(result: AIAgentMonitorResult) {
     if (!result.nudge) {
       return null; // Clear nudge when AI doesn't provide one
     }
@@ -759,10 +759,10 @@ export class CodexMonitorService {
     };
   }
 
-  private emitNotePatch(patch: CodexMonitorNotePatch) {
+  private emitNotePatch(patch: AIAgentMonitorNotePatch) {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:note-patch", patch);
+        window.webContents.send("ai-agent-monitor:note-patch", patch);
       }
     }
   }
@@ -770,7 +770,7 @@ export class CodexMonitorService {
   private broadcastState() {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:state", this.state);
+        window.webContents.send("ai-agent-monitor:state", this.state);
       }
     }
 
@@ -807,17 +807,17 @@ export class CodexMonitorService {
   }
 
   private async getSchemaPath() {
-    this.schemaPathPromise ??= createTempSchemaFile("marshall-codex-monitor-", RESULT_SCHEMA);
+    this.schemaPathPromise ??= createTempSchemaFile("marshall-agent-monitor-", RESULT_SCHEMA);
     return this.schemaPathPromise;
   }
 
   private async getChatSchemaPath() {
-    this.chatSchemaPathPromise ??= createTempSchemaFile("marshall-codex-chat-", CHAT_RESULT_SCHEMA);
+    this.chatSchemaPathPromise ??= createTempSchemaFile("marshall-agent-chat-", CHAT_RESULT_SCHEMA);
     return this.chatSchemaPathPromise;
   }
 
-  private async executeCodex(
-    session: CodexMonitorSessionInput,
+  private async executeAgent(
+    session: AIAgentMonitorSessionInput,
     finalize: boolean,
     schemaPath: string
   ) {
@@ -832,7 +832,7 @@ export class CodexMonitorService {
     this.broadcastState();
 
     const executor = this.getExecutor();
-    return executor<CodexMonitorResult>({
+    return executor<AIAgentMonitorResult>({
       prompt,
       conversationId: this.conversationId,
       schemaPath,
@@ -843,7 +843,7 @@ export class CodexMonitorService {
           setConversationId(session.noteId, threadId);
         }
       },
-      parseResult: (lastMessage) => JSON.parse(lastMessage) as CodexMonitorResult,
+      parseResult: (lastMessage) => JSON.parse(lastMessage) as AIAgentMonitorResult,
       setProcess: (child) => {
         this.analysisProcess = child;
       },
@@ -851,7 +851,7 @@ export class CodexMonitorService {
     });
   }
 
-  private buildPrompt(session: CodexMonitorSessionInput, finalize: boolean) {
+  private buildPrompt(session: AIAgentMonitorSessionInput, finalize: boolean) {
     const checklistItems = extractChecklistItems(session.noteBodyText);
     const existingItems = this.state.items.map((item) => ({
       text: item.text,

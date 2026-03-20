@@ -1,8 +1,9 @@
 /**
- * Codex Monitor with MCP Tools
+ * AI Agent Monitor with MCP Tools
  *
  * This version gives the agent tools to access transcript and notes on-demand,
  * rather than embedding everything in the prompt.
+ * Supports multiple coding agents (Codex, Claude Code, etc.)
  */
 
 import { BrowserWindow } from "electron";
@@ -12,11 +13,11 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import type {
-  CodexMonitorNotePatch,
-  CodexMonitorSessionInput,
-  CodexMonitorState,
-  CodexMonitorItem,
-  CodexMonitorItemStatus,
+  AIAgentMonitorNotePatch,
+  AIAgentMonitorSessionInput,
+  AIAgentMonitorState,
+  AIAgentMonitorItem,
+  AIAgentMonitorItemStatus,
   AgentOperation,
   NoteRecord,
   MeetingProposal,
@@ -27,7 +28,7 @@ import { getConversationId, setConversationId, updateLastUsed } from "./codex-se
 // Types
 // ============================================================================
 
-interface CodexMonitorMCPServiceOptions {
+interface AIAgentMonitorMCPServiceOptions {
   createNotificationWindow: () => BrowserWindow;
   /** Callback to fetch notes from database */
   fetchNotes?: (params: {
@@ -39,9 +40,9 @@ interface CodexMonitorMCPServiceOptions {
   fetchNote?: (noteId: string) => Promise<NoteRecord | null>;
 }
 
-interface CodexMonitorResultItem {
+interface AIAgentMonitorResultItem {
   text: string;
-  status: CodexMonitorItemStatus;
+  status: AIAgentMonitorItemStatus;
 }
 
 // Agent's final response after using tools
@@ -50,7 +51,7 @@ interface AgentFinalResponse {
     text: string;
     suggestedPhrase: string | null;
   } | null;
-  items: CodexMonitorResultItem[];
+  items: AIAgentMonitorResultItem[];
   summary: string | null;
   meetingProposal: {
     title: string;
@@ -132,7 +133,7 @@ const FINAL_RESPONSE_SCHEMA = {
 // Helpers
 // ============================================================================
 
-function isActiveCall(status: CodexMonitorSessionInput["transcription"]["status"]) {
+function isActiveCall(status: AIAgentMonitorSessionInput["transcription"]["status"]) {
   return status === "recording" || status === "transcribing";
 }
 
@@ -144,7 +145,7 @@ function normalizeSignature(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function createEmptyDebugState(): CodexMonitorState["debug"] {
+function createEmptyDebugState(): AIAgentMonitorState["debug"] {
   return {
     transcriptionStatus: null,
     transcriptLength: 0,
@@ -225,7 +226,7 @@ Respond ONLY with valid JSON matching this schema. No other text.`;
 }
 
 // ============================================================================
-// Codex Process
+// Agent Process Execution
 // ============================================================================
 
 interface ToolCall {
@@ -329,12 +330,12 @@ async function runCodexWithContext(
       cleanup();
 
       if (code !== 0) {
-        reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
+        reject(new Error(stderr.trim() || `Agent exited with code ${code}`));
         return;
       }
 
       if (!lastAgentMessage) {
-        reject(new Error("Codex returned no response"));
+        reject(new Error("Agent returned no response"));
         return;
       }
 
@@ -342,7 +343,10 @@ async function runCodexWithContext(
         resolve(JSON.parse(lastAgentMessage) as AgentFinalResponse);
       } catch {
         // Agent returned plain text instead of JSON - treat as a nudge
-        console.warn("[Codex] Agent returned non-JSON response:", lastAgentMessage.slice(0, 100));
+        console.warn(
+          "[AIAgentMonitor] Agent returned non-JSON response:",
+          lastAgentMessage.slice(0, 100)
+        );
         resolve({
           nudge: {
             text: lastAgentMessage.trim(),
@@ -365,12 +369,12 @@ async function runCodexWithContext(
 // Service Class
 // ============================================================================
 
-export class CodexMonitorMCPService {
+export class AIAgentMonitorMCPService {
   private readonly createNotificationWindow: () => BrowserWindow;
-  private readonly options: CodexMonitorMCPServiceOptions;
+  private readonly options: AIAgentMonitorMCPServiceOptions;
   private schemaPathPromise: Promise<string> | null = null;
-  private session: CodexMonitorSessionInput | null = null;
-  private state: CodexMonitorState = {
+  private session: AIAgentMonitorSessionInput | null = null;
+  private state: AIAgentMonitorState = {
     status: "idle",
     noteId: null,
     noteTitle: null,
@@ -397,7 +401,7 @@ export class CodexMonitorMCPService {
   private pendingMeetingProposals: Map<string, MeetingProposal> = new Map();
   private pendingChatMessage: string | null = null;
 
-  constructor(options: CodexMonitorMCPServiceOptions) {
+  constructor(options: AIAgentMonitorMCPServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
     this.options = options;
   }
@@ -406,7 +410,7 @@ export class CodexMonitorMCPService {
     return this.state;
   }
 
-  async updateSession(input: CodexMonitorSessionInput) {
+  async updateSession(input: AIAgentMonitorSessionInput) {
     const previousSession = this.session;
     const previousWasActive = previousSession
       ? isActiveCall(previousSession.transcription.status)
@@ -765,7 +769,7 @@ export class CodexMonitorMCPService {
 
       const schemaPath = await this.getSchemaPath();
 
-      // Run Codex with context embedded in prompt
+      // Run agent with context embedded in prompt
       const result = await runCodexWithContext(
         prompt,
         schemaPath,
@@ -873,8 +877,8 @@ export class CodexMonitorMCPService {
     }
   }
 
-  private mergeItems(nextItems: CodexMonitorResultItem[]): CodexMonitorItem[] {
-    const merged: CodexMonitorItem[] = [];
+  private mergeItems(nextItems: AIAgentMonitorResultItem[]): AIAgentMonitorItem[] {
+    const merged: AIAgentMonitorItem[] = [];
     const seenSignatures = new Set<string>();
 
     for (const existing of this.state.items) {
@@ -918,10 +922,10 @@ export class CodexMonitorMCPService {
     };
   }
 
-  private emitNotePatch(patch: CodexMonitorNotePatch) {
+  private emitNotePatch(patch: AIAgentMonitorNotePatch) {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:note-patch", patch);
+        window.webContents.send("ai-agent-monitor:note-patch", patch);
       }
     }
   }
@@ -932,7 +936,7 @@ export class CodexMonitorMCPService {
 
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:meeting-proposal", proposal);
+        window.webContents.send("ai-agent-monitor:meeting-proposal", proposal);
       }
     }
   }
@@ -940,7 +944,7 @@ export class CodexMonitorMCPService {
   private emitMeetingProposalUpdate(proposal: MeetingProposal) {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:meeting-proposal-update", proposal);
+        window.webContents.send("ai-agent-monitor:meeting-proposal-update", proposal);
       }
     }
   }
@@ -948,7 +952,7 @@ export class CodexMonitorMCPService {
   private broadcastState() {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:state", this.state);
+        window.webContents.send("ai-agent-monitor:state", this.state);
       }
     }
     this.syncNotificationWindow();
