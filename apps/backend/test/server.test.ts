@@ -37,4 +37,20 @@ describe("createBackendApp", () => {
       url: "http://localhost/api/auth/session",
     });
   });
+
+  it("serves the calendar connect page", async () => {
+    const app = createBackendApp({
+      auth: {
+        handler: async () => new Response("unexpected"),
+      } as Auth,
+    });
+
+    const response = await app.handle(new Request("http://localhost/calendar/connect"));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("Connect Google Calendar");
+    expect(html).toContain("authClient.signIn.social");
+    expect(html).toContain("calendar.readonly");
+  });
 });

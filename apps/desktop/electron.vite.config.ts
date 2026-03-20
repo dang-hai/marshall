@@ -28,7 +28,15 @@ function copyResourcesPlugin() {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin(), copyResourcesPlugin()],
+    plugins: [
+      externalizeDepsPlugin({
+        // Bundle conf instead of resolving it from packaged node_modules.
+        // This avoids Bun symlink layout issues where conf's transitive
+        // dependency tree is incomplete inside the final app bundle.
+        exclude: ["conf"],
+      }),
+      copyResourcesPlugin(),
+    ],
     build: {
       rollupOptions: {
         input: {

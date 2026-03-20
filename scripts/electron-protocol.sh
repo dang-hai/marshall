@@ -1,12 +1,23 @@
 #!/bin/bash
 # Electron Protocol Manager for Marshall
-# Manages marshall:// protocol registration across worktrees
+# Manages per-worktree protocol registration (marshall-<branch>://)
 
 set -e
 
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 MARSHALL_WORKTREES_DIR="$HOME/.superset/worktrees/marshall"
-PROTOCOL="marshall"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Get the protocol for the current worktree
+get_current_protocol() {
+    if [ -n "$BETTER_AUTH_ELECTRON_PROTOCOL" ]; then
+        echo "$BETTER_AUTH_ELECTRON_PROTOCOL"
+    else
+        node "$SCRIPT_DIR/get-electron-protocol.mjs" 2>/dev/null || echo "marshall"
+    fi
+}
+
+PROTOCOL="$(get_current_protocol)"
 
 # Colors
 RED='\033[0;31m'
@@ -18,12 +29,16 @@ NC='\033[0m' # No Color
 show_help() {
     echo "Electron Protocol Manager for Marshall"
     echo ""
+    echo "Each worktree uses a unique protocol based on its git branch:"
+    echo "  - Protected branches (main, master): marshall://"
+    echo "  - Feature branches: marshall-<branch-slug>://"
+    echo ""
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  status    Show current protocol registrations and running Electron processes"
+    echo "  status    Show current protocol and running Electron processes"
     echo "  clean     Kill all Marshall Electron processes and unregister from Launch Services"
-    echo "  register  Register current worktree's Electron as the protocol handler"
+    echo "  register  Register current worktree's Electron as protocol handler"
     echo "  reset     Clean + register (recommended before starting dev)"
     echo "  help      Show this help message"
     echo ""
@@ -31,6 +46,11 @@ show_help() {
 
 show_status() {
     echo -e "${BLUE}=== Marshall Protocol Status ===${NC}"
+    echo ""
+
+    # Show current worktree's protocol
+    echo -e "${YELLOW}Current worktree protocol:${NC}"
+    echo -e "  ${GREEN}${PROTOCOL}://${NC}"
     echo ""
 
     # Show running Electron processes
@@ -134,6 +154,7 @@ reset_all() {
     clean_all
     register_current
     echo -e "${GREEN}Ready! Run 'bun run dev' to start the app.${NC}"
+    echo -e "Protocol: ${BLUE}${PROTOCOL}://${NC}"
 }
 
 # Main

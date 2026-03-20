@@ -15,7 +15,12 @@ triggers:
 
 # Electron Protocol Manager
 
-Marshall uses the `marshall://` custom protocol for OAuth callbacks. On macOS, only one app can own a protocol at a time. When running multiple worktrees, protocol conflicts cause auth redirects to fail or go to the wrong Electron instance.
+Marshall uses custom protocols for OAuth callbacks. Each worktree uses a **unique protocol** based on its git branch:
+
+- **Protected branches** (main, master, release): `marshall://`
+- **Feature branches**: `marshall-<branch-slug>://` (e.g., `marshall-feature-auth-abc123://`)
+
+This allows multiple worktrees to run simultaneously without protocol conflicts. The protocol is automatically configured by `bun run setup`.
 
 ## Available Commands
 
@@ -35,26 +40,25 @@ Run these from the project root:
 If the user authenticates in the browser but doesn't get redirected back to the Electron app:
 
 ```bash
-bun run electron:reset
+bun run electron:status  # Check which protocol is configured
+bun run electron:reset   # Re-register the protocol
 bun run dev
 ```
 
-### Deep Link Going to Wrong App
+### After Running Setup
 
-If `marshall://` links open a different worktree's Electron (often shows the default Electron welcome page):
+After `bun run setup`, the protocol is automatically configured in `.env`. If you need to re-register with Launch Services:
 
 ```bash
-bun run electron:status  # Check what's running
-bun run electron:clean   # Kill everything
-bun run dev              # Start fresh
+bun run electron:reset
 ```
 
-### Before Starting Dev in a New Worktree
+### Multiple Worktrees Running
 
-Always recommended when switching worktrees:
+With per-worktree protocols, multiple worktrees can run simultaneously. Each worktree's protocol is independent:
 
 ```bash
-bun run dev:clean
+bun run electron:status  # Shows current worktree's protocol
 ```
 
 ## Direct Script Usage
@@ -70,13 +74,22 @@ The underlying script can also be called directly:
 
 ## How It Works
 
-1. **Killing processes**: Finds and kills all Electron processes from Marshall worktrees
-2. **Unregistering**: Removes all Marshall Electron apps from macOS Launch Services database
-3. **Registering**: Registers the current worktree's Electron.app as the `marshall://` handler
+1. **Protocol Generation**: `scripts/get-electron-protocol.mjs` generates a unique protocol name based on the git branch
+2. **Setup Integration**: `bun run setup` writes `BETTER_AUTH_ELECTRON_PROTOCOL` to `.env`
+3. **Registration**: Registers the current worktree's Electron.app as the handler for its unique protocol
 
-## Symptoms of Protocol Conflicts
+## Troubleshooting
 
-- Browser shows "Sign in successful! Redirecting..." but nothing happens
-- A different Electron window (wrong worktree) opens instead
-- Default Electron welcome page appears with "To run a local app..." message
-- Auth flow hangs indefinitely
+### Auth redirect not working
+
+1. Check that `.env` has the correct `BETTER_AUTH_ELECTRON_PROTOCOL` value
+2. Run `bun run electron:reset` to re-register with Launch Services
+3. Restart the dev server
+
+### Protocol mismatch after branch change
+
+If you change branches without re-running setup:
+
+```bash
+bun run setup  # Regenerates protocol for new branch
+```

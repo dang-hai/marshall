@@ -16,6 +16,7 @@ import { getConversationId, setConversationId, updateLastUsed } from "./codex-se
 
 interface CodexMonitorServiceOptions {
   createNotificationWindow: () => BrowserWindow;
+  executeCodexProcess?: CodexExecutor;
 }
 
 interface CodexMonitorResultItem {
@@ -180,6 +181,8 @@ interface SpawnCodexOptions<T> {
   noResultError: string;
 }
 
+type CodexExecutor = <T>(options: SpawnCodexOptions<T>) => Promise<T>;
+
 function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
   const {
     prompt,
@@ -297,6 +300,7 @@ function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
 
 export class CodexMonitorService {
   private readonly createNotificationWindow: () => BrowserWindow;
+  private readonly executeCodexProcess: CodexExecutor;
   private schemaPathPromise: Promise<string> | null = null;
   private chatSchemaPathPromise: Promise<string> | null = null;
   private session: CodexMonitorSessionInput | null = null;
@@ -326,6 +330,7 @@ export class CodexMonitorService {
 
   constructor(options: CodexMonitorServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
+    this.executeCodexProcess = options.executeCodexProcess ?? spawnCodexProcess;
   }
 
   getState() {
@@ -913,12 +918,12 @@ export class CodexMonitorService {
       ...this.state,
       debug: {
         ...this.state.debug,
-        lastPromptPreview: truncatePreview(prompt),
+        lastPromptPreview: prompt,
       },
     };
     this.broadcastState();
 
-    return spawnCodexProcess<CodexMonitorResult>({
+    return this.executeCodexProcess<CodexMonitorResult>({
       prompt,
       conversationId: this.conversationId,
       schemaPath,

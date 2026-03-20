@@ -48,8 +48,8 @@ function ChatMessage({ message }: { message: CodexMonitorChatMessage }) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-          isUser ? "bg-blue-600 text-white" : "bg-zinc-700 text-zinc-100"
+        className={`max-w-[85%] rounded-xl px-4 py-2.5 text-[13px] leading-relaxed ${
+          isUser ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-100"
         }`}
       >
         {message.text}
@@ -65,27 +65,27 @@ function StatusIndicator({ state }: { state: CodexMonitorState }) {
 
   if (isComputing) {
     return (
-      <span className="flex items-center gap-1.5" title="Processing...">
+      <span className="flex items-center gap-2" title="Processing...">
         <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-        <span className="text-xs text-blue-400">Processing</span>
+        <span className="text-[11px] font-medium text-blue-400">Processing</span>
       </span>
     );
   }
 
   if (isPending) {
     return (
-      <span className="flex items-center gap-1.5" title="Update pending...">
+      <span className="flex items-center gap-2" title="Update pending...">
         <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-        <span className="text-xs text-amber-400">Pending</span>
+        <span className="text-[11px] font-medium text-amber-400">Pending</span>
       </span>
     );
   }
 
   if (isMonitoring) {
     return (
-      <span className="flex items-center gap-1.5" title="Listening...">
+      <span className="flex items-center gap-2" title="Listening...">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
-        <span className="text-xs text-emerald-500">Listening</span>
+        <span className="text-[11px] font-medium text-emerald-500">Listening</span>
       </span>
     );
   }
@@ -148,71 +148,72 @@ export function CodexNotificationWindowView({
   const pendingCount = items.filter((i) => i.status !== "done").length;
 
   return (
-    <div className="flex h-screen flex-col bg-transparent p-3">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-neutral-900 shadow-2xl">
-        {/* Header - draggable */}
-        <div className="app-drag flex shrink-0 items-center justify-between border-b border-zinc-800 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-200">
-              {state.noteTitle ?? "Marshall"}
+    <div className="flex h-screen flex-col overflow-hidden bg-neutral-900">
+      {/* Header - draggable */}
+      <div className="app-drag flex shrink-0 items-center justify-between border-b border-zinc-800/60 px-5 py-3">
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] font-medium tracking-tight text-zinc-100">
+            {state.noteTitle ?? "Marshall"}
+          </span>
+          {pendingCount > 0 && (
+            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] font-medium tabular-nums text-zinc-400">
+              {pendingCount}
             </span>
-            {pendingCount > 0 && (
-              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400">
-                {pendingCount}
-              </span>
-            )}
-            <StatusIndicator state={state} />
-          </div>
-          <div className="app-no-drag flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Toggle chat"
-              className={`rounded p-1 transition-colors ${
-                showChat
-                  ? "bg-zinc-700 text-zinc-200"
-                  : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-              }`}
-              onClick={() => {
-                setShowChat(!showChat);
-                if (!showChat) {
-                  setTimeout(() => inputRef.current?.focus(), 100);
-                }
-              }}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Dismiss"
-              className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-              onClick={onDismiss}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          )}
+          <StatusIndicator state={state} />
         </div>
+        <div className="app-no-drag flex items-center gap-1.5">
+          <button
+            type="button"
+            aria-label="Toggle chat"
+            className={`rounded-md p-1.5 transition-colors ${
+              showChat
+                ? "bg-zinc-700 text-zinc-100"
+                : "text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+            }`}
+            onClick={() => {
+              setShowChat(!showChat);
+              if (!showChat) {
+                setTimeout(() => inputRef.current?.focus(), 100);
+              }
+            }}
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+            onClick={onDismiss}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
+      {/* Scrollable content area */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* Error state */}
         {error && (
-          <div className="flex shrink-0 items-start gap-2.5 border-b border-zinc-800 bg-red-950/30 px-4 py-3">
+          <div className="flex shrink-0 items-start gap-3 border-b border-zinc-800/60 bg-red-950/40 px-5 py-4">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <p className="text-sm text-red-300">{error}</p>
+            <p className="text-[13px] leading-relaxed text-red-300">{error}</p>
           </div>
         )}
 
         {/* Checklist - stable, status-tracked items */}
         {sortedItems.length > 0 && (
-          <div className="shrink-0 border-b border-zinc-800 px-4 py-3">
-            <ul className="space-y-2">
+          <div className="shrink-0 border-b border-zinc-800/60 px-5 py-4">
+            <ul className="space-y-3">
               {sortedItems.map((item) => (
                 <li
                   key={item.id}
-                  className={`flex items-start gap-2.5 text-sm transition-opacity ${itemStyles(item.status)}`}
+                  className={`flex items-start gap-3 text-[13px] transition-opacity ${itemStyles(item.status)}`}
                 >
                   <span className="mt-0.5 shrink-0">
                     <ItemIcon status={item.status} />
                   </span>
-                  <span className="leading-snug">{item.text}</span>
+                  <span className="leading-relaxed">{item.text}</span>
                 </li>
               ))}
             </ul>
@@ -221,77 +222,76 @@ export function CodexNotificationWindowView({
 
         {/* Live nudge - ephemeral, in-the-moment guidance */}
         {nudge && (
-          <div className="shrink-0 bg-zinc-800/50 px-4 py-3">
-            <p className="text-sm leading-snug text-zinc-100">{nudge.text}</p>
+          <div className="shrink-0 border-b border-zinc-800/60 bg-zinc-800/40 px-5 py-4">
+            <p className="text-[13px] leading-relaxed text-zinc-100">{nudge.text}</p>
             {nudge.suggestedPhrase && (
-              <p className="mt-2 text-sm italic text-zinc-400">"{nudge.suggestedPhrase}"</p>
+              <p className="mt-3 text-[13px] italic text-zinc-400">"{nudge.suggestedPhrase}"</p>
             )}
           </div>
         )}
 
         {/* Summary - only shown at end of call */}
         {summary && !nudge && (
-          <div className="shrink-0 bg-zinc-800/30 px-4 py-3">
-            <p className="text-sm leading-relaxed text-zinc-400">{summary}</p>
+          <div className="shrink-0 border-b border-zinc-800/60 bg-zinc-800/20 px-5 py-4">
+            <p className="text-[13px] leading-relaxed text-zinc-400">{summary}</p>
           </div>
         )}
 
-        {/* Chat section */}
+        {/* Chat messages */}
         {showChat && (
-          <>
-            {/* Chat messages */}
-            <div
-              ref={chatContainerRef}
-              className="min-h-0 flex-1 space-y-2 overflow-y-auto border-t border-zinc-800 px-4 py-3"
-            >
-              {chatMessages.length === 0 && (
-                <p className="text-center text-sm text-zinc-500">
-                  Ask about the call or request info
-                </p>
-              )}
-              {chatMessages.map((msg) => (
-                <ChatMessage key={msg.id} message={msg} />
-              ))}
-              {isChatting && (
-                <div className="flex justify-start">
-                  <div className="flex items-center gap-2 rounded-lg bg-zinc-700 px-3 py-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
-                    <span className="text-sm text-zinc-400">Thinking...</span>
-                  </div>
+          <div
+            ref={chatContainerRef}
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4"
+          >
+            {chatMessages.length === 0 && (
+              <p className="py-8 text-center text-[13px] text-zinc-500">
+                Ask about the call or request info
+              </p>
+            )}
+            {chatMessages.map((msg) => (
+              <ChatMessage key={msg.id} message={msg} />
+            ))}
+            {isChatting && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2.5 rounded-lg bg-zinc-800 px-4 py-2.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" />
+                  <span className="text-[13px] text-zinc-400">Thinking...</span>
                 </div>
-              )}
-            </div>
-
-            {/* Chat input */}
-            <div className="shrink-0 border-t border-zinc-800 p-3">
-              <div className="flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="What did they say about...?"
-                  disabled={isChatting}
-                  className="flex-1 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-600 focus:outline-none disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim() || isChatting}
-                  className="rounded-md bg-blue-600 p-1.5 text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isChatting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </button>
               </div>
-            </div>
-          </>
+            )}
+          </div>
         )}
       </div>
+
+      {/* Chat input - fixed at bottom */}
+      {showChat && (
+        <div className="shrink-0 border-t border-zinc-800/60 bg-zinc-900 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <input
+              ref={inputRef}
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="What did they say about...?"
+              disabled={isChatting}
+              className="flex-1 rounded-lg border border-zinc-700/80 bg-zinc-800/80 px-4 py-2.5 text-[13px] text-zinc-100 placeholder-zinc-500 transition-colors focus:border-zinc-600 focus:outline-none disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={handleSendChat}
+              disabled={!chatInput.trim() || isChatting}
+              className="rounded-lg bg-blue-600 p-2.5 text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isChatting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

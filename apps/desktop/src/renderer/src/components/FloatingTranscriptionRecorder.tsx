@@ -14,7 +14,6 @@ import {
 import { cn } from "../lib/utils";
 import { extractPlainTextFromHtml } from "../lib/note-body";
 import { ModelSetupDialog } from "./ModelSetupDialog";
-import { MARSHALL_EVENTS } from "../constants";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
 
@@ -126,6 +125,22 @@ export function resolveRecorderModel(
     selectedModelName,
     usingFallback: firstDownloadedModel !== null,
   };
+}
+
+export function resolveRecorderLaunchModelName({
+  models,
+  selectedModelDownloaded,
+  selectedModelName,
+}: {
+  models: ModelInfo[];
+  selectedModelDownloaded: boolean;
+  selectedModelName: string;
+}): string | null {
+  if (selectedModelDownloaded) {
+    return selectedModelName;
+  }
+
+  return models.find((model) => model.downloaded)?.name ?? null;
 }
 
 function AnimatedSoundWave({
@@ -384,18 +399,22 @@ export function FloatingTranscriptionRecorderView({
 }
 
 interface FloatingTranscriptionRecorderProps {
+  autoStartToken?: number | null;
   noteId: string;
   noteBodyHtml: string;
   noteTitle: string;
   persistedSnapshot: NoteTranscriptionSnapshot | null;
+  onAutoStartHandled?: (token: number) => void;
   onSnapshotChange: (snapshot: SaveNoteTranscriptionInput) => Promise<void> | void;
 }
 
 export function FloatingTranscriptionRecorder({
+  autoStartToken = null,
   noteId,
   noteBodyHtml,
   noteTitle,
   persistedSnapshot,
+  onAutoStartHandled,
   onSnapshotChange,
 }: FloatingTranscriptionRecorderProps) {
   const { settings } = useSettings();
@@ -431,6 +450,7 @@ export function FloatingTranscriptionRecorder({
   const [isDownloadingModel, setIsDownloadingModel] = useState(false);
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false);
   const launchSessionRef = useRef(0);
+  const lastHandledAutoStartTokenRef = useRef<number | null>(null);
 
   const selectedModelName = (settings?.transcription.selectedModel ??
     FALLBACK_MODEL) as WhisperModelName;
@@ -618,17 +638,40 @@ export function FloatingTranscriptionRecorder({
   }, [buildSnapshot, noteBodyHtml, noteId, noteTitle, persistedSnapshot]);
 
   const ensureInitialized = useCallback(async () => {
-    if (!resolvedModel.model) {
+    let launchModelName = resolvedModel.model?.name ?? null;
+
+    if (!launchModelName) {
+      const [selectedModelDownloaded, availableModels] = await Promise.all([
+        window.transcriptionAPI.isModelDownloaded(selectedModelName),
+        window.transcriptionAPI.getModels(),
+      ]);
+
+      launchModelName = resolveRecorderLaunchModelName({
+        models: availableModels,
+        selectedModelDownloaded,
+        selectedModelName,
+      });
+    }
+
+    if (!launchModelName) {
       setIsModelDialogOpen(true);
       return false;
     }
 
-    if (isInitialized && currentModel === resolvedModel.model.name) {
+    if (isInitialized && currentModel === launchModelName) {
       return true;
     }
 
-    return initialize(resolvedModel.model.name, language, useGPU);
-  }, [resolvedModel.model, isInitialized, currentModel, initialize, language, useGPU]);
+    return initialize(launchModelName, language, useGPU);
+  }, [
+    resolvedModel.model,
+    selectedModelName,
+    isInitialized,
+    currentModel,
+    initialize,
+    language,
+    useGPU,
+  ]);
 
   const startLiveRecording = useCallback(async () => {
     const launchSession = ++launchSessionRef.current;
@@ -717,18 +760,19 @@ export function FloatingTranscriptionRecorder({
     await stopRecording();
   };
 
-  // Listen for start transcription events from call notifications
   useEffect(() => {
-    const handleStartTranscription = () => {
-      startLiveRecording();
-    };
+    if (autoStartToken === null) {
+      return;
+    }
 
-    window.addEventListener(MARSHALL_EVENTS.START_TRANSCRIPTION, handleStartTranscription);
+    if (lastHandledAutoStartTokenRef.current === autoStartToken) {
+      return;
+    }
 
-    return () => {
-      window.removeEventListener(MARSHALL_EVENTS.START_TRANSCRIPTION, handleStartTranscription);
-    };
-  }, [startLiveRecording]);
+    lastHandledAutoStartTokenRef.current = autoStartToken;
+    onAutoStartHandled?.(autoStartToken);
+    void startLiveRecording();
+  }, [autoStartToken, onAutoStartHandled, startLiveRecording]);
 
   useEffect(() => {
     return () => {
