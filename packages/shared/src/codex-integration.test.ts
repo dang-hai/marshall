@@ -64,21 +64,22 @@ describe("codex-document-integration", () => {
 
   describe("buildDocumentPromptSection", () => {
     it("formats blocks for agent prompt", () => {
-      const prompt = buildDocumentPromptSection(MEETING_TEMPLATE);
+      const { section, hasStructure } = buildDocumentPromptSection(MEETING_TEMPLATE);
 
-      expect(prompt).toContain("## Document Blocks");
-      expect(prompt).toContain('id: "agenda"');
-      expect(prompt).toContain("[0] [ ] Review Q1 goals");
-      expect(prompt).toContain("[1] [ ] Discuss project timeline");
+      expect(hasStructure).toBe(true);
+      expect(section).toContain("## Document Blocks");
+      expect(section).toContain('id: "agenda"');
+      expect(section).toContain("[0] [ ] Review Q1 goals");
+      expect(section).toContain("[1] [ ] Discuss project timeline");
     });
 
     it("shows checklist indices", () => {
-      const prompt = buildDocumentPromptSection(MEETING_TEMPLATE);
+      const { section } = buildDocumentPromptSection(MEETING_TEMPLATE);
 
       // Agent needs indices to reference items
-      expect(prompt).toMatch(/\[0\].*Review Q1 goals/);
-      expect(prompt).toMatch(/\[1\].*Discuss project timeline/);
-      expect(prompt).toMatch(/\[2\].*Any blockers/);
+      expect(section).toMatch(/\[0\].*Review Q1 goals/);
+      expect(section).toMatch(/\[1\].*Discuss project timeline/);
+      expect(section).toMatch(/\[2\].*Any blockers/);
     });
   });
 

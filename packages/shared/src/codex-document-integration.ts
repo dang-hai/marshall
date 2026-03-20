@@ -7,6 +7,7 @@
 
 import { loadDocument, parseMarkdown } from "./document-blocks.js";
 import type { AgentOperation } from "./document-service.js";
+import { executeOperation } from "./document-service.js";
 
 // ============================================================================
 // Types for Codex Agent Output
@@ -171,15 +172,22 @@ export function extractDocumentContext(markdown: string): {
 
 /**
  * Build the document context section for the agent prompt.
+ * Returns both the prompt section and whether the document has structure.
  */
-export function buildDocumentPromptSection(markdown: string): string {
+export function buildDocumentPromptSection(markdown: string): {
+  section: string;
+  hasStructure: boolean;
+} {
   const { hasStructure, blocks } = extractDocumentContext(markdown);
 
   if (!hasStructure) {
-    return [
-      "## Meeting Notes (Unstructured)",
-      markdown.trim().slice(0, 3000) || "(No notes provided)",
-    ].join("\n");
+    return {
+      section: [
+        "## Meeting Notes (Unstructured)",
+        markdown.trim().slice(0, 3000) || "(No notes provided)",
+      ].join("\n"),
+      hasStructure: false,
+    };
   }
 
   const lines = ["## Document Blocks", ""];
@@ -204,7 +212,7 @@ export function buildDocumentPromptSection(markdown: string): string {
     lines.push("");
   }
 
-  return lines.join("\n");
+  return { section: lines.join("\n"), hasStructure: true };
 }
 
 // ============================================================================
@@ -225,26 +233,7 @@ export function applyDocumentOperations(markdown: string, operations: AgentOpera
 
     for (const op of operations) {
       try {
-        switch (op.op) {
-          case "checklist.check":
-            api.checklist(op.blockId).check(op.index);
-            break;
-          case "checklist.uncheck":
-            api.checklist(op.blockId).uncheck(op.index);
-            break;
-          case "checklist.add":
-            api.checklist(op.blockId).add(op.text);
-            break;
-          case "section.append":
-            api.section(op.blockId).append(op.content);
-            break;
-          case "section.set":
-            api.section(op.blockId).set(op.content);
-            break;
-          case "status.set":
-            api.status(op.blockId).set(op.value);
-            break;
-        }
+        executeOperation(api, op);
       } catch (error) {
         // Log but continue - don't fail the whole batch for one bad op
         console.warn(`Failed to apply operation ${op.op} on ${op.blockId}:`, error);
@@ -327,8 +316,7 @@ export function buildAgentPrompt(params: {
   previousNudge: string | null;
   mode: "live" | "final";
 }): string {
-  const documentSection = buildDocumentPromptSection(params.noteBody);
-  const { hasStructure } = extractDocumentContext(params.noteBody);
+  const { section: documentSection, hasStructure } = buildDocumentPromptSection(params.noteBody);
 
   const lines = [
     "You are Marshall's live call monitor.",

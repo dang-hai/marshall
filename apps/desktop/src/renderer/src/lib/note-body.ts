@@ -1,4 +1,4 @@
-import type { CodexMonitorNotePatch, AgentOperation } from "@marshall/shared";
+import type { CodexMonitorNotePatch } from "@marshall/shared";
 import { applyDocumentOperations, extractDocumentContext } from "@marshall/shared";
 
 export const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
@@ -341,23 +341,6 @@ function markdownToHtml(markdown: string): string {
   return htmlLines.join("");
 }
 
-/**
- * Apply document block operations to the note body.
- * If the body contains structured markdown, applies operations via document blocks API.
- */
-function applyDocumentOps(bodyText: string, ops: AgentOperation[]): string {
-  if (!ops || ops.length === 0) {
-    return bodyText;
-  }
-
-  const { hasStructure } = extractDocumentContext(bodyText);
-  if (!hasStructure) {
-    return bodyText;
-  }
-
-  return applyDocumentOperations(bodyText, ops);
-}
-
 export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePatch) {
   // First, check if we have document operations to apply
   if (patch.documentOps && patch.documentOps.length > 0) {
@@ -366,7 +349,8 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
     const { hasStructure } = extractDocumentContext(plainText);
 
     if (hasStructure) {
-      const updatedMarkdown = applyDocumentOps(plainText, patch.documentOps);
+      // Apply operations directly - no need to check hasStructure again
+      const updatedMarkdown = applyDocumentOperations(plainText, patch.documentOps);
       // Convert updated markdown back to HTML, then apply remaining patches
       const updatedHtml = markdownToHtml(updatedMarkdown);
 

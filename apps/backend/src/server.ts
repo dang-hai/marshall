@@ -528,6 +528,7 @@ function serializeNote(
   return {
     id: row.id,
     userId: row.userId,
+    templateId: row.templateId,
     title: row.title,
     body: row.body,
     createdAt: row.createdAt.toISOString(),
