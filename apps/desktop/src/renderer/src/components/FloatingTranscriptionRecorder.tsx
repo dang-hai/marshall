@@ -369,6 +369,17 @@ export function FloatingTranscriptionRecorder({
   }, [onSnapshotChange]);
 
   useEffect(() => {
+    // Skip re-hydration if we're the ones who saved this snapshot
+    const incomingFingerprint = persistedSnapshot ? JSON.stringify(persistedSnapshot) : null;
+    if (incomingFingerprint === lastPersistedFingerprintRef.current) {
+      return;
+    }
+
+    // Skip if transcription is in progress
+    if (isRecording || isTranscribing) {
+      return;
+    }
+
     launchSessionRef.current += 1;
 
     hydrateSnapshot(persistedSnapshot);
@@ -379,10 +390,8 @@ export function FloatingTranscriptionRecorder({
     setIsBootstrapping(false);
     setIsDownloadingModel(false);
     setIsModelDialogOpen(false);
-    lastPersistedFingerprintRef.current = persistedSnapshot
-      ? JSON.stringify(persistedSnapshot)
-      : null;
-  }, [hydrateSnapshot, noteId]);
+    lastPersistedFingerprintRef.current = incomingFingerprint;
+  }, [hydrateSnapshot, noteId, persistedSnapshot, isRecording, isTranscribing]);
 
   useEffect(() => {
     if (partialText.trim()) {
