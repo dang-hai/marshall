@@ -1,4 +1,4 @@
-import { CalendarDays, Mic, Shield, UserRound, type LucideIcon } from "lucide-react";
+import { Bot, CalendarDays, Mic, Shield, UserRound, type LucideIcon } from "lucide-react";
 
 export const fallbackUser = {
   name: "Guest",
@@ -26,6 +26,11 @@ export const SETTINGS_SECTIONS = {
     label: "Permissions",
     description: "Microphone and screen recording",
     icon: Shield,
+  },
+  monitor: {
+    label: "Monitor Agent",
+    description: "Choose the AI agent for call monitoring",
+    icon: Bot,
   },
 } as const satisfies Record<
   string,

@@ -118,6 +118,11 @@ contextBridge.exposeInMainWorld("codexMonitorAPI", {
   },
 });
 
+// Coding Agents API
+contextBridge.exposeInMainWorld("codingAgentsAPI", {
+  detectAvailable: () => ipcRenderer.invoke("coding-agents:detect"),
+});
+
 // AI API
 contextBridge.exposeInMainWorld("aiAPI", {
   completion: (input: { prompt: string; system?: string }) =>
@@ -302,6 +307,16 @@ interface DetectedCall {
   dismissed: boolean;
 }
 
+// Coding agent types
+type MonitorAgent = "codex" | "claude-code";
+
+interface AgentInfo {
+  id: MonitorAgent;
+  name: string;
+  available: boolean;
+  version: string | null;
+}
+
 declare global {
   interface Window {
     authAPI: {
@@ -446,6 +461,9 @@ declare global {
       onActivityState: (
         callback: (state: "idle" | "recording" | "transcribing") => void
       ) => () => void;
+    };
+    codingAgentsAPI: {
+      detectAvailable: () => Promise<AgentInfo[]>;
     };
   }
 }

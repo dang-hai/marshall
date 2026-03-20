@@ -4,6 +4,7 @@ import type { DisplayUser, GoogleCalendarConnectionStatus } from "@marshall/shar
 import {
   defaultAppSettings,
   type AppSettings,
+  type MonitorAgent,
   type TranscriptionProvider,
 } from "../../../shared/settings";
 import { useAudioCapture } from "../hooks/useAudioCapture";
@@ -53,6 +54,30 @@ const transcriptionProviderOptions: Array<{
     label: "Speechmatics",
     description: "Enterprise-grade cloud transcription. Coming soon.",
     disabled: true,
+  },
+];
+
+interface AgentInfo {
+  id: MonitorAgent;
+  name: string;
+  available: boolean;
+  version: string | null;
+}
+
+const monitorAgentOptions: Array<{
+  description: string;
+  key: MonitorAgent;
+  label: string;
+}> = [
+  {
+    key: "codex",
+    label: "Codex",
+    description: "OpenAI's Codex CLI for code-aware call monitoring.",
+  },
+  {
+    key: "claude-code",
+    label: "Claude Code",
+    description: "Anthropic's Claude Code CLI for intelligent call assistance.",
   },
 ];
 
@@ -159,6 +184,9 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
   const [isCalendarLoading, setIsCalendarLoading] = useState(section === "calendar");
   const [isCalendarActionLoading, setIsCalendarActionLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [availableAgents, setAvailableAgents] = useState<AgentInfo[]>([]);
+  const [isAgentsLoading, setIsAgentsLoading] = useState(section === "monitor");
+  const monitorSettings = settings?.monitor ?? defaultAppSettings.monitor;
 
   const loadCalendarStatus = useCallback(async () => {
     setIsCalendarLoading(true);
@@ -209,8 +237,29 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
     }
   }, [loadCalendarStatus, section]);
 
+  useEffect(() => {
+    if (section === "monitor") {
+      setIsAgentsLoading(true);
+      window.codingAgentsAPI
+        .detectAvailable()
+        .then((agents) => {
+          setAvailableAgents(agents);
+        })
+        .catch(() => {
+          setAvailableAgents([]);
+        })
+        .finally(() => {
+          setIsAgentsLoading(false);
+        });
+    }
+  }, [section]);
+
   const setTranscriptionProvider = (provider: TranscriptionProvider) => {
     void updateSection("transcription", { provider });
+  };
+
+  const setMonitorAgent = (agent: MonitorAgent) => {
+    void updateSection("monitor", { agent });
   };
 
   const connectGoogleCalendar = async () => {
@@ -458,6 +507,68 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
             />
             <p className="mt-4 text-2xs text-muted-foreground">
               To revoke permissions, go to System Settings {" > "} Privacy & Security.
+            </p>
+          </div>
+        )}
+
+        {section === "monitor" && (
+          <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
+            <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Call monitoring agent
+            </p>
+            <h3 className="text-sm font-medium text-foreground">Choose your AI assistant</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Select which coding agent to use for intelligent call monitoring and assistance.
+            </p>
+            <div className="mt-4 space-y-2">
+              {isAgentsLoading ? (
+                <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                monitorAgentOptions.map((option) => {
+                  const agentInfo = availableAgents.find((a) => a.id === option.key);
+                  const isAvailable = agentInfo?.available ?? false;
+
+                  return (
+                    <ProviderRow
+                      key={option.key}
+                      description={option.description}
+                      disabled={!transcriptionReady || !isAvailable}
+                      label={option.label}
+                      name="monitor-agent"
+                      onSelect={() => setMonitorAgent(option.key)}
+                      selected={monitorSettings.agent === option.key}
+                    >
+                      <div className="flex items-center gap-2 text-2xs">
+                        {isAvailable ? (
+                          <>
+                            <span className="flex items-center gap-1.5 text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                              Installed
+                            </span>
+                            {agentInfo?.version && (
+                              <>
+                                <span className="text-muted-foreground/60">|</span>
+                                <span className="text-muted-foreground">v{agentInfo.version}</span>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            Not installed
+                          </span>
+                        )}
+                      </div>
+                    </ProviderRow>
+                  );
+                })
+              )}
+            </div>
+            <p className="mt-4 text-2xs text-muted-foreground">
+              Install the CLI for your preferred agent to enable it. Both agents provide intelligent
+              call monitoring with nudges, action items, and summaries.
             </p>
           </div>
         )}

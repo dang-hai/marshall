@@ -18,9 +18,10 @@ import type {
 } from "@marshall/shared";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
-import { setupSettingsIPC } from "./settings";
+import { setupSettingsIPC, getSetting } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
 import { CodexMonitorService } from "./codex-monitor";
+import { detectAvailableAgents } from "./coding-agents";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -349,6 +350,7 @@ function setupCodexMonitorWindowHandlers(window: BrowserWindow) {
 app.whenReady().then(() => {
   const codexMonitor = new CodexMonitorService({
     createNotificationWindow: createCodexNotificationWindow,
+    getSelectedAgent: () => getSetting("monitor").agent,
   });
 
   // Set up permission handlers for media access
@@ -518,6 +520,10 @@ app.whenReady().then(() => {
   ipcMain.handle("codex-monitor:send-chat", async (_event, message: string) =>
     codexMonitor.sendChat(message)
   );
+
+  // Coding agent detection handler
+  ipcMain.handle("coding-agents:detect", async () => detectAvailableAgents());
+
   // AI completion handler
   ipcMain.handle("ai:completion", async (_event, input: { prompt: string; system?: string }) => {
     const payload = await authenticatedJsonRequest("/api/ai/completion", {

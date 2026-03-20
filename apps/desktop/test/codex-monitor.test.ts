@@ -40,7 +40,7 @@ describe("CodexMonitorService", () => {
     let capturedPrompt = "";
     const service = new CodexMonitorService({
       createNotificationWindow: (() => null) as any,
-      executeCodexProcess: async ({ prompt }) => {
+      executeProcess: async ({ prompt }) => {
         capturedPrompt = prompt;
         return {
           nudge: null,

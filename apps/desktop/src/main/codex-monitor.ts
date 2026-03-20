@@ -1,9 +1,6 @@
 import { BrowserWindow } from "electron";
 import { randomUUID } from "crypto";
-import { mkdtemp, writeFile } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
-import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
+import type { ChildProcessWithoutNullStreams } from "child_process";
 import type {
   CodexMonitorNotePatch,
   CodexMonitorSessionInput,
@@ -13,10 +10,13 @@ import type {
   CodexMonitorChatMessage,
 } from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
+import { createTempSchemaFile, getAgentExecutor, type AgentExecutor } from "./coding-agents";
+import type { MonitorAgent } from "../shared/settings";
 
 interface CodexMonitorServiceOptions {
   createNotificationWindow: () => BrowserWindow;
-  executeCodexProcess?: CodexExecutor;
+  executeProcess?: AgentExecutor;
+  getSelectedAgent?: () => MonitorAgent;
 }
 
 interface CodexMonitorResultItem {
@@ -132,13 +132,6 @@ function buildTranscriptExcerpt(transcriptText: string) {
   return `${leading}\n...\n${trailing}`;
 }
 
-async function createTempSchemaFile(prefix: string, schema: object) {
-  const schemaDirectory = await mkdtemp(join(tmpdir(), prefix));
-  const schemaPath = join(schemaDirectory, "schema.json");
-  await writeFile(schemaPath, JSON.stringify(schema), "utf8");
-  return schemaPath;
-}
-
 function truncatePreview(value: string | null | undefined, limit = DEBUG_PREVIEW_LIMIT) {
   if (!value) {
     return null;
@@ -170,139 +163,10 @@ function createEmptyDebugState(): CodexMonitorState["debug"] {
   };
 }
 
-interface SpawnCodexOptions<T> {
-  prompt: string;
-  conversationId: string | null;
-  schemaPath: string;
-  noteId: string;
-  onThreadStarted: (threadId: string) => void;
-  parseResult: (lastMessage: string) => T;
-  setProcess: (child: ChildProcessWithoutNullStreams | null) => void;
-  noResultError: string;
-}
-
-type CodexExecutor = <T>(options: SpawnCodexOptions<T>) => Promise<T>;
-
-function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
-  const {
-    prompt,
-    conversationId,
-    schemaPath,
-    noteId,
-    onThreadStarted,
-    parseResult,
-    setProcess,
-    noResultError,
-  } = options;
-
-  const args = conversationId
-    ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", conversationId, "-"]
-    : [
-        "exec",
-        "--json",
-        "--color",
-        "never",
-        "--sandbox",
-        "read-only",
-        "-m",
-        "gpt-5.4-mini",
-        "--output-schema",
-        schemaPath,
-        "-",
-      ];
-
-  return new Promise<T>((resolve, reject) => {
-    const child = spawn("codex", args, {
-      env: process.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    setProcess(child);
-
-    let lastAgentMessage = "";
-    let stderr = "";
-
-    const handleStdout = (chunk: Buffer) => {
-      const text = chunk.toString("utf8");
-      for (const line of text.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("{")) continue;
-
-        try {
-          const parsed = JSON.parse(trimmed) as {
-            type?: string;
-            thread_id?: string;
-            item?: { type?: string; text?: string };
-          };
-
-          if (parsed.type === "thread.started" && parsed.thread_id) {
-            onThreadStarted(parsed.thread_id);
-            if (noteId) {
-              setConversationId(noteId, parsed.thread_id);
-            }
-          }
-
-          if (
-            parsed.type === "item.completed" &&
-            parsed.item?.type === "agent_message" &&
-            typeof parsed.item.text === "string"
-          ) {
-            lastAgentMessage = parsed.item.text;
-          }
-        } catch {
-          continue;
-        }
-      }
-    };
-
-    const handleStderr = (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
-    };
-
-    const cleanup = () => {
-      child.stdout.removeListener("data", handleStdout);
-      child.stderr.removeListener("data", handleStderr);
-    };
-
-    child.stdout.on("data", handleStdout);
-    child.stderr.on("data", handleStderr);
-    child.on("error", (err) => {
-      cleanup();
-      reject(err);
-    });
-    child.on("close", (code) => {
-      cleanup();
-
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
-        return;
-      }
-
-      if (!lastAgentMessage) {
-        reject(new Error(noResultError));
-        return;
-      }
-
-      try {
-        resolve(parseResult(lastAgentMessage));
-      } catch (error) {
-        reject(
-          new Error(
-            error instanceof Error
-              ? `Failed to parse Codex output: ${error.message}`
-              : "Failed to parse Codex output"
-          )
-        );
-      }
-    });
-
-    child.stdin.write(prompt);
-    child.stdin.end();
-  });
-}
-
 export class CodexMonitorService {
   private readonly createNotificationWindow: () => BrowserWindow;
-  private readonly executeCodexProcess: CodexExecutor;
+  private readonly executeProcessOverride: AgentExecutor | undefined;
+  private readonly getSelectedAgent: () => MonitorAgent;
   private schemaPathPromise: Promise<string> | null = null;
   private chatSchemaPathPromise: Promise<string> | null = null;
   private session: CodexMonitorSessionInput | null = null;
@@ -332,7 +196,15 @@ export class CodexMonitorService {
 
   constructor(options: CodexMonitorServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
-    this.executeCodexProcess = options.executeCodexProcess ?? spawnCodexProcess;
+    this.executeProcessOverride = options.executeProcess;
+    this.getSelectedAgent = options.getSelectedAgent ?? (() => "codex");
+  }
+
+  private getExecutor(): AgentExecutor {
+    if (this.executeProcessOverride) {
+      return this.executeProcessOverride;
+    }
+    return getAgentExecutor(this.getSelectedAgent());
   }
 
   getState() {
@@ -565,8 +437,9 @@ export class CodexMonitorService {
     ].join("\n");
 
     const schemaPath = await this.getChatSchemaPath();
+    const executor = this.getExecutor();
 
-    return spawnCodexProcess<ChatResult>({
+    return executor<ChatResult>({
       prompt,
       conversationId: this.conversationId,
       schemaPath,
@@ -925,19 +798,23 @@ export class CodexMonitorService {
     };
     this.broadcastState();
 
-    return this.executeCodexProcess<CodexMonitorResult>({
+    const executor = this.getExecutor();
+    return executor<CodexMonitorResult>({
       prompt,
       conversationId: this.conversationId,
       schemaPath,
       noteId: session.noteId,
       onThreadStarted: (threadId) => {
         this.conversationId = threadId;
+        if (session.noteId) {
+          setConversationId(session.noteId, threadId);
+        }
       },
       parseResult: (lastMessage) => JSON.parse(lastMessage) as CodexMonitorResult,
       setProcess: (child) => {
         this.analysisProcess = child;
       },
-      noResultError: "Codex returned no structured result",
+      noResultError: "Agent returned no structured result",
     });
   }
 
