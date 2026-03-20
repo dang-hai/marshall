@@ -1,4 +1,5 @@
-import type { CodexMonitorNotePatch } from "@marshall/shared";
+import type { CodexMonitorNotePatch, MeetingProposal } from "@marshall/shared";
+import { applyDocumentOperations, extractDocumentContext } from "@marshall/shared";
 
 export const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
 export const HEADING_ONE_BLOCK_CLASS =
@@ -98,7 +99,7 @@ function createBlock(document: Document, type: MarkdownBlockType, text: string) 
 
 function replaceSection(
   body: HTMLElement,
-  section: "followups" | "summary",
+  section: "followups" | "summary" | "meetings",
   nextBlocks: HTMLElement[]
 ) {
   const existing = Array.from(body.children).filter(
@@ -193,6 +194,47 @@ function buildSummarySection(document: Document, summary: string | null) {
   return [heading, ...paragraphs];
 }
 
+function formatMeetingTime(startAt: string, endAt: string): string {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  };
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+  };
+  return `${start.toLocaleDateString("en-US", dateOptions)} · ${start.toLocaleTimeString("en-US", timeOptions)} - ${end.toLocaleTimeString("en-US", timeOptions)}`;
+}
+
+function buildMeetingProposalsSection(document: Document, proposals: MeetingProposal[]) {
+  if (proposals.length === 0) {
+    return [];
+  }
+
+  const heading = createBlock(document, "heading-2", "Proposed meetings");
+  heading.dataset.marshallSection = "meetings";
+  heading.dataset.marshallRole = "heading";
+
+  const items = proposals.map((proposal) => {
+    const statusIcon = proposal.status === "accepted" ? "✓" : "⏰";
+    const participants =
+      proposal.participants.length > 0 ? ` (${proposal.participants.join(", ")})` : "";
+    const text = `${statusIcon} ${proposal.title} — ${formatMeetingTime(proposal.startAt, proposal.endAt)}${participants}`;
+
+    const item = createBlock(document, "bullet", text);
+    item.dataset.marshallSection = "meetings";
+    item.dataset.marshallRole = "item";
+    item.dataset.meetingId = proposal.id;
+    item.dataset.meetingStatus = proposal.status;
+    return item;
+  });
+
+  return [heading, ...items];
+}
+
 function buildBlockHtml(
   type: MarkdownBlockType,
   text: string,
@@ -207,7 +249,7 @@ function buildBlockHtml(
   }</div>`;
 }
 
-function buildSectionHtml(section: "followups" | "summary", items: string[]) {
+function buildSectionHtml(section: "followups" | "summary" | "meetings", items: string[]) {
   if (section === "followups") {
     if (items.length === 0) {
       return "";
@@ -221,6 +263,25 @@ function buildSectionHtml(section: "followups" | "summary", items: string[]) {
       ...items.map((item) =>
         buildBlockHtml("bullet", item, {
           "data-marshall-section": "followups",
+          "data-marshall-role": "item",
+        })
+      ),
+    ].join("");
+  }
+
+  if (section === "meetings") {
+    if (items.length === 0) {
+      return "";
+    }
+
+    return [
+      buildBlockHtml("heading-2", "Proposed meetings", {
+        "data-marshall-section": "meetings",
+        "data-marshall-role": "heading",
+      }),
+      ...items.map((item) =>
+        buildBlockHtml("bullet", item, {
+          "data-marshall-section": "meetings",
           "data-marshall-role": "item",
         })
       ),
@@ -245,6 +306,13 @@ function buildSectionHtml(section: "followups" | "summary", items: string[]) {
   ].join("");
 }
 
+function formatMeetingProposalText(proposal: MeetingProposal): string {
+  const statusIcon = proposal.status === "accepted" ? "✓" : "⏰";
+  const participants =
+    proposal.participants.length > 0 ? ` (${proposal.participants.join(", ")})` : "";
+  return `${statusIcon} ${proposal.title} — ${formatMeetingTime(proposal.startAt, proposal.endAt)}${participants}`;
+}
+
 function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNotePatch) {
   let nextHtml = bodyHtml;
 
@@ -259,6 +327,10 @@ function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNote
     ""
   );
   nextHtml = nextHtml.replace(/<div[^>]*data-marshall-section="summary"[^>]*>[\s\S]*?<\/div>/g, "");
+  nextHtml = nextHtml.replace(
+    /<div[^>]*data-marshall-section="meetings"[^>]*>[\s\S]*?<\/div>/g,
+    ""
+  );
 
   const followUpsHtml = buildSectionHtml(
     "followups",
@@ -273,11 +345,118 @@ function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNote
           .filter(Boolean)
       : []
   );
+  const meetingsHtml = buildSectionHtml(
+    "meetings",
+    (patch.meetingProposals ?? []).map(formatMeetingProposalText)
+  );
 
-  return normalizeEditorHtml(`${nextHtml}${followUpsHtml}${summaryHtml}`);
+  return normalizeEditorHtml(`${nextHtml}${meetingsHtml}${followUpsHtml}${summaryHtml}`);
+}
+
+/**
+ * Convert plain text (markdown-like) to basic HTML blocks.
+ */
+function markdownToHtml(markdown: string): string {
+  const lines = markdown.split("\n");
+  const htmlLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      htmlLines.push(`<div class="${PARAGRAPH_BLOCK_CLASS}"><br></div>`);
+      continue;
+    }
+
+    // Headings
+    if (trimmed.startsWith("# ")) {
+      htmlLines.push(
+        `<div data-md-type="heading-1" class="${HEADING_ONE_BLOCK_CLASS}">${renderInlineMarkdown(trimmed.slice(2))}</div>`
+      );
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      htmlLines.push(
+        `<div data-md-type="heading-2" class="${HEADING_TWO_BLOCK_CLASS}">${renderInlineMarkdown(trimmed.slice(3))}</div>`
+      );
+      continue;
+    }
+
+    // Checklist items
+    const checklistMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.+)$/);
+    if (checklistMatch) {
+      const checked = checklistMatch[1].toLowerCase() === "x";
+      const text = checklistMatch[2];
+      htmlLines.push(
+        `<div data-md-type="bullet" class="${BULLET_BLOCK_CLASS}">- [${checked ? "x" : " "}] ${renderInlineMarkdown(text)}</div>`
+      );
+      continue;
+    }
+
+    // Bullet points
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      htmlLines.push(
+        `<div data-md-type="bullet" class="${BULLET_BLOCK_CLASS}">${renderInlineMarkdown(trimmed)}</div>`
+      );
+      continue;
+    }
+
+    // Horizontal rule
+    if (trimmed === "---" || trimmed === "***") {
+      htmlLines.push(`<hr class="${DIVIDER_BLOCK_CLASS}">`);
+      continue;
+    }
+
+    // Regular paragraph
+    htmlLines.push(
+      `<div data-md-type="paragraph" class="${PARAGRAPH_BLOCK_CLASS}">${renderInlineMarkdown(trimmed)}</div>`
+    );
+  }
+
+  return htmlLines.join("");
 }
 
 export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePatch) {
+  // First, check if we have document operations to apply
+  if (patch.documentOps && patch.documentOps.length > 0) {
+    // Extract plain text, apply document ops, convert back to HTML
+    const plainText = extractPlainTextFromHtml(bodyHtml);
+    const { hasStructure } = extractDocumentContext(plainText);
+
+    if (hasStructure) {
+      // Apply operations directly - no need to check hasStructure again
+      const updatedMarkdown = applyDocumentOperations(plainText, patch.documentOps);
+      // Convert updated markdown back to HTML, then apply remaining patches
+      const updatedHtml = markdownToHtml(updatedMarkdown);
+
+      // Apply follow-ups and summary on top
+      if (typeof DOMParser === "undefined") {
+        return applyCodexNotePatchWithoutDom(updatedHtml, {
+          ...patch,
+          checkedPlanItems: [], // Already handled by documentOps
+        });
+      }
+
+      const body = parseBodyHtml(updatedHtml);
+      replaceSection(
+        body,
+        "meetings",
+        buildMeetingProposalsSection(body.ownerDocument, patch.meetingProposals ?? [])
+      );
+      replaceSection(
+        body,
+        "followups",
+        buildFollowUpSection(
+          body.ownerDocument,
+          patch.items.map((item) => item.text)
+        )
+      );
+      replaceSection(body, "summary", buildSummarySection(body.ownerDocument, patch.summary));
+      return normalizeEditorHtml(body.innerHTML);
+    }
+  }
+
+  // Fallback to legacy behavior
   if (typeof DOMParser === "undefined") {
     return applyCodexNotePatchWithoutDom(bodyHtml, patch);
   }
@@ -285,6 +464,11 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
   const body = parseBodyHtml(bodyHtml);
 
   markChecklistItems(body, patch.checkedPlanItems);
+  replaceSection(
+    body,
+    "meetings",
+    buildMeetingProposalsSection(body.ownerDocument, patch.meetingProposals ?? [])
+  );
   replaceSection(
     body,
     "followups",

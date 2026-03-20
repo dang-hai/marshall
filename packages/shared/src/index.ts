@@ -1,5 +1,10 @@
 // Shared types and utilities
 
+export * from "./document-blocks.js";
+export * from "./document-service.js";
+export * from "./codex-document-integration.js";
+export * from "./marshall-mcp-server.js";
+
 export interface User {
   id: string;
   email: string;
@@ -88,6 +93,19 @@ export interface GoogleCalendarEvent {
   status: string | null;
 }
 
+/** Agent-proposed meeting draft for user review */
+export interface MeetingProposal {
+  id: string;
+  title: string;
+  startAt: string; // ISO 8601 datetime
+  endAt: string; // ISO 8601 datetime
+  participants: string[]; // email addresses
+  location: string | null;
+  description: string | null;
+  createdAt: string;
+  status: "pending" | "accepted" | "reminded" | "discarded";
+}
+
 export interface Session {
   id: string;
   userId: string;
@@ -163,6 +181,7 @@ export interface NoteTranscriptionSnapshot extends SaveNoteTranscriptionInput {
 export interface NoteRecord {
   id: string;
   userId: string;
+  templateId: string | null;
   title: string;
   body: string;
   createdAt: string;
@@ -171,7 +190,30 @@ export interface NoteRecord {
   transcription: NoteTranscriptionSnapshot | null;
 }
 
+export interface TemplateRecord {
+  id: string;
+  userId: string | null;
+  name: string;
+  description: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTemplateInput {
+  name: string;
+  description?: string;
+  body: string;
+}
+
+export interface UpdateTemplateInput {
+  name?: string;
+  description?: string;
+  body?: string;
+}
+
 export interface CreateNoteInput {
+  templateId?: string;
   title?: string;
   body?: string;
   createdAt?: string;
@@ -211,8 +253,13 @@ export interface CodexMonitorItem {
 
 export interface CodexMonitorNotePatch {
   noteId: string;
+  /** @deprecated Use documentOps instead */
   checkedPlanItems: string[];
+  /** Document block operations to apply */
+  documentOps?: import("./document-service").AgentOperation[];
   items: CodexMonitorItem[];
+  /** Meeting proposals (accepted or reminded, not discarded) */
+  meetingProposals?: MeetingProposal[];
   summary: string | null;
   final: boolean;
   generatedAt: string;

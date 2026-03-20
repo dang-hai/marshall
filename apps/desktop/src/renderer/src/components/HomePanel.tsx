@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import {
+  Bot,
   CalendarDays,
   CalendarPlus,
   ChevronLeft,
@@ -28,7 +29,6 @@ import type {
 } from "@marshall/shared";
 import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
 import { Button } from "./ui/button";
-import { CodexMonitorDebugPanel } from "./CodexMonitorDebugPanel";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 import {
   applyCodexNotePatch,
@@ -476,7 +476,7 @@ export function HomePanel() {
     noteId: string;
     token: number;
   } | null>(null);
-  const [codexMonitorState, setCodexMonitorState] = useState<CodexMonitorState>({
+  const [_codexMonitorState, setCodexMonitorState] = useState<CodexMonitorState>({
     status: "idle",
     noteId: null,
     noteTitle: null,
@@ -1112,6 +1112,14 @@ export function HomePanel() {
                   <CalendarPlus className="h-3 w-3" />
                   <span>+ Plan Meeting</span>
                 </button>
+                <button
+                  type="button"
+                  className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
+                  onClick={() => window.codexMonitorAPI?.showWindow()}
+                >
+                  <Bot className="h-3 w-3" />
+                  <span>Marshall AI</span>
+                </button>
               </div>
 
               <div className="relative mt-10 min-h-[20rem] flex-1">
@@ -1132,12 +1140,6 @@ export function HomePanel() {
                   onPaste={handleBodyPaste}
                 />
               </div>
-
-              <CodexMonitorDebugPanel
-                state={codexMonitorState}
-                noteId={activeNote.id}
-                transcription={activeNote.transcription}
-              />
             </div>
           </div>
         </div>

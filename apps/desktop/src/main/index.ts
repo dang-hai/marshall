@@ -18,13 +18,13 @@ import type {
 } from "@marshall/shared";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
-import { setupSettingsIPC, getSetting } from "./settings";
+import { setupSettingsIPC } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
-import { CodexMonitorService } from "./codex-monitor";
+import { CodexMonitorMCPService } from "./codex-monitor-mcp";
 import { detectAvailableAgents } from "./coding-agents";
 import { setupIntegrationsIPC, setNotionToken } from "./integrations";
 import { setupNotionIntegrationIPC } from "./notion-integration";
-import type { StoredNotionToken } from "@marshall/shared";
+import type { NoteRecord, StoredNotionToken } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -39,7 +39,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let codexNotificationWindow: BrowserWindow | null = null;
-let codexMonitorInstance: CodexMonitorService | null = null;
+let codexMonitorInstance: CodexMonitorMCPService | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -421,9 +421,29 @@ function setupCodexMonitorWindowHandlers(window: BrowserWindow) {
 }
 
 app.whenReady().then(() => {
-  const codexMonitor = new CodexMonitorService({
+  const codexMonitor = new CodexMonitorMCPService({
     createNotificationWindow: createCodexNotificationWindow,
-    getSelectedAgent: () => getSetting("monitor").agent,
+    fetchNotes: async (params) => {
+      try {
+        const query = new URLSearchParams();
+        if (params.limit) query.set("limit", String(params.limit));
+        if (params.search) query.set("search", params.search);
+        const queryStr = query.toString();
+        const path = queryStr ? `/api/notes?${queryStr}` : "/api/notes";
+        const payload = await authenticatedJsonRequest(path);
+        return (payload as { notes: NoteRecord[] }).notes;
+      } catch {
+        return [];
+      }
+    },
+    fetchNote: async (noteId) => {
+      try {
+        const payload = await authenticatedJsonRequest(`/api/notes/${noteId}`);
+        return (payload as { note: NoteRecord }).note;
+      } catch {
+        return null;
+      }
+    },
   });
 
   // Set up permission handlers for media access
@@ -620,8 +640,64 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("codex-monitor:get-state", () => codexMonitor.getState());
   ipcMain.handle("codex-monitor:dismiss-window", () => codexMonitor.dismissWindow());
+  ipcMain.handle("codex-monitor:show-window", () => {
+    codexMonitor.showWindow();
+    return { status: "shown" };
+  });
   ipcMain.handle("codex-monitor:send-chat", async (_event, message: string) =>
     codexMonitor.sendChat(message)
+  );
+  ipcMain.handle(
+    "codex-monitor:accept-meeting-proposal",
+    async (_event, proposalId: string, participants?: string[]) => {
+      const result = await codexMonitor.acceptMeetingProposal(proposalId, participants);
+      if (result.status !== "accepted") {
+        return result;
+      }
+
+      // Get the proposal and create the calendar event
+      const proposal = codexMonitor.getMeetingProposal(proposalId);
+      if (!proposal) {
+        return { status: "error", error: "Proposal not found after accept" };
+      }
+
+      // Use the proposal's participants (already updated by acceptMeetingProposal)
+      const attendees = proposal.participants;
+
+      try {
+        const payload = await authenticatedJsonRequest("/api/calendar/google/events", {
+          method: "POST",
+          body: JSON.stringify({
+            title: proposal.title,
+            startAt: proposal.startAt,
+            endAt: proposal.endAt,
+            description: proposal.description ?? undefined,
+            location: proposal.location ?? undefined,
+            attendees: attendees.length > 0 ? attendees : undefined,
+          }),
+        });
+
+        const response = payload as { event?: unknown; error?: string };
+        if (response.error) {
+          return { status: "error", error: response.error };
+        }
+
+        return { status: "accepted", event: response.event };
+      } catch (error) {
+        return {
+          status: "error",
+          error: error instanceof Error ? error.message : "Failed to create calendar event",
+        };
+      }
+    }
+  );
+  ipcMain.handle(
+    "codex-monitor:remind-meeting-proposal",
+    async (_event, proposalId: string, participants?: string[]) =>
+      codexMonitor.remindMeetingProposal(proposalId, participants)
+  );
+  ipcMain.handle("codex-monitor:discard-meeting-proposal", async (_event, proposalId: string) =>
+    codexMonitor.discardMeetingProposal(proposalId)
   );
 
   // Coding agent detection handler

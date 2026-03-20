@@ -17,10 +17,12 @@ import { generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import {
   GOOGLE_CALENDAR_PROVIDER_ID,
-  GOOGLE_CALENDAR_READONLY_SCOPE,
+  GOOGLE_CALENDAR_WRITE_SCOPE,
   hasGoogleCalendarAccess,
+  hasGoogleCalendarWriteAccess,
   parseGoogleCalendarScopes,
   serializeGoogleCalendarEvent,
+  type CreateGoogleCalendarEventInput,
 } from "./calendar";
 import {
   buildNotionAuthUrl,
@@ -302,7 +304,7 @@ function calendarConnectPage(baseUrl: string) {
 <body>
   <div class="container">
     <h1>Connect Google Calendar</h1>
-    <p class="subtitle">Grant Marshall read-only access to your upcoming Google Calendar events.</p>
+    <p class="subtitle">Grant Marshall access to view and create Google Calendar events.</p>
 
     <button id="googleCalendarBtn" class="btn" onclick="connectGoogleCalendar()">
       <svg viewBox="0 0 24 24">
@@ -318,7 +320,7 @@ function calendarConnectPage(baseUrl: string) {
     <div id="message" class="message"></div>
 
     <div class="footer">
-      Marshall only requests read-only Google Calendar access in this flow.
+      Marshall requests Google Calendar access to view and create events.
     </div>
   </div>
 
@@ -371,7 +373,7 @@ function calendarConnectPage(baseUrl: string) {
             "openid",
             "email",
             "profile",
-            "${GOOGLE_CALENDAR_READONLY_SCOPE}",
+            "${GOOGLE_CALENDAR_WRITE_SCOPE}",
           ],
         });
       } catch (error) {
@@ -550,6 +552,7 @@ function serializeNote(
   return {
     id: row.id,
     userId: row.userId,
+    templateId: row.templateId,
     title: row.title,
     body: row.body,
     createdAt: row.createdAt.toISOString(),
@@ -960,6 +963,104 @@ export function createBackendApp({
         {
           query: t.Object({
             limit: t.Optional(t.String()),
+          }),
+        }
+      )
+      .post(
+        "/api/calendar/google/events",
+        async ({ body, request, set }) => {
+          if (!db) {
+            set.status = 500;
+            return { error: "Database is not configured" };
+          }
+
+          try {
+            const session = await getAuthenticatedSession(auth, request, set);
+            if (!session) {
+              return { error: "Not authenticated" };
+            }
+
+            const [googleAccount] = await db
+              .select({ scope: account.scope })
+              .from(account)
+              .where(
+                and(
+                  eq(account.userId, session.user.id),
+                  eq(account.providerId, GOOGLE_CALENDAR_PROVIDER_ID)
+                )
+              )
+              .orderBy(desc(account.updatedAt))
+              .limit(1);
+
+            const scopes = parseGoogleCalendarScopes(googleAccount?.scope);
+
+            if (!hasGoogleCalendarWriteAccess(scopes)) {
+              set.status = 403;
+              return {
+                error: "Google Calendar write access not granted",
+                requiresScope: GOOGLE_CALENDAR_WRITE_SCOPE,
+              };
+            }
+
+            const token = await auth.api.getAccessToken({
+              headers: request.headers,
+              body: { providerId: GOOGLE_CALENDAR_PROVIDER_ID },
+            });
+
+            const eventData: CreateGoogleCalendarEventInput = body;
+
+            const calendarEvent = {
+              summary: eventData.title,
+              description: eventData.description,
+              location: eventData.location,
+              start: {
+                dateTime: eventData.startAt,
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              },
+              end: {
+                dateTime: eventData.endAt,
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              },
+              attendees: eventData.attendees?.map((email) => ({ email })),
+            };
+
+            const response = await fetch(
+              "https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all",
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token.accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(calendarEvent),
+              }
+            );
+
+            if (!response.ok) {
+              const message = await response.text();
+              console.error("[API] Google Calendar create event failed:", response.status, message);
+              set.status = 502;
+              return { error: "Failed to create Google Calendar event" };
+            }
+
+            const created = await response.json();
+            const event = serializeGoogleCalendarEvent(created);
+
+            return { event };
+          } catch (error) {
+            console.error("[API] Error creating Google Calendar event:", error);
+            set.status = 500;
+            return { error: "Failed to create Google Calendar event" };
+          }
+        },
+        {
+          body: t.Object({
+            title: t.String(),
+            startAt: t.String(),
+            endAt: t.String(),
+            description: t.Optional(t.String()),
+            location: t.Optional(t.String()),
+            attendees: t.Optional(t.Array(t.String())),
           }),
         }
       )
