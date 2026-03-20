@@ -196,7 +196,7 @@ function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
   } = options;
 
   const args = conversationId
-    ? ["exec", "resume", "--json", conversationId, "-"]
+    ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", conversationId, "-"]
     : [
         "exec",
         "--json",
@@ -204,6 +204,8 @@ function spawnCodexProcess<T>(options: SpawnCodexOptions<T>): Promise<T> {
         "never",
         "--sandbox",
         "read-only",
+        "-m",
+        "gpt-5.4-mini",
         "--output-schema",
         schemaPath,
         "-",
