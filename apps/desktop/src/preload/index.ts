@@ -204,6 +204,10 @@ contextBridge.exposeInMainWorld("transcriptionAPI", {
     ipcRenderer.on("transcription:vad-level", (_event, rms) => callback(rms));
     return () => ipcRenderer.removeAllListeners("transcription:vad-level");
   },
+  onActivityState: (callback: (state: "idle" | "recording" | "transcribing") => void) => {
+    ipcRenderer.on("transcription:activity-state", (_event, state) => callback(state));
+    return () => ipcRenderer.removeAllListeners("transcription:activity-state");
+  },
 });
 
 // Type declarations
@@ -398,6 +402,7 @@ declare global {
         duration: number;
         mode: "streaming" | "batch" | null;
         partialText?: string;
+        activity?: "idle" | "recording" | "transcribing";
       }>;
 
       // VAD
@@ -415,6 +420,9 @@ declare global {
       onVADSpeechStart: (callback: () => void) => () => void;
       onVADSpeechEnd: (callback: (duration: number) => void) => () => void;
       onVADLevel: (callback: (rms: number) => void) => () => void;
+      onActivityState: (
+        callback: (state: "idle" | "recording" | "transcribing") => void
+      ) => () => void;
     };
   }
 }

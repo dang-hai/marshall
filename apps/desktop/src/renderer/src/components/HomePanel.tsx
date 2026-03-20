@@ -62,6 +62,26 @@ const timestampFormatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+export function resolveTranscriptionTargetNoteId({
+  activeNoteId,
+  currentTargetNoteId,
+  sessionActive,
+}: {
+  activeNoteId: string | null;
+  currentTargetNoteId: string | null;
+  sessionActive: boolean;
+}) {
+  if (!activeNoteId) {
+    return currentTargetNoteId;
+  }
+
+  if (sessionActive && currentTargetNoteId) {
+    return currentTargetNoteId;
+  }
+
+  return activeNoteId;
+}
+
 function formatTimestamp(timestamp: number) {
   return timestampFormatter.format(timestamp);
 }
@@ -832,130 +852,132 @@ export function HomePanel() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <div className="flex items-start justify-between gap-6 border-b border-border/50 pb-6">
-        <div className="space-y-3">
-          <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
-            Welcome to Marshall
-          </p>
-          <div className="space-y-2">
-            <h1 className="font-serif text-2xl font-medium tracking-tight text-foreground">
-              Keep important context within reach
-            </h1>
-            <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
-              Capture a quick note before, during, or after a call so the important detail does not
-              get lost.
+    <>
+      <div className="flex min-h-full flex-1 flex-col">
+        <div className="flex items-start justify-between gap-6 border-b border-border/50 pb-6">
+          <div className="space-y-3">
+            <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
+              Welcome to Marshall
             </p>
+            <div className="space-y-2">
+              <h1 className="font-serif text-2xl font-medium tracking-tight text-foreground">
+                Keep important context within reach
+              </h1>
+              <p className="max-w-lg text-sm leading-relaxed text-muted-foreground">
+                Capture a quick note before, during, or after a call so the important detail does
+                not get lost.
+              </p>
+            </div>
           </div>
+
+          <Button type="button" className="shrink-0" onClick={() => createNote()}>
+            <span>{isCreatingNote ? "Creating..." : "+ Quick Note"}</span>
+          </Button>
         </div>
 
-        <Button type="button" className="shrink-0" onClick={() => createNote()}>
-          <span>{isCreatingNote ? "Creating..." : "+ Quick Note"}</span>
-        </Button>
-      </div>
-
-      <div className="grid flex-1 gap-6 pt-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
-        <div className="space-y-3">
-          {isLoadingNotes ? (
-            <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Loading notes...</span>
+        <div className="grid flex-1 gap-6 pt-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+          <div className="space-y-3">
+            {isLoadingNotes ? (
+              <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading notes...</span>
+                </div>
               </div>
-            </div>
-          ) : visibleNotes.length > 0 ? (
-            visibleNotes.map((note) => (
-              <article
-                key={note.id}
-                className="rounded-xl border border-border/60 bg-card/90 px-5 py-4 shadow-soft transition-all hover:border-border hover:bg-card hover:shadow-lifted"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <button
-                    type="button"
-                    onClick={() => openNote(note.id)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <p className="truncate font-serif text-base font-medium text-foreground">
-                        {note.title.trim() || "New note"}
-                      </p>
-                      <p className="shrink-0 text-2xs tracking-wide text-muted-foreground/70">
-                        {formatStoredTimestamp(note.updatedAt)}
-                      </p>
-                    </div>
-                    <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
-                      {summarizeBody(note.body)}
-                    </p>
-                  </button>
-
-                  <div className="relative shrink-0" data-note-menu-root="true">
+            ) : visibleNotes.length > 0 ? (
+              visibleNotes.map((note) => (
+                <article
+                  key={note.id}
+                  className="rounded-xl border border-border/60 bg-card/90 px-5 py-4 shadow-soft transition-all hover:border-border hover:bg-card hover:shadow-lifted"
+                >
+                  <div className="flex items-start justify-between gap-4">
                     <button
                       type="button"
-                      aria-label="Note actions"
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      onClick={() =>
-                        setOpenMenuId((currentMenuId) =>
-                          currentMenuId === note.id ? null : note.id
-                        )
-                      }
+                      onClick={() => openNote(note.id)}
+                      className="min-w-0 flex-1 text-left"
                     >
-                      <Ellipsis className="h-4 w-4" />
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="truncate font-serif text-base font-medium text-foreground">
+                          {note.title.trim() || "New note"}
+                        </p>
+                        <p className="shrink-0 text-2xs tracking-wide text-muted-foreground/70">
+                          {formatStoredTimestamp(note.updatedAt)}
+                        </p>
+                      </div>
+                      <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
+                        {summarizeBody(note.body)}
+                      </p>
                     </button>
 
-                    {openMenuId === note.id && (
-                      <div className="absolute right-0 top-10 z-10 min-w-36 rounded-lg border border-border/70 bg-popover p-1 shadow-lifted">
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
-                          onClick={() => moveNoteToTrash(note.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          <span>Move to trash</span>
-                        </button>
-                      </div>
-                    )}
+                    <div className="relative shrink-0" data-note-menu-root="true">
+                      <button
+                        type="button"
+                        aria-label="Note actions"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        onClick={() =>
+                          setOpenMenuId((currentMenuId) =>
+                            currentMenuId === note.id ? null : note.id
+                          )
+                        }
+                      >
+                        <Ellipsis className="h-4 w-4" />
+                      </button>
+
+                      {openMenuId === note.id && (
+                        <div className="absolute right-0 top-10 z-10 min-w-36 rounded-lg border border-border/70 bg-popover p-1 shadow-lifted">
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-accent"
+                            onClick={() => moveNoteToTrash(note.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Move to trash</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                </article>
+              ))
+            ) : (
+              <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
+                <div className="max-w-xs text-center">
+                  <p className="font-serif text-base font-medium text-foreground">No notes yet</p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Use the + Quick Note button in the top right to open a fresh note document.
+                  </p>
                 </div>
-              </article>
-            ))
-          ) : (
-            <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-8 py-12">
-              <div className="max-w-xs text-center">
-                <p className="font-serif text-base font-medium text-foreground">No notes yet</p>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Use the + Quick Note button in the top right to open a fresh note document.
+              </div>
+            )}
+
+            {notesError && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                {notesError}
+              </div>
+            )}
+          </div>
+
+          <aside className="h-fit rounded-xl border border-border/60 bg-card/70 p-5 shadow-soft">
+            <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
+              Home
+            </p>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-lg bg-muted/50 px-4 py-3">
+                <p className="text-2xs tracking-wide text-muted-foreground">Quick note status</p>
+                <p className="mt-1.5 font-serif text-lg font-medium text-foreground">
+                  {noteCountLabel}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-border/50 px-4 py-3">
+                <p className="text-xs font-medium text-foreground">Suggested use</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                  Open a note when you need a blank page for context, decisions, or follow-ups.
                 </p>
               </div>
             </div>
-          )}
-
-          {notesError && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
-              {notesError}
-            </div>
-          )}
+          </aside>
         </div>
-
-        <aside className="h-fit rounded-xl border border-border/60 bg-card/70 p-5 shadow-soft">
-          <p className="text-2xs font-medium uppercase tracking-[0.2em] text-muted-foreground/80">
-            Home
-          </p>
-          <div className="mt-4 space-y-3">
-            <div className="rounded-lg bg-muted/50 px-4 py-3">
-              <p className="text-2xs tracking-wide text-muted-foreground">Quick note status</p>
-              <p className="mt-1.5 font-serif text-lg font-medium text-foreground">
-                {noteCountLabel}
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-border/50 px-4 py-3">
-              <p className="text-xs font-medium text-foreground">Suggested use</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                Open a note when you need a blank page for context, decisions, or follow-ups.
-              </p>
-            </div>
-          </div>
-        </aside>
       </div>
       {recorderNote && (
         <FloatingTranscriptionRecorder
@@ -966,6 +988,6 @@ export function HomePanel() {
           onSnapshotChange={handleRecorderSnapshotChange}
         />
       )}
-    </div>
+    </>
   );
 }

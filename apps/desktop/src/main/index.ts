@@ -223,6 +223,10 @@ function loadRendererWindow(window: BrowserWindow, query?: Record<string, string
   });
 }
 
+function getOpenWindows() {
+  return [mainWindow].filter((window): window is BrowserWindow => window !== null);
+}
+
 function createCodexNotificationWindow() {
   if (codexNotificationWindow && !codexNotificationWindow.isDestroyed()) {
     return codexNotificationWindow;
@@ -445,7 +449,7 @@ app.whenReady().then(() => {
 
   // Set up transcription IPC handlers and codex monitor window lifecycle
   if (mainWindow) {
-    setupTranscriptionIPC(mainWindow);
+    setupTranscriptionIPC(getOpenWindows);
     setupCallDetectionIPC(mainWindow);
     setupCodexMonitorWindowHandlers(mainWindow);
   }
@@ -454,7 +458,7 @@ app.whenReady().then(() => {
     if (mainWindow === null) {
       createWindow();
       if (mainWindow) {
-        setupTranscriptionIPC(mainWindow);
+        setupTranscriptionIPC(getOpenWindows);
         setupCallDetectionIPC(mainWindow);
         setupCodexMonitorWindowHandlers(mainWindow);
       }

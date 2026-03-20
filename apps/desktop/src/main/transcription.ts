@@ -37,8 +37,24 @@ const LIVE_TRANSCRIPTION_MIN_SPEECH_MS = 120;
 const LIVE_TRANSCRIPTION_SILENCE_TIMEOUT_MS = 250;
 const LIVE_TRANSCRIPTION_MIN_SEGMENT_SECONDS = 0.35;
 const LIVE_TRANSCRIPTION_MAX_SEGMENT_SECONDS = 12;
+type TranscriptionActivityState = "idle" | "recording" | "transcribing";
 
-export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
+export function setupTranscriptionIPC(getWindows: () => BrowserWindow[]): void {
+  let activityState: TranscriptionActivityState = "idle";
+
+  const broadcast = (channel: string, ...args: unknown[]) => {
+    for (const window of getWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(channel, ...args);
+      }
+    }
+  };
+
+  const setActivityState = (nextState: TranscriptionActivityState) => {
+    activityState = nextState;
+    broadcast("transcription:activity-state", nextState);
+  };
+
   // Get available models with detailed info
   ipcMain.handle("transcription:get-models", () => {
     return listAvailableModels();
@@ -76,17 +92,17 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
   // Download a model (and auto-generate CoreML encoder on macOS)
   ipcMain.handle("transcription:download-model", async (_event, modelName: WhisperModelName) => {
     const modelPath = await downloadModel(modelName, (progress) => {
-      mainWindow.webContents.send("transcription:download-progress", progress);
+      broadcast("transcription:download-progress", progress);
     });
 
     // Auto-generate CoreML encoder on macOS if not already available
     if (process.platform === "darwin" && !isCoreMLEncoderAvailable(modelName)) {
       // Run CoreML generation in background (don't await - let it complete async)
       generateCoreMLEncoder(modelName, (progress: CoreMLGenerationProgress) => {
-        mainWindow.webContents.send("transcription:coreml-progress", progress);
+        broadcast("transcription:coreml-progress", progress);
       }).catch((err) => {
         console.error(`[CoreML] Failed to generate encoder for ${modelName}:`, err);
-        mainWindow.webContents.send("transcription:coreml-progress", {
+        broadcast("transcription:coreml-progress", {
           modelName,
           stage: "error",
           message: `Failed to generate CoreML encoder: ${err.message}`,
@@ -104,7 +120,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
     }
 
     return generateCoreMLEncoder(modelName, (progress: CoreMLGenerationProgress) => {
-      mainWindow.webContents.send("transcription:coreml-progress", progress);
+      broadcast("transcription:coreml-progress", progress);
     });
   });
 
@@ -185,12 +201,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
         // Forward Deepgram events to renderer
         deepgramTranscriber.on("transcription:partial", (partial: DeepgramPartialTranscription) => {
-          console.log(
-            "[Transcription IPC] Forwarding partial to renderer:",
-            partial.isFinal ? "FINAL" : "INTERIM",
-            partial.text?.substring(0, 50)
-          );
-          mainWindow.webContents.send("transcription:partial", {
+          broadcast("transcription:partial", {
             text: partial.text,
             isFinal: partial.isFinal,
             segmentIndex: 0,
@@ -199,20 +210,22 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
         });
 
         deepgramTranscriber.on("transcription:complete", (result: DeepgramTranscriptionResult) => {
-          mainWindow.webContents.send("transcription:complete", result);
+          setActivityState("idle");
+          broadcast("transcription:complete", result);
         });
 
         deepgramTranscriber.on("transcription:error", (error: Error) => {
-          mainWindow.webContents.send("transcription:error", error.message);
+          setActivityState("idle");
+          broadcast("transcription:error", error.message);
         });
 
         // VAD events from Deepgram
         deepgramTranscriber.on("vad:speech-start", () => {
-          mainWindow.webContents.send("transcription:vad-speech-start");
+          broadcast("transcription:vad-speech-start");
         });
 
         deepgramTranscriber.on("vad:speech-end", () => {
-          mainWindow.webContents.send("transcription:vad-speech-end", 0);
+          broadcast("transcription:vad-speech-end", 0);
         });
 
         return { status: "initialized", mode: "streaming", provider: "deepgram" };
@@ -246,17 +259,17 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
         // Forward streaming events to renderer
         streamingTranscriber.on("transcription:progress", (percent: number) => {
-          mainWindow.webContents.send("transcription:progress", percent);
+          broadcast("transcription:progress", percent);
         });
 
         streamingTranscriber.on("transcription:partial", (partial: PartialTranscription) => {
-          mainWindow.webContents.send("transcription:partial", partial);
+          broadcast("transcription:partial", partial);
         });
 
         streamingTranscriber.on(
           "transcription:segment",
           (result: TranscriptionResult, segmentIndex: number) => {
-            mainWindow.webContents.send("transcription:segment", {
+            broadcast("transcription:segment", {
               result,
               segmentIndex,
             });
@@ -264,24 +277,26 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
         );
 
         streamingTranscriber.on("transcription:complete", (result: TranscriptionResult) => {
-          mainWindow.webContents.send("transcription:complete", result);
+          setActivityState("idle");
+          broadcast("transcription:complete", result);
         });
 
         streamingTranscriber.on("transcription:error", (error: Error) => {
-          mainWindow.webContents.send("transcription:error", error.message);
+          setActivityState("idle");
+          broadcast("transcription:error", error.message);
         });
 
         // VAD events
         streamingTranscriber.on("vad:speech-start", () => {
-          mainWindow.webContents.send("transcription:vad-speech-start");
+          broadcast("transcription:vad-speech-start");
         });
 
         streamingTranscriber.on("vad:speech-end", (duration: number) => {
-          mainWindow.webContents.send("transcription:vad-speech-end", duration);
+          broadcast("transcription:vad-speech-end", duration);
         });
 
         streamingTranscriber.on("vad:level", (rms: number) => {
-          mainWindow.webContents.send("transcription:vad-level", rms);
+          broadcast("transcription:vad-level", rms);
         });
       } else {
         // Use regular transcriber for batch mode
@@ -293,15 +308,17 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
 
         // Forward events to renderer
         transcriber.on("transcription:progress", (percent) => {
-          mainWindow.webContents.send("transcription:progress", percent);
+          broadcast("transcription:progress", percent);
         });
 
         transcriber.on("transcription:complete", (result: TranscriptionResult) => {
-          mainWindow.webContents.send("transcription:complete", result);
+          setActivityState("idle");
+          broadcast("transcription:complete", result);
         });
 
         transcriber.on("transcription:error", (error: Error) => {
-          mainWindow.webContents.send("transcription:error", error.message);
+          setActivityState("idle");
+          broadcast("transcription:error", error.message);
         });
       }
 
@@ -325,6 +342,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
     }
 
     activeTranscriber.startRecording();
+    setActivityState("recording");
 
     const mode = deepgramTranscriber ? "deepgram" : streamingTranscriber ? "streaming" : "batch";
     return { status: "recording", mode };
@@ -352,6 +370,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
       throw new Error("Transcriber not initialized");
     }
 
+    setActivityState("transcribing");
     const result = await activeTranscriber.stopAndTranscribe();
     return result;
   });
@@ -376,6 +395,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
     if (transcriber) {
       transcriber.cancel();
     }
+    setActivityState("idle");
     return { status: "cancelled" };
   });
 
@@ -409,6 +429,7 @@ export function setupTranscriptionIPC(mainWindow: BrowserWindow): void {
         deepgramTranscriber?.getPartialTranscription() ||
         streamingTranscriber?.getPartialTranscription() ||
         "",
+      activity: activityState,
     };
   });
 
