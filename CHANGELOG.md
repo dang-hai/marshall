@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.9](https://github.com/dang-hai/marshall/compare/v0.0.8...v0.0.9) (2026-03-20)
+
+
+### Features
+
+* **ci:** add smoke test to catch missing modules in electron build ([d08bed1](https://github.com/dang-hai/marshall/commit/d08bed1b39229b0bc67389b0b99f04dfe7c7650f))
+
+
+### Bug Fixes
+
+* **ci:** chain build workflow from release-please and fix type errors ([da1efa3](https://github.com/dang-hai/marshall/commit/da1efa3c3271ae412c31547101deb0de49d3f0d9))
+* **desktop:** add node-fetch for notionhq/client in electron build ([b9c7871](https://github.com/dang-hai/marshall/commit/b9c7871275c7c5e27a11fe46d661dec66924d317))
+* **desktop:** use node-fetch v2 for commonjs compatibility ([10a82b5](https://github.com/dang-hai/marshall/commit/10a82b5dfa1b55a2ea8be51195c4691fb166b276))
+
 ## [0.0.8](https://github.com/dang-hai/marshall/compare/v0.0.7...v0.0.8) (2026-03-20)
 
 ### Bug Fixes
