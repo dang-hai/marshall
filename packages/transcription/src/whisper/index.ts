@@ -15,6 +15,7 @@ export type {
   WhisperConfig,
   TranscriptionResult,
   TranscriptionSegment,
+  TranscriptionUtterance,
   WhisperProgress,
   WhisperModelName,
 } from "./types.js";

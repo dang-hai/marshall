@@ -391,6 +391,7 @@ export class StreamingTranscriber extends EventEmitter {
         text: "",
         language: this.config.language || "en",
         segments: [],
+        utterances: [],
         duration: 0,
       };
     }
@@ -398,9 +399,10 @@ export class StreamingTranscriber extends EventEmitter {
     // Calculate time offset for each segment
     let timeOffset = 0;
     const allSegments: TranscriptionResult["segments"] = [];
+    const allUtterances: TranscriptionResult["utterances"] = [];
     const allText: string[] = [];
 
-    for (const result of this.segmentResults) {
+    for (const [resultIndex, result] of this.segmentResults.entries()) {
       allText.push(result.text);
 
       for (const seg of result.segments) {
@@ -411,6 +413,16 @@ export class StreamingTranscriber extends EventEmitter {
         });
       }
 
+      for (const utterance of result.utterances) {
+        allUtterances.push({
+          id: `${utterance.id}-${resultIndex}`,
+          start: utterance.start + timeOffset,
+          end: utterance.end + timeOffset,
+          text: utterance.text,
+          speaker: utterance.speaker ?? null,
+        });
+      }
+
       timeOffset += result.duration;
     }
 
@@ -418,6 +430,7 @@ export class StreamingTranscriber extends EventEmitter {
       text: allText.join(" ").trim(),
       language: this.segmentResults[0]?.language || this.config.language || "en",
       segments: allSegments,
+      utterances: allUtterances,
       duration: timeOffset,
     };
   }
@@ -434,6 +447,7 @@ export class StreamingTranscriber extends EventEmitter {
         text: "",
         language: this.config.language || "en",
         segments: [],
+        utterances: [],
         duration: 0,
       };
     }

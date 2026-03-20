@@ -17,6 +17,7 @@ export type {
   DeepgramTranscriberEvents,
   DeepgramPartialTranscription,
   DeepgramTranscriptionResult,
+  DeepgramUtterance,
 } from "./deepgram-streaming-transcriber.js";
 
 // Whisper
@@ -36,6 +37,7 @@ export type {
   WhisperConfig,
   TranscriptionResult,
   TranscriptionSegment,
+  TranscriptionUtterance,
   WhisperProgress,
   WhisperModelName,
   DownloadProgress,

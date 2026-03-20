@@ -11,7 +11,7 @@ export interface DeepgramPartialTranscription {
   text: string;
   isFinal: boolean;
   confidence?: number;
-  words?: Array<{ word: string; start: number; end: number; confidence: number }>;
+  words?: DeepgramWord[];
   timestamp: number;
 }
 
@@ -29,8 +29,32 @@ export interface DeepgramTranscriberEvents {
 export interface DeepgramTranscriptionResult {
   text: string;
   language: string;
-  segments: Array<{ start: number; end: number; text: string }>;
+  segments: DeepgramSegment[];
+  utterances: DeepgramUtterance[];
   duration: number;
+}
+
+export interface DeepgramWord {
+  word: string;
+  start: number;
+  end: number;
+  confidence: number;
+  speaker?: number | null;
+}
+
+export interface DeepgramSegment {
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null;
+}
+
+export interface DeepgramUtterance {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null;
 }
 
 interface TranscriptionMessage {
@@ -38,7 +62,103 @@ interface TranscriptionMessage {
   text?: string;
   confidence?: number;
   error?: string;
-  words?: Array<{ word: string; start: number; end: number; confidence: number }>;
+  words?: DeepgramWord[];
+}
+
+function resolveSpeakerLabel(speaker?: number | null): string | null {
+  if (typeof speaker !== "number" || Number.isNaN(speaker)) {
+    return null;
+  }
+
+  return `Speaker ${speaker + 1}`;
+}
+
+function appendWord(existingText: string, nextWord: string): string {
+  if (!existingText) {
+    return nextWord;
+  }
+
+  return /^[,.;:!?%)]/.test(nextWord)
+    ? `${existingText}${nextWord}`
+    : `${existingText} ${nextWord}`;
+}
+
+export function buildSpeakerSegments(
+  words: DeepgramWord[] = [],
+  fallbackText = ""
+): DeepgramSegment[] {
+  const segments: DeepgramSegment[] = [];
+
+  for (const word of words) {
+    const text = word.word.trim();
+    if (!text) {
+      continue;
+    }
+
+    const speaker = resolveSpeakerLabel(word.speaker);
+    const currentSegment = segments[segments.length - 1];
+
+    if (currentSegment && currentSegment.speaker === speaker) {
+      currentSegment.end = word.end;
+      currentSegment.text = appendWord(currentSegment.text, text);
+      continue;
+    }
+
+    segments.push({
+      start: word.start,
+      end: word.end,
+      text,
+      speaker,
+    });
+  }
+
+  if (segments.length > 0) {
+    return segments;
+  }
+
+  const text = fallbackText.trim();
+  return text ? [{ start: 0, end: 0, text, speaker: null }] : [];
+}
+
+export function formatSpeakerTranscript(
+  segments: DeepgramSegment[] = [],
+  fallbackText = ""
+): string {
+  const normalizedSegments = segments.filter((segment) => segment.text.trim());
+  if (normalizedSegments.length === 0) {
+    return fallbackText.trim();
+  }
+
+  if (!normalizedSegments.some((segment) => segment.speaker)) {
+    return (
+      fallbackText.trim() ||
+      normalizedSegments
+        .map((segment) => segment.text.trim())
+        .join(" ")
+        .trim()
+    );
+  }
+
+  return normalizedSegments
+    .map((segment) =>
+      segment.speaker ? `${segment.speaker}: ${segment.text.trim()}` : segment.text.trim()
+    )
+    .join("\n")
+    .trim();
+}
+
+export function buildSpeakerUtterances(
+  segments: DeepgramSegment[] = []
+): DeepgramTranscriptionResult["utterances"] {
+  return segments
+    .filter((segment) => segment.text.trim())
+    .map((segment, index) => ({
+      id: `utt-${index}-${segment.start.toFixed(3)}-${segment.end.toFixed(3)}`,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text.trim(),
+      speaker: segment.speaker ?? null,
+    }));
 }
 
 export class DeepgramStreamingTranscriber extends EventEmitter {
@@ -47,7 +167,7 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
   private isRecording = false;
   private sourceSampleRate = 48000;
   private allText: string[] = [];
-  private allSegments: Array<{ start: number; end: number; text: string }> = [];
+  private allSegments: DeepgramSegment[] = [];
   private recordingStartTime = 0;
 
   constructor(config: DeepgramTranscriberConfig) {
@@ -113,31 +233,25 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
         } satisfies DeepgramPartialTranscription);
         break;
 
-      case "final":
+      case "final": {
         console.log("[DeepgramTranscriber] Emitting final partial:", data.text);
-        if (data.text && data.text.trim()) {
-          this.allText.push(data.text.trim());
+        const segments = buildSpeakerSegments(data.words, data.text);
+        const formattedText = formatSpeakerTranscript(segments, data.text);
 
-          // Add segments from words if available
-          if (data.words && data.words.length > 0) {
-            const firstWord = data.words[0];
-            const lastWord = data.words[data.words.length - 1];
-            this.allSegments.push({
-              start: firstWord.start,
-              end: lastWord.end,
-              text: data.text.trim(),
-            });
-          }
+        if (formattedText) {
+          this.allText.push(formattedText);
+          this.allSegments.push(...segments);
         }
 
         this.emit("transcription:partial", {
-          text: data.text || "",
+          text: formattedText,
           isFinal: true,
           confidence: data.confidence,
           words: data.words,
           timestamp: Date.now(),
         } satisfies DeepgramPartialTranscription);
         break;
+      }
 
       case "speech_started":
         console.log("[DeepgramTranscriber] Speech started");
@@ -203,11 +317,13 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
     }
 
     const duration = (Date.now() - this.recordingStartTime) / 1000;
+    const text = formatSpeakerTranscript(this.allSegments, this.allText.join(" ").trim());
 
     const result: DeepgramTranscriptionResult = {
-      text: this.allText.join(" ").trim(),
+      text,
       language: this.config.language || "en",
       segments: this.allSegments,
+      utterances: buildSpeakerUtterances(this.allSegments),
       duration,
     };
 
@@ -225,7 +341,7 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
   }
 
   getPartialTranscription(): string {
-    return this.allText.join(" ").trim();
+    return formatSpeakerTranscript(this.allSegments, this.allText.join(" ").trim());
   }
 
   cancel(): void {

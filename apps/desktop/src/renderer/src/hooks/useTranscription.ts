@@ -6,12 +6,22 @@ export interface TranscriptionSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string | null;
+}
+
+export interface TranscriptionUtterance {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null;
 }
 
 export interface TranscriptionResult {
   text: string;
   language: string;
   segments: TranscriptionSegment[];
+  utterances: TranscriptionUtterance[];
   duration: number;
 }
 
@@ -71,6 +81,82 @@ function offsetSegments(segments: TranscriptionSegment[], offsetSeconds: number)
   }));
 }
 
+function offsetUtterances(utterances: TranscriptionUtterance[], offsetSeconds: number) {
+  return utterances.map((utterance) => ({
+    ...utterance,
+    start: utterance.start + offsetSeconds,
+    end: utterance.end + offsetSeconds,
+  }));
+}
+
+function createUtterancesFromSegments(
+  segments: TranscriptionSegment[] = []
+): TranscriptionUtterance[] {
+  return segments
+    .filter((segment) => segment.text.trim())
+    .map((segment, index) => ({
+      id: `utt-${index}-${segment.start.toFixed(3)}-${segment.end.toFixed(3)}`,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text.trim(),
+      speaker: segment.speaker ?? null,
+    }));
+}
+
+function normalizeUtterances(
+  utterances: TranscriptionUtterance[] | undefined,
+  segments: TranscriptionSegment[]
+): TranscriptionUtterance[] {
+  if (utterances?.length) {
+    return utterances.filter((utterance) => utterance.text.trim());
+  }
+
+  return createUtterancesFromSegments(segments);
+}
+
+function formatTranscriptUtterances(
+  utterances: TranscriptionUtterance[],
+  fallbackText = ""
+): string {
+  const normalizedUtterances = utterances.filter((utterance) => utterance.text.trim());
+  if (normalizedUtterances.length === 0) {
+    return fallbackText.trim();
+  }
+
+  if (!normalizedUtterances.some((utterance) => utterance.speaker)) {
+    return (
+      fallbackText.trim() ||
+      normalizedUtterances
+        .map((utterance) => utterance.text.trim())
+        .join(" ")
+        .trim()
+    );
+  }
+
+  return normalizedUtterances
+    .map((utterance) =>
+      utterance.speaker ? `${utterance.speaker}: ${utterance.text.trim()}` : utterance.text.trim()
+    )
+    .join("\n")
+    .trim();
+}
+
+function mergeTranscriptText(baseText: string, incomingText: string): string {
+  const trimmedBase = baseText.trim();
+  const trimmedIncoming = incomingText.trim();
+
+  if (!trimmedBase) {
+    return trimmedIncoming;
+  }
+
+  if (!trimmedIncoming) {
+    return trimmedBase;
+  }
+
+  const separator = trimmedBase.includes("\n") || trimmedIncoming.includes("\n") ? "\n" : " ";
+  return `${trimmedBase}${separator}${trimmedIncoming}`.trim();
+}
+
 export function snapshotToTranscript(
   snapshot: NoteTranscriptionSnapshot | null
 ): TranscriptionResult | null {
@@ -78,11 +164,18 @@ export function snapshotToTranscript(
     return null;
   }
 
-  const text = snapshot.transcriptText.trim()
+  const fallbackText = snapshot.transcriptText.trim()
     ? snapshot.transcriptText.trim()
-    : [snapshot.finalText.trim(), snapshot.interimText.trim()].filter(Boolean).join(" ").trim();
+    : mergeTranscriptText(snapshot.finalText, snapshot.interimText);
+  const utterances = normalizeUtterances(snapshot.utterances, snapshot.segments);
+  const text = formatTranscriptUtterances(utterances, fallbackText);
 
-  if (!text && snapshot.segments.length === 0 && snapshot.durationSeconds <= 0) {
+  if (
+    !text &&
+    snapshot.segments.length === 0 &&
+    utterances.length === 0 &&
+    snapshot.durationSeconds <= 0
+  ) {
     return null;
   }
 
@@ -90,6 +183,7 @@ export function snapshotToTranscript(
     text,
     language: snapshot.language,
     segments: snapshot.segments,
+    utterances,
     duration: snapshot.durationSeconds,
   };
 }
@@ -98,17 +192,33 @@ export function mergeTranscriptionResults(
   base: TranscriptionResult | null,
   incoming: TranscriptionResult
 ): TranscriptionResult {
+  const incomingUtterances = normalizeUtterances(incoming.utterances, incoming.segments);
+  const normalizedIncoming = {
+    ...incoming,
+    utterances: incomingUtterances,
+    text: formatTranscriptUtterances(incomingUtterances, incoming.text),
+  };
+
   if (!base) {
-    return incoming;
+    return normalizedIncoming;
   }
 
   const baseText = base.text.trim();
-  const incomingText = incoming.text.trim();
+  const incomingText = normalizedIncoming.text.trim();
+  const mergedSegments = [
+    ...base.segments,
+    ...offsetSegments(normalizedIncoming.segments, base.duration),
+  ];
+  const mergedUtterances = [
+    ...base.utterances,
+    ...offsetUtterances(incomingUtterances, base.duration),
+  ];
 
   return {
-    text: [baseText, incomingText].filter(Boolean).join(" ").trim(),
+    text: formatTranscriptUtterances(mergedUtterances, mergeTranscriptText(baseText, incomingText)),
     language: incoming.language || base.language,
-    segments: [...base.segments, ...offsetSegments(incoming.segments, base.duration)],
+    segments: mergedSegments,
+    utterances: mergedUtterances,
     duration: base.duration + incoming.duration,
   };
 }
@@ -175,7 +285,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       setState((prev) => {
         if (partial.isFinal) {
           // Final result: append to finalText, clear interimText
-          const newFinalText = prev.finalText ? prev.finalText + " " + partial.text : partial.text;
+          const newFinalText = mergeTranscriptText(prev.finalText, partial.text);
           return {
             ...prev,
             lastSegmentIndex: partial.segmentIndex,
@@ -185,9 +295,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           };
         } else {
           // Interim result: replace interimText (don't accumulate)
-          const newPartialText = prev.finalText
-            ? prev.finalText + " " + partial.text
-            : partial.text;
+          const newPartialText = mergeTranscriptText(prev.finalText, partial.text);
           return {
             ...prev,
             lastSegmentIndex: partial.segmentIndex,
@@ -198,8 +306,17 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       });
     });
 
-    const unsubSegment = window.transcriptionAPI.onSegment((_data) => {
-      // Segment completed - could add to a segments array if needed
+    const unsubSegment = window.transcriptionAPI.onSegment((data) => {
+      setState((prev) => {
+        const nextTranscript = prev.transcript
+          ? mergeTranscriptionResults(prev.transcript, data.result)
+          : data.result;
+
+        return {
+          ...prev,
+          transcript: nextTranscript,
+        };
+      });
     });
 
     const unsubComplete = window.transcriptionAPI.onComplete((result) => {

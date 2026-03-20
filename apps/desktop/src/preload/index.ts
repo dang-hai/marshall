@@ -223,12 +223,22 @@ interface TranscriptionSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string | null;
+}
+
+interface TranscriptionUtterance {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  speaker?: string | null;
 }
 
 interface TranscriptionResult {
   text: string;
   language: string;
   segments: TranscriptionSegment[];
+  utterances: TranscriptionUtterance[];
   duration: number;
 }
 

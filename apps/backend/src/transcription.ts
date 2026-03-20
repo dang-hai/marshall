@@ -6,7 +6,13 @@ export interface TranscriptionMessage {
   text?: string;
   confidence?: number;
   error?: string;
-  words?: Array<{ word: string; start: number; end: number; confidence: number }>;
+  words?: Array<{
+    word: string;
+    start: number;
+    end: number;
+    confidence: number;
+    speaker?: number | null;
+  }>;
 }
 
 interface DeepgramConnection {
@@ -65,6 +71,7 @@ export function createTranscriptionRoutes() {
           language: "en",
           smart_format: "true",
           interim_results: "true",
+          diarize: "true",
           utterance_end_ms: "1000",
           vad_events: "true",
           sample_rate: "16000",
@@ -123,10 +130,11 @@ export function createTranscriptionRoutes() {
                 confidence: transcript.confidence,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 words: transcript.words?.map((w: any) => ({
-                  word: w.word || "",
+                  word: w.punctuated_word || w.word || "",
                   start: w.start || 0,
                   end: w.end || 0,
                   confidence: w.confidence || 0,
+                  speaker: typeof w.speaker === "number" ? w.speaker : null,
                 })),
               };
 

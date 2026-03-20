@@ -15,6 +15,7 @@ import type {
   NoteTranscriptionProvider,
   NoteTranscriptionSegment,
   NoteTranscriptionStatus,
+  NoteTranscriptionUtterance,
 } from "@marshall/shared";
 
 export const user = pgTable("user", {
@@ -178,6 +179,10 @@ export const noteTranscription = pgTable(
     interimText: text("interimText").notNull().default(""),
     segments: jsonb("segments")
       .$type<NoteTranscriptionSegment[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    utterances: jsonb("utterances")
+      .$type<NoteTranscriptionUtterance[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
     lastSegmentIndex: integer("lastSegmentIndex"),

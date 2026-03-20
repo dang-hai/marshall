@@ -3,6 +3,7 @@ import { EventEmitter } from "events";
 import { join, dirname } from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { buildSpeakerUtterances } from "../deepgram-streaming-transcriber.js";
 import type { WhisperConfig, TranscriptionResult, WhisperProgress } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -127,6 +128,7 @@ export class WhisperProcess extends EventEmitter {
               text: stdout.trim(),
               language: this.config.language || "en",
               segments: [],
+              utterances: [],
               duration: (Date.now() - this.startTime) / 1000,
             });
           }
@@ -143,15 +145,17 @@ export class WhisperProcess extends EventEmitter {
     // Try to parse as JSON first
     try {
       const json = JSON.parse(output);
+      const segments =
+        json.transcription?.map((s: { offsets: { from: number; to: number }; text: string }) => ({
+          start: s.offsets?.from || 0,
+          end: s.offsets?.to || 0,
+          text: s.text || "",
+        })) || [];
       return {
         text: json.text || json.transcription?.map((s: { text: string }) => s.text).join(" ") || "",
         language: json.language || this.config.language || "en",
-        segments:
-          json.transcription?.map((s: { offsets: { from: number; to: number }; text: string }) => ({
-            start: s.offsets?.from || 0,
-            end: s.offsets?.to || 0,
-            text: s.text || "",
-          })) || [],
+        segments,
+        utterances: buildSpeakerUtterances(segments),
         duration: (Date.now() - this.startTime) / 1000,
       };
     } catch {
@@ -176,6 +180,7 @@ export class WhisperProcess extends EventEmitter {
         text: fullText.trim() || output.trim(),
         language: this.config.language || "en",
         segments,
+        utterances: buildSpeakerUtterances(segments),
         duration: (Date.now() - this.startTime) / 1000,
       };
     }
