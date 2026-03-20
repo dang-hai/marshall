@@ -12,7 +12,9 @@ import type {
   CodexMonitorItem,
   CodexMonitorItemStatus,
   CodexMonitorChatMessage,
+  AgentOperation,
 } from "@marshall/shared";
+import { buildAgentPrompt, extractDocumentContext } from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
 
 interface CodexMonitorServiceOptions {
@@ -32,6 +34,7 @@ interface CodexMonitorResult {
   } | null;
   items: CodexMonitorResultItem[];
   checkedPlanItems: string[];
+  documentOps: AgentOperation[];
   summary: string | null;
 }
 
@@ -53,6 +56,30 @@ const ITEM_SCHEMA = {
     status: { type: "string", enum: ["pending", "done", "attention"] },
   },
   required: ["text", "status"],
+  additionalProperties: false,
+} as const;
+
+const DOCUMENT_OP_SCHEMA = {
+  type: "object",
+  properties: {
+    op: {
+      type: "string",
+      enum: [
+        "checklist.check",
+        "checklist.uncheck",
+        "checklist.add",
+        "section.append",
+        "section.set",
+        "status.set",
+      ],
+    },
+    blockId: { type: "string" },
+    index: { type: "number" },
+    text: { type: "string" },
+    content: { type: "string" },
+    value: { type: "string" },
+  },
+  required: ["op", "blockId"],
   additionalProperties: false,
 } as const;
 
@@ -80,11 +107,15 @@ const RESULT_SCHEMA = {
       type: "array",
       items: { type: "string" },
     },
+    documentOps: {
+      type: "array",
+      items: DOCUMENT_OP_SCHEMA,
+    },
     summary: {
       anyOf: [{ type: "string" }, { type: "null" }],
     },
   },
-  required: ["nudge", "items", "checkedPlanItems", "summary"],
+  required: ["nudge", "items", "checkedPlanItems", "documentOps", "summary"],
   additionalProperties: false,
 } as const;
 
@@ -777,10 +808,12 @@ export class CodexMonitorService {
 
       this.broadcastState();
 
-      if (checkedPlanItems.length > 0 || mergedItems.length > 0 || summary) {
+      const hasDocumentChanges = result.documentOps && result.documentOps.length > 0;
+      if (checkedPlanItems.length > 0 || mergedItems.length > 0 || summary || hasDocumentChanges) {
         this.emitNotePatch({
           noteId: currentSession.noteId,
           checkedPlanItems,
+          documentOps: result.documentOps || [],
           items: mergedItems,
           summary,
           final: finalize,
@@ -980,6 +1013,22 @@ export class CodexMonitorService {
       status: item.status,
     }));
 
+    // Check if the note uses structured document blocks
+    const { hasStructure } = extractDocumentContext(session.noteBodyText);
+
+    if (hasStructure) {
+      // Use document-aware prompt for structured templates
+      return buildAgentPrompt({
+        noteTitle: session.noteTitle,
+        noteBody: session.noteBodyText,
+        transcriptExcerpt: buildTranscriptExcerpt(session.transcription.transcriptText),
+        existingItems,
+        previousNudge: this.state.nudge?.text ?? null,
+        mode: finalize ? "final" : "live",
+      });
+    }
+
+    // Fallback to legacy prompt for unstructured notes
     const promptPayload = {
       mode: finalize ? "final" : "live",
       noteTitle: session.noteTitle,
@@ -1009,6 +1058,7 @@ export class CodexMonitorService {
       "",
       "## Other rules",
       "- `checkedPlanItems` must only contain exact labels from `planChecklistItems` that are clearly completed.",
+      "- `documentOps` should be an empty array for unstructured notes.",
       "- Set `summary` to null unless `mode` is `final`.",
       "- In `final` mode, write a concise 2-3 sentence summary.",
       "",

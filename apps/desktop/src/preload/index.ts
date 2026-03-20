@@ -7,6 +7,7 @@ import type {
   GoogleCalendarConnectionStatus,
   GoogleCalendarEvent,
   MeetingNoteData,
+  MeetingProposal,
   NoteRecord,
   NotionConnectionStatus,
   NotionDatabase,
@@ -131,6 +132,7 @@ contextBridge.exposeInMainWorld("codexMonitorAPI", {
   clearSession: (noteId?: string) => ipcRenderer.invoke("codex-monitor:clear-session", noteId),
   getState: () => ipcRenderer.invoke("codex-monitor:get-state"),
   dismissWindow: () => ipcRenderer.invoke("codex-monitor:dismiss-window"),
+  showWindow: () => ipcRenderer.invoke("codex-monitor:show-window"),
   sendChat: (message: string) => ipcRenderer.invoke("codex-monitor:send-chat", message),
   onState: (callback: (state: CodexMonitorState) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, state: CodexMonitorState) =>
@@ -144,6 +146,24 @@ contextBridge.exposeInMainWorld("codexMonitorAPI", {
     ipcRenderer.on("codex-monitor:note-patch", handler);
     return () => ipcRenderer.removeListener("codex-monitor:note-patch", handler);
   },
+  onMeetingProposal: (callback: (proposal: MeetingProposal) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, proposal: MeetingProposal) =>
+      callback(proposal);
+    ipcRenderer.on("codex-monitor:meeting-proposal", handler);
+    return () => ipcRenderer.removeListener("codex-monitor:meeting-proposal", handler);
+  },
+  onMeetingProposalUpdate: (callback: (proposal: MeetingProposal) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, proposal: MeetingProposal) =>
+      callback(proposal);
+    ipcRenderer.on("codex-monitor:meeting-proposal-update", handler);
+    return () => ipcRenderer.removeListener("codex-monitor:meeting-proposal-update", handler);
+  },
+  acceptMeetingProposal: (proposalId: string, participants?: string[]) =>
+    ipcRenderer.invoke("codex-monitor:accept-meeting-proposal", proposalId, participants),
+  remindMeetingProposal: (proposalId: string, participants?: string[]) =>
+    ipcRenderer.invoke("codex-monitor:remind-meeting-proposal", proposalId, participants),
+  discardMeetingProposal: (proposalId: string) =>
+    ipcRenderer.invoke("codex-monitor:discard-meeting-proposal", proposalId),
 });
 
 // AI API
@@ -423,9 +443,21 @@ declare global {
       clearSession: (noteId?: string) => Promise<{ status: string }>;
       getState: () => Promise<CodexMonitorState>;
       dismissWindow: () => Promise<{ status: string }>;
+      showWindow: () => Promise<{ status: string }>;
       sendChat: (message: string) => Promise<{ status: string; response?: string; error?: string }>;
       onState: (callback: (state: CodexMonitorState) => void) => () => void;
       onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => () => void;
+      onMeetingProposal: (callback: (proposal: MeetingProposal) => void) => () => void;
+      onMeetingProposalUpdate: (callback: (proposal: MeetingProposal) => void) => () => void;
+      acceptMeetingProposal: (
+        proposalId: string,
+        participants?: string[]
+      ) => Promise<{ status: string; event?: GoogleCalendarEvent; error?: string }>;
+      remindMeetingProposal: (
+        proposalId: string,
+        participants?: string[]
+      ) => Promise<{ status: string; error?: string }>;
+      discardMeetingProposal: (proposalId: string) => Promise<{ status: string }>;
     };
     aiAPI: {
       completion: (input: { prompt: string; system?: string }) => Promise<{ text: string }>;

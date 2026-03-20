@@ -143,6 +143,22 @@ export const invitation = pgTable(
   })
 );
 
+export const template = pgTable(
+  "template",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId").references(() => user.id, { onDelete: "cascade" }), // null = system template
+    name: text("name").notNull(),
+    description: text("description"),
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("template_userId_idx").on(table.userId),
+  })
+);
+
 export const note = pgTable(
   "note",
   {
@@ -150,6 +166,7 @@ export const note = pgTable(
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    templateId: text("templateId").references(() => template.id, { onDelete: "set null" }),
     title: text("title").notNull().default(""),
     body: text("body").notNull().default(""),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -159,6 +176,7 @@ export const note = pgTable(
   (table) => ({
     userIdIdx: index("note_userId_idx").on(table.userId),
     userIdUpdatedAtIdx: index("note_userId_updatedAt_idx").on(table.userId, table.updatedAt),
+    templateIdIdx: index("note_templateId_idx").on(table.templateId),
   })
 );
 

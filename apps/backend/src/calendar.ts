@@ -2,10 +2,11 @@ import type { GoogleCalendarEvent } from "@marshall/shared";
 
 export const GOOGLE_CALENDAR_PROVIDER_ID = "google";
 export const GOOGLE_CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+export const GOOGLE_CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar";
 
 const GOOGLE_CALENDAR_ACCESS_SCOPES = new Set([
   GOOGLE_CALENDAR_READONLY_SCOPE,
-  "https://www.googleapis.com/auth/calendar",
+  GOOGLE_CALENDAR_WRITE_SCOPE,
 ]);
 
 interface GoogleCalendarApiEventDateTime {
@@ -32,6 +33,19 @@ export function parseGoogleCalendarScopes(scope: string | null | undefined) {
 
 export function hasGoogleCalendarAccess(scopes: string[]) {
   return scopes.some((scope) => GOOGLE_CALENDAR_ACCESS_SCOPES.has(scope));
+}
+
+export function hasGoogleCalendarWriteAccess(scopes: string[]) {
+  return scopes.includes(GOOGLE_CALENDAR_WRITE_SCOPE);
+}
+
+export interface CreateGoogleCalendarEventInput {
+  title: string;
+  startAt: string; // ISO 8601
+  endAt: string; // ISO 8601
+  description?: string;
+  location?: string;
+  attendees?: string[]; // email addresses
 }
 
 export function serializeGoogleCalendarEvent(
