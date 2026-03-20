@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { NotionClient } from "./client.js";
-import type { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
+import type { BlockObjectRequest } from "./types.js";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";

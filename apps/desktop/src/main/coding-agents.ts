@@ -1,6 +1,6 @@
 import { app } from "electron";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import { mkdtemp, writeFile } from "fs/promises";
+import { mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
 import type { MonitorAgent } from "../shared/settings";
@@ -264,7 +264,7 @@ export function createCodexExecutor(): AgentExecutor {
 }
 
 export function createClaudeCodeExecutor(): AgentExecutor {
-  return function spawnClaudeProcess<T>(options: AgentSpawnOptions<T>): Promise<T> {
+  return async function spawnClaudeProcess<T>(options: AgentSpawnOptions<T>): Promise<T> {
     const {
       prompt,
       conversationId,
@@ -276,11 +276,13 @@ export function createClaudeCodeExecutor(): AgentExecutor {
       noResultError,
     } = options;
 
-    // Claude Code uses different CLI arguments
+    // Claude Code uses --json-schema which accepts a JSON string, not a file path
+    const schemaContent = await readFile(schemaPath, "utf8");
+
     // --print outputs final result, --output-format json for structured output
     const args = conversationId
       ? ["--resume", conversationId, "--print", "--output-format", "json", "-p", prompt]
-      : ["--print", "--output-format", "json", "--output-schema", schemaPath, "-p", prompt];
+      : ["--print", "--output-format", "json", "--json-schema", schemaContent, "-p", prompt];
 
     return new Promise<T>((resolve, reject) => {
       const child = spawn("claude", args, {

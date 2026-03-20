@@ -3,7 +3,7 @@
  * These helpers make it easier to construct block content programmatically.
  */
 
-import type { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
+import type { BlockObjectRequest } from "./types.js";
 
 type RichTextInput =
   | string

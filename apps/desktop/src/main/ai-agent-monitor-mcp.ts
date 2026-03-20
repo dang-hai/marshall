@@ -8,7 +8,7 @@
 
 import { BrowserWindow } from "electron";
 import { randomUUID } from "crypto";
-import { mkdtemp, writeFile } from "fs/promises";
+import { mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
@@ -389,11 +389,13 @@ async function runClaudeCodeWithContext(
   onThreadStarted: (threadId: string) => void,
   setProcess: (child: ChildProcessWithoutNullStreams | null) => void
 ): Promise<AgentFinalResponse> {
+  // Claude Code uses --json-schema which accepts a JSON string, not a file path
+  const schemaContent = await readFile(schemaPath, "utf8");
+
   return new Promise((resolve, reject) => {
-    // Claude Code uses different CLI arguments
     const args = conversationId
       ? ["--resume", conversationId, "--print", "--output-format", "json", "-p", prompt]
-      : ["--print", "--output-format", "json", "--output-schema", schemaPath, "-p", prompt];
+      : ["--print", "--output-format", "json", "--json-schema", schemaContent, "-p", prompt];
 
     const child = spawn("claude", args, {
       env: process.env,
@@ -962,8 +964,10 @@ export class AIAgentMonitorMCPService {
         return;
       }
 
-      // Process result
-      const mergedItems = this.mergeItems(result.items);
+      // Process result (defensive: ensure items is an array)
+      const mergedItems = Array.isArray(result.items)
+        ? this.mergeItems(result.items)
+        : this.state.items;
       const summary = finalize ? result.summary?.trim() || null : this.state.summary;
       const nextNudge = finalize ? null : this.buildNudge(result);
 
