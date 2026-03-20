@@ -1,4 +1,5 @@
-import type { CodexMonitorNotePatch } from "@marshall/shared";
+import type { CodexMonitorNotePatch, AgentOperation } from "@marshall/shared";
+import { applyDocumentOperations, extractDocumentContext } from "@marshall/shared";
 
 export const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
 export const HEADING_ONE_BLOCK_CLASS =
@@ -277,7 +278,121 @@ function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNote
   return normalizeEditorHtml(`${nextHtml}${followUpsHtml}${summaryHtml}`);
 }
 
+/**
+ * Convert plain text (markdown-like) to basic HTML blocks.
+ */
+function markdownToHtml(markdown: string): string {
+  const lines = markdown.split("\n");
+  const htmlLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      htmlLines.push(`<div class="${PARAGRAPH_BLOCK_CLASS}"><br></div>`);
+      continue;
+    }
+
+    // Headings
+    if (trimmed.startsWith("# ")) {
+      htmlLines.push(
+        `<div data-md-type="heading-1" class="${HEADING_ONE_BLOCK_CLASS}">${renderInlineMarkdown(trimmed.slice(2))}</div>`
+      );
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      htmlLines.push(
+        `<div data-md-type="heading-2" class="${HEADING_TWO_BLOCK_CLASS}">${renderInlineMarkdown(trimmed.slice(3))}</div>`
+      );
+      continue;
+    }
+
+    // Checklist items
+    const checklistMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.+)$/);
+    if (checklistMatch) {
+      const checked = checklistMatch[1].toLowerCase() === "x";
+      const text = checklistMatch[2];
+      htmlLines.push(
+        `<div data-md-type="bullet" class="${BULLET_BLOCK_CLASS}">- [${checked ? "x" : " "}] ${renderInlineMarkdown(text)}</div>`
+      );
+      continue;
+    }
+
+    // Bullet points
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      htmlLines.push(
+        `<div data-md-type="bullet" class="${BULLET_BLOCK_CLASS}">${renderInlineMarkdown(trimmed)}</div>`
+      );
+      continue;
+    }
+
+    // Horizontal rule
+    if (trimmed === "---" || trimmed === "***") {
+      htmlLines.push(`<hr class="${DIVIDER_BLOCK_CLASS}">`);
+      continue;
+    }
+
+    // Regular paragraph
+    htmlLines.push(
+      `<div data-md-type="paragraph" class="${PARAGRAPH_BLOCK_CLASS}">${renderInlineMarkdown(trimmed)}</div>`
+    );
+  }
+
+  return htmlLines.join("");
+}
+
+/**
+ * Apply document block operations to the note body.
+ * If the body contains structured markdown, applies operations via document blocks API.
+ */
+function applyDocumentOps(bodyText: string, ops: AgentOperation[]): string {
+  if (!ops || ops.length === 0) {
+    return bodyText;
+  }
+
+  const { hasStructure } = extractDocumentContext(bodyText);
+  if (!hasStructure) {
+    return bodyText;
+  }
+
+  return applyDocumentOperations(bodyText, ops);
+}
+
 export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePatch) {
+  // First, check if we have document operations to apply
+  if (patch.documentOps && patch.documentOps.length > 0) {
+    // Extract plain text, apply document ops, convert back to HTML
+    const plainText = extractPlainTextFromHtml(bodyHtml);
+    const { hasStructure } = extractDocumentContext(plainText);
+
+    if (hasStructure) {
+      const updatedMarkdown = applyDocumentOps(plainText, patch.documentOps);
+      // Convert updated markdown back to HTML, then apply remaining patches
+      const updatedHtml = markdownToHtml(updatedMarkdown);
+
+      // Apply follow-ups and summary on top
+      if (typeof DOMParser === "undefined") {
+        return applyCodexNotePatchWithoutDom(updatedHtml, {
+          ...patch,
+          checkedPlanItems: [], // Already handled by documentOps
+        });
+      }
+
+      const body = parseBodyHtml(updatedHtml);
+      replaceSection(
+        body,
+        "followups",
+        buildFollowUpSection(
+          body.ownerDocument,
+          patch.items.map((item) => item.text)
+        )
+      );
+      replaceSection(body, "summary", buildSummarySection(body.ownerDocument, patch.summary));
+      return normalizeEditorHtml(body.innerHTML);
+    }
+  }
+
+  // Fallback to legacy behavior
   if (typeof DOMParser === "undefined") {
     return applyCodexNotePatchWithoutDom(bodyHtml, patch);
   }

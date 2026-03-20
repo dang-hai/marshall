@@ -1,5 +1,9 @@
 // Shared types and utilities
 
+export * from "./document-blocks.js";
+export * from "./document-service.js";
+export * from "./codex-document-integration.js";
+
 export interface User {
   id: string;
   email: string;
@@ -114,6 +118,7 @@ export interface NoteTranscriptionSnapshot extends SaveNoteTranscriptionInput {
 export interface NoteRecord {
   id: string;
   userId: string;
+  templateId: string | null;
   title: string;
   body: string;
   createdAt: string;
@@ -122,7 +127,30 @@ export interface NoteRecord {
   transcription: NoteTranscriptionSnapshot | null;
 }
 
+export interface TemplateRecord {
+  id: string;
+  userId: string | null;
+  name: string;
+  description: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTemplateInput {
+  name: string;
+  description?: string;
+  body: string;
+}
+
+export interface UpdateTemplateInput {
+  name?: string;
+  description?: string;
+  body?: string;
+}
+
 export interface CreateNoteInput {
+  templateId?: string;
   title?: string;
   body?: string;
   createdAt?: string;
@@ -162,7 +190,10 @@ export interface CodexMonitorItem {
 
 export interface CodexMonitorNotePatch {
   noteId: string;
+  /** @deprecated Use documentOps instead */
   checkedPlanItems: string[];
+  /** Document block operations to apply */
+  documentOps?: import("./document-service").AgentOperation[];
   items: CodexMonitorItem[];
   summary: string | null;
   final: boolean;

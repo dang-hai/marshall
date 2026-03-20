@@ -40,7 +40,7 @@
     },
     "apps/desktop": {
       "name": "@marshall/desktop",
-      "version": "0.0.3",
+      "version": "0.0.6",
       "dependencies": {
         "@better-auth/electron": "^1.5.5",
         "@marshall/api": "workspace:*",
@@ -85,7 +85,7 @@
     },
     "apps/marketing": {
       "name": "@marshall/marketing",
-      "version": "0.0.3",
+      "version": "0.0.6",
       "dependencies": {
         "@vercel/analytics": "2.0.1",
         "motion": "12.38.0",
@@ -102,7 +102,7 @@
     },
     "packages/api": {
       "name": "@marshall/api",
-      "version": "0.0.3",
+      "version": "0.0.6",
       "dependencies": {
         "@marshall/auth": "workspace:*",
         "@marshall/database": "workspace:*",
@@ -117,7 +117,7 @@
     },
     "packages/auth": {
       "name": "@marshall/auth",
-      "version": "0.0.3",
+      "version": "0.0.6",
       "dependencies": {
         "@better-auth/electron": "1.5.5",
         "@marshall/database": "workspace:*",
@@ -129,7 +129,7 @@
     },
     "packages/database": {
       "name": "@marshall/database",
-      "version": "0.0.3",
+      "version": "0.0.6",
       "dependencies": {
         "@marshall/shared": "workspace:*",
         "@neondatabase/serverless": "^0.9.0",
@@ -142,14 +142,19 @@
     },
     "packages/shared": {
       "name": "@marshall/shared",
-      "version": "0.0.3",
+      "version": "0.0.6",
+      "bin": {
+        "doc": "./src/document-blocks-cli.ts",
+      },
       "devDependencies": {
+        "@types/node": "^20.0.0",
+        "bun-types": "^1.0.0",
         "typescript": "^5.4.0",
       },
     },
     "packages/transcription": {
       "name": "@marshall/transcription",
-      "version": "0.0.3",
+      "version": "0.0.6",
       "dependencies": {
         "node-wav": "^0.0.2",
         "ws": "8.19.0",
@@ -987,6 +992,8 @@
     "builder-util": ["builder-util@24.13.1", "", { "dependencies": { "7zip-bin": "~5.2.0", "@types/debug": "^4.1.6", "app-builder-bin": "4.0.0", "bluebird-lst": "^1.0.9", "builder-util-runtime": "9.2.4", "chalk": "^4.1.2", "cross-spawn": "^7.0.3", "debug": "^4.3.4", "fs-extra": "^10.1.0", "http-proxy-agent": "^5.0.0", "https-proxy-agent": "^5.0.1", "is-ci": "^3.0.0", "js-yaml": "^4.1.0", "source-map-support": "^0.5.19", "stat-mode": "^1.0.0", "temp-file": "^3.4.0" } }, "sha512-NhbCSIntruNDTOVI9fdXz0dihaqX2YuE1D6zZMrwiErzH4ELZHE6mdiB40wEgZNprDia+FghRFgKoAqMZRRjSA=="],
 
     "builder-util-runtime": ["builder-util-runtime@9.2.4", "", { "dependencies": { "debug": "^4.3.4", "sax": "^1.2.4" } }, "sha512-upp+biKpN/XZMLim7aguUyW8s0FUpDvOtK6sbanMFDAMBzpHDqdhgVYm6zc9HJ6nWo7u2Lxk60i2M6Jd3aiNrA=="],
+
+    "bun-types": ["bun-types@1.3.11", "", { "dependencies": { "@types/node": "*" } }, "sha512-1KGPpoxQWl9f6wcZh57LvrPIInQMn2TQ7jsgxqpRzg+l0QPOFvJVH7HmvHo/AiPgwXy+/Thf6Ov3EdVn1vOabg=="],
 
     "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
 
@@ -2858,6 +2865,8 @@
 
     "body-parser/iconv-lite": ["iconv-lite@0.4.24", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3" } }, "sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA=="],
 
+    "bun-types/@types/node": ["@types/node@25.5.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw=="],
+
     "chokidar/glob-parent": ["glob-parent@5.1.2", "", { "dependencies": { "is-glob": "^4.0.1" } }, "sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow=="],
 
     "chromium-bidi/zod": ["zod@3.23.8", "", {}, "sha512-XBx9AXhXktjUqnepgTiE5flcKIYWi/rme0Eaj+5Y0lftuGBq+jyRu/md4WnuxqgP1ubdpNCsYEYPxrzVHD8d6g=="],
@@ -3269,6 +3278,8 @@
     "archiver-utils/readable-stream/string_decoder": ["string_decoder@1.1.1", "", { "dependencies": { "safe-buffer": "~5.1.0" } }, "sha512-n/ShnvDi6FHbbVfviro+WojiFzv+s8MPMHBczVePfUpDJLwoLT0ht1l4YwBCbi8pJAveEEdnkHyPyTP/mzRfwg=="],
 
     "body-parser/debug/ms": ["ms@2.0.0", "", {}, "sha512-Tpp60P6IUJDTuOq/5Z8cdskzJujfwqfOTkrwIwj7IRISpnkJnT6SyJ4PCPnGMoFjC9ddhal5KVIYtAt97ix05A=="],
+
+    "bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "cli-truncate/string-width/strip-ansi": ["strip-ansi@7.2.0", "", { "dependencies": { "ansi-regex": "^6.2.2" } }, "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w=="],
 
