@@ -1,6 +1,6 @@
-import { Check, ChevronRight, FolderOpen, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import type { DisplayUser } from "@marshall/shared";
+import { Check, ChevronRight, FolderOpen, Loader2, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import type { DisplayUser, GoogleCalendarConnectionStatus } from "@marshall/shared";
 import {
   defaultAppSettings,
   type AppSettings,
@@ -25,52 +25,6 @@ function formatBytes(bytes: number): string {
 import { cn, getInitial } from "../lib/utils";
 import { type SettingsSectionId } from "./settings-config";
 import { Button } from "./ui/button";
-
-const defaultCalendarSettings: AppSettings["calendar"] = defaultAppSettings.calendar;
-
-const calendarVisibilityOptions: Array<{
-  description: string;
-  key: keyof AppSettings["calendar"]["visibleCalendars"];
-  label: string;
-}> = [
-  {
-    key: "work",
-    label: "Work",
-    description: "Your default work calendar and scheduled meetings.",
-  },
-  {
-    key: "personal",
-    label: "Personal",
-    description: "Private events that help Marshall understand availability.",
-  },
-  {
-    key: "shared",
-    label: "Shared",
-    description: "Team or project calendars that should appear alongside your own.",
-  },
-];
-
-const calendarDisplayOptions: Array<{
-  description: string;
-  key: Exclude<keyof AppSettings["calendar"], "visibleCalendars">;
-  label: string;
-}> = [
-  {
-    key: "showDeclinedEvents",
-    label: "Show declined events",
-    description: "Keep declined meetings visible for quick context.",
-  },
-  {
-    key: "showWeekends",
-    label: "Show weekends",
-    description: "Include Saturday and Sunday in calendar previews.",
-  },
-  {
-    key: "compactView",
-    label: "Compact layout",
-    description: "Reduce spacing to fit more events in the calendar preview.",
-  },
-];
 
 const transcriptionProviderOptions: Array<{
   description: string;
@@ -116,14 +70,6 @@ interface PermissionRowProps {
   onRequest: () => void;
 }
 
-interface PreferenceRowProps {
-  checked: boolean;
-  description: string;
-  disabled?: boolean;
-  label: string;
-  onToggle: () => void;
-}
-
 interface ProviderRowProps {
   children?: React.ReactNode;
   description: string;
@@ -158,30 +104,6 @@ function PermissionRow({ label, description, granted, onRequest }: PermissionRow
       )}
       {granted && <span className="text-2xs text-muted-foreground">Granted</span>}
     </div>
-  );
-}
-
-function PreferenceRow({
-  label,
-  description,
-  checked,
-  disabled = false,
-  onToggle,
-}: PreferenceRowProps) {
-  return (
-    <label className="flex items-start justify-between gap-3 border-b border-border/40 py-3 last:border-0">
-      <div>
-        <p className="text-xs font-medium text-foreground">{label}</p>
-        <p className="text-2xs text-muted-foreground">{description}</p>
-      </div>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={onToggle}
-        className="mt-0.5 h-4 w-4 rounded border-border bg-background text-primary disabled:cursor-not-allowed disabled:opacity-50"
-      />
-    </label>
   );
 }
 
@@ -227,13 +149,33 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
   const { micPermission, screenPermission, requestMicPermission, requestScreenPermission } =
     useAudioCapture();
   const { error, loading, settings, updateSection } = useSettings();
-  const calendarSettings = settings?.calendar ?? defaultCalendarSettings;
   const transcriptionSettings = settings?.transcription ?? defaultTranscriptionSettings;
-  const calendarReady = !loading && Boolean(settings);
   const displayName = user?.name || user?.email || "User";
   const transcriptionReady = !loading && Boolean(settings);
 
   const [modelStorageInfo, setModelStorageInfo] = useState<ModelStorageInfo | null>(null);
+  const [calendarConnection, setCalendarConnection] =
+    useState<GoogleCalendarConnectionStatus | null>(null);
+  const [isCalendarLoading, setIsCalendarLoading] = useState(section === "calendar");
+  const [isCalendarActionLoading, setIsCalendarActionLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+
+  const loadCalendarStatus = useCallback(async () => {
+    setIsCalendarLoading(true);
+    setCalendarError(null);
+
+    try {
+      const status = await window.calendarAPI.getStatus();
+      setCalendarConnection(status);
+      return status;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load Google Calendar status";
+      setCalendarError(message);
+      return null;
+    } finally {
+      setIsCalendarLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (section === "audio") {
@@ -261,25 +203,29 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
     }
   }, [section, transcriptionSettings.selectedModel]);
 
-  const toggleCalendarVisibility = (key: keyof AppSettings["calendar"]["visibleCalendars"]) => {
-    void updateSection("calendar", {
-      visibleCalendars: {
-        ...calendarSettings.visibleCalendars,
-        [key]: !calendarSettings.visibleCalendars[key],
-      },
-    });
-  };
-
-  const toggleCalendarDisplay = (
-    key: Exclude<keyof AppSettings["calendar"], "visibleCalendars">
-  ) => {
-    void updateSection("calendar", {
-      [key]: !calendarSettings[key],
-    } as Partial<AppSettings["calendar"]>);
-  };
+  useEffect(() => {
+    if (section === "calendar") {
+      void loadCalendarStatus();
+    }
+  }, [loadCalendarStatus, section]);
 
   const setTranscriptionProvider = (provider: TranscriptionProvider) => {
     void updateSection("transcription", { provider });
+  };
+
+  const connectGoogleCalendar = async () => {
+    setIsCalendarActionLoading(true);
+    setCalendarError(null);
+
+    try {
+      await window.calendarAPI.connectGoogle();
+      await loadCalendarStatus();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to connect Google Calendar";
+      setCalendarError(message);
+    } finally {
+      setIsCalendarActionLoading(false);
+    }
   };
 
   return (
@@ -399,44 +345,95 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
           <>
             <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
               <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Visible calendars
+                Google Calendar
               </p>
-              <h3 className="text-sm font-medium text-foreground">Choose which calendars show</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Marshall can tailor meeting context around the calendars you want to keep visible.
-              </p>
-              <div className="mt-3">
-                {calendarVisibilityOptions.map((option) => (
-                  <PreferenceRow
-                    key={option.key}
-                    checked={calendarSettings.visibleCalendars[option.key]}
-                    description={option.description}
-                    disabled={!calendarReady}
-                    label={option.label}
-                    onToggle={() => toggleCalendarVisibility(option.key)}
-                  />
-                ))}
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-foreground">Connect upcoming events</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Marshall reads your next 5 upcoming Google Calendar events and shows them on
+                    Home.
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-2xs font-medium",
+                    calendarConnection?.connected
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {calendarConnection?.connected ? "Connected" : "Not connected"}
+                </span>
+              </div>
+              <div className="mt-4 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <p className="text-xs font-medium text-foreground">Connection status</p>
+                {isCalendarLoading ? (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Checking Google Calendar access...</span>
+                  </div>
+                ) : calendarConnection?.connected ? (
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>Connected as {calendarConnection.accountEmail || "your Google account"}.</p>
+                    <p>Marshall only requests read-only access for upcoming calendar events.</p>
+                  </div>
+                ) : (
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>Google Calendar access has not been granted yet.</p>
+                    <p>
+                      Use the button below to approve read-only calendar access in your browser.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void connectGoogleCalendar()}
+                  disabled={isCalendarLoading || isCalendarActionLoading}
+                >
+                  {isCalendarActionLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      <span>
+                        {calendarConnection?.connected ? "Reconnecting..." : "Connecting..."}
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      {calendarConnection?.connected
+                        ? "Reconnect Google Calendar"
+                        : "Connect Google Calendar"}
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void loadCalendarStatus()}
+                  disabled={isCalendarLoading || isCalendarActionLoading}
+                >
+                  Refresh status
+                </Button>
               </div>
             </div>
 
             <div className="rounded-xl border border-border/60 bg-card p-5 shadow-soft">
               <p className="mb-2 text-2xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Display options
+                Sync behavior
               </p>
-              <h3 className="text-sm font-medium text-foreground">
-                Control how calendar data appears
-              </h3>
-              <div className="mt-3">
-                {calendarDisplayOptions.map((option) => (
-                  <PreferenceRow
-                    key={option.key}
-                    checked={calendarSettings[option.key]}
-                    description={option.description}
-                    disabled={!calendarReady}
-                    label={option.label}
-                    onToggle={() => toggleCalendarDisplay(option.key)}
-                  />
-                ))}
+              <h3 className="text-sm font-medium text-foreground">What Marshall uses</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The current integration reads event titles, times, locations, and Google Calendar
+                links from your primary calendar.
+              </p>
+              <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                <p>Marshall shows the 5 upcoming events on Home after the calendar is connected.</p>
+                <p>
+                  Calendar access stays read-only. Editing or creating Google Calendar events is not
+                  part of this integration.
+                </p>
               </div>
             </div>
           </>
@@ -468,6 +465,11 @@ export function SettingsPanel({ onBack, section, user, onSignOut }: SettingsPane
         {error && (
           <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             {error}
+          </div>
+        )}
+        {calendarError && section === "calendar" && (
+          <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            {calendarError}
           </div>
         )}
       </div>

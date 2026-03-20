@@ -19,7 +19,7 @@ export const SETTINGS_SECTIONS = {
   },
   calendar: {
     label: "Calendar",
-    description: "Visible calendars and display",
+    description: "Google Calendar connection",
     icon: CalendarDays,
   },
   permissions: {

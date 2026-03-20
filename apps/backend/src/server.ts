@@ -1,9 +1,10 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
 import type { Auth } from "@marshall/auth";
-import { note, noteTranscription, type Database } from "@marshall/database";
+import { account, note, noteTranscription, type Database } from "@marshall/database";
 import type {
   CreateNoteInput,
+  GoogleCalendarConnectionStatus,
   NoteRecord,
   NoteTranscriptionSnapshot,
   SaveNoteTranscriptionInput,
@@ -14,6 +15,13 @@ import { randomUUID } from "crypto";
 import { createTranscriptionRoutes } from "./transcription";
 import { generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
+import {
+  GOOGLE_CALENDAR_PROVIDER_ID,
+  GOOGLE_CALENDAR_READONLY_SCOPE,
+  hasGoogleCalendarAccess,
+  parseGoogleCalendarScopes,
+  serializeGoogleCalendarEvent,
+} from "./calendar";
 
 export interface BackendAppOptions {
   auth: Auth;
@@ -235,6 +243,54 @@ function desktopSuccessPage(scheme: string, token: string, state: string) {
 </html>`;
 }
 
+function desktopCalendarRedirectPage({
+  description,
+  redirectLabel,
+  redirectUrl,
+  title,
+}: {
+  description: string;
+  redirectLabel: string;
+  redirectUrl: string;
+  title: string;
+}) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - Marshall</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      text-align: center;
+      margin: 0;
+    }
+    .container { max-width: 420px; padding: 48px; }
+    h1 { font-size: 24px; margin-bottom: 16px; }
+    p { color: rgba(255,255,255,0.68); margin-bottom: 24px; line-height: 1.6; }
+    a { color: #818cf8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>${title}</h1>
+    <p>${description}</p>
+    <p>If Marshall does not open automatically, <a href="${redirectUrl}">${redirectLabel}</a>.</p>
+  </div>
+  <script>
+    window.location.href = "${redirectUrl}";
+  </script>
+</body>
+</html>`;
+}
+
 function toIsoString(value: Date | null | undefined) {
   return value ? value.toISOString() : null;
 }
@@ -246,6 +302,29 @@ function parseDateInput(value?: string | null) {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildGoogleCalendarConnectionStatus(
+  scope: string | null | undefined,
+  accountEmail: string | null | undefined
+): GoogleCalendarConnectionStatus {
+  const scopes = parseGoogleCalendarScopes(scope);
+
+  return {
+    connected: hasGoogleCalendarAccess(scopes),
+    accountEmail: accountEmail ?? null,
+    scopes,
+  };
+}
+
+function googleCalendarCallbackUrl(baseUrl: string, scheme: string, state: string, error?: string) {
+  const url = new URL(`${baseUrl}/auth/desktop/calendar-${error ? "error" : "success"}`);
+  url.searchParams.set("scheme", scheme);
+  url.searchParams.set("state", state);
+  if (error) {
+    url.searchParams.set("error", error);
+  }
+  return url.toString();
 }
 
 function serializeNoteTranscription(
@@ -405,6 +484,42 @@ export function createBackendApp({
           return `Error: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       })
+      .get("/auth/desktop/calendar-success", ({ query, set }) => {
+        const state = query.state as string | undefined;
+        const scheme = (query.scheme as string | undefined) || electronProtocol;
+
+        if (!state) {
+          set.status = 400;
+          return "Missing state parameter";
+        }
+
+        set.headers["Content-Type"] = "text/html; charset=utf-8";
+        return desktopCalendarRedirectPage({
+          title: "Google Calendar connected",
+          description: "Marshall now has read access to your upcoming Google Calendar events.",
+          redirectLabel: "open Marshall",
+          redirectUrl: `${scheme}://calendar/callback?state=${encodeURIComponent(state)}`,
+        });
+      })
+      .get("/auth/desktop/calendar-error", ({ query, set }) => {
+        const state = query.state as string | undefined;
+        const scheme = (query.scheme as string | undefined) || electronProtocol;
+        const error = typeof query.error === "string" ? query.error : "calendar_connect_failed";
+
+        if (!state) {
+          set.status = 400;
+          return "Missing state parameter";
+        }
+
+        set.headers["Content-Type"] = "text/html; charset=utf-8";
+        return desktopCalendarRedirectPage({
+          title: "Google Calendar connection failed",
+          description:
+            "Marshall could not complete Google Calendar access. Try the connection flow again.",
+          redirectLabel: "return to Marshall",
+          redirectUrl: `${scheme}://calendar/error?state=${encodeURIComponent(state)}&error=${encodeURIComponent(error)}`,
+        });
+      })
       // Get current user from session token (for desktop app)
       .get("/api/user/me", async ({ request, set }) => {
         try {
@@ -430,6 +545,164 @@ export function createBackendApp({
           return { error: "Failed to get user" };
         }
       })
+      .get("/api/calendar/google/status", async ({ request, set }) => {
+        if (!db) {
+          set.status = 500;
+          return { error: "Database is not configured" };
+        }
+
+        try {
+          const session = await getAuthenticatedSession(auth, request, set);
+          if (!session) {
+            return { error: "Not authenticated" };
+          }
+
+          const [googleAccount] = await db
+            .select()
+            .from(account)
+            .where(
+              and(
+                eq(account.userId, session.user.id),
+                eq(account.providerId, GOOGLE_CALENDAR_PROVIDER_ID)
+              )
+            )
+            .orderBy(desc(account.updatedAt))
+            .limit(1);
+
+          return buildGoogleCalendarConnectionStatus(googleAccount?.scope, session.user.email);
+        } catch (error) {
+          console.error("[API] Error getting Google Calendar status:", error);
+          set.status = 500;
+          return { error: "Failed to get Google Calendar status" };
+        }
+      })
+      .post(
+        "/api/calendar/google/connect",
+        async ({ body, request, set }) => {
+          try {
+            const session = await getAuthenticatedSession(auth, request, set);
+            if (!session) {
+              return { error: "Not authenticated" };
+            }
+
+            const result = await auth.api.linkSocialAccount({
+              headers: request.headers,
+              body: {
+                provider: GOOGLE_CALENDAR_PROVIDER_ID,
+                scopes: [GOOGLE_CALENDAR_READONLY_SCOPE],
+                callbackURL: googleCalendarCallbackUrl(
+                  baseUrl,
+                  body.scheme || electronProtocol,
+                  body.state
+                ),
+                errorCallbackURL: googleCalendarCallbackUrl(
+                  baseUrl,
+                  body.scheme || electronProtocol,
+                  body.state,
+                  "calendar_connect_failed"
+                ),
+                disableRedirect: true,
+              },
+            });
+
+            return { url: result.url };
+          } catch (error) {
+            console.error("[API] Error starting Google Calendar connect flow:", error);
+            set.status = 500;
+            return { error: "Failed to start Google Calendar connect flow" };
+          }
+        },
+        {
+          body: t.Object({
+            scheme: t.Optional(t.String()),
+            state: t.String(),
+          }),
+        }
+      )
+      .get(
+        "/api/calendar/google/upcoming",
+        async ({ query, request, set }) => {
+          if (!db) {
+            set.status = 500;
+            return { error: "Database is not configured" };
+          }
+
+          try {
+            const session = await getAuthenticatedSession(auth, request, set);
+            if (!session) {
+              return { error: "Not authenticated" };
+            }
+
+            const [googleAccount] = await db
+              .select({ scope: account.scope })
+              .from(account)
+              .where(
+                and(
+                  eq(account.userId, session.user.id),
+                  eq(account.providerId, GOOGLE_CALENDAR_PROVIDER_ID)
+                )
+              )
+              .orderBy(desc(account.updatedAt))
+              .limit(1);
+
+            const status = buildGoogleCalendarConnectionStatus(
+              googleAccount?.scope,
+              session.user.email
+            );
+
+            if (!status.connected) {
+              set.status = 403;
+              return { error: "Google Calendar is not connected" };
+            }
+
+            const token = await auth.api.getAccessToken({
+              headers: request.headers,
+              body: { providerId: GOOGLE_CALENDAR_PROVIDER_ID },
+            });
+
+            const limit = Math.min(Math.max(Number(query.limit ?? 5) || 5, 1), 10);
+            const calendarUrl = new URL(
+              "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+            );
+            calendarUrl.searchParams.set("maxResults", String(limit));
+            calendarUrl.searchParams.set("orderBy", "startTime");
+            calendarUrl.searchParams.set("singleEvents", "true");
+            calendarUrl.searchParams.set("timeMin", new Date().toISOString());
+
+            const response = await fetch(calendarUrl.toString(), {
+              headers: {
+                Authorization: `Bearer ${token.accessToken}`,
+              },
+            });
+
+            if (!response.ok) {
+              const message = await response.text();
+              console.error("[API] Google Calendar request failed:", response.status, message);
+              set.status = 502;
+              return { error: "Failed to fetch upcoming Google Calendar events" };
+            }
+
+            const payload = (await response.json()) as { items?: unknown[] };
+            const events = (payload.items ?? [])
+              .flatMap((item) => {
+                const event = serializeGoogleCalendarEvent(item as Record<string, unknown>);
+                return event ? [event] : [];
+              })
+              .slice(0, limit);
+
+            return { events };
+          } catch (error) {
+            console.error("[API] Error fetching upcoming Google Calendar events:", error);
+            set.status = 500;
+            return { error: "Failed to fetch upcoming Google Calendar events" };
+          }
+        },
+        {
+          query: t.Object({
+            limit: t.Optional(t.String()),
+          }),
+        }
+      )
       // LLM completion endpoint
       .post(
         "/api/ai/completion",

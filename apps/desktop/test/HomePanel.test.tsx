@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { NoteRecord } from "@marshall/shared";
-import { getFloatingRecorderNote } from "../src/renderer/src/components/HomePanel";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { GoogleCalendarEvent, NoteRecord } from "@marshall/shared";
+import {
+  formatUpcomingEventSchedule,
+  getFloatingRecorderNote,
+  UpcomingEventsPanel,
+} from "../src/renderer/src/components/HomePanel";
 
 function createNote(overrides: Partial<NoteRecord> = {}): NoteRecord {
   return {
@@ -105,5 +110,84 @@ describe("getFloatingRecorderNote", () => {
     expect(getFloatingRecorderNote([trashedRecordingNote, selectedNote], "note-selected")?.id).toBe(
       "note-selected"
     );
+  });
+});
+
+describe("UpcomingEventsPanel", () => {
+  test("renders a connect prompt when Google Calendar is not connected", () => {
+    const markup = renderToStaticMarkup(
+      <UpcomingEventsPanel
+        events={[]}
+        error={null}
+        isLoading={false}
+        onOpenSettings={() => {}}
+        onRefresh={() => {}}
+        status={{ connected: false, accountEmail: null, scopes: [] }}
+      />
+    );
+
+    expect(markup).toContain("Connect Google Calendar");
+    expect(markup).toContain("Open calendar settings");
+  });
+
+  test("renders the upcoming event list when events are available", () => {
+    const events: GoogleCalendarEvent[] = [
+      {
+        id: "event-1",
+        title: "Design review",
+        startAt: "2026-03-21T09:00:00.000Z",
+        endAt: "2026-03-21T09:30:00.000Z",
+        isAllDay: false,
+        location: "Google Meet",
+        htmlLink: null,
+        status: "confirmed",
+      },
+    ];
+
+    const markup = renderToStaticMarkup(
+      <UpcomingEventsPanel
+        events={events}
+        error={null}
+        isLoading={false}
+        onOpenSettings={() => {}}
+        onRefresh={() => {}}
+        status={{ connected: true, accountEmail: "marshall@example.com", scopes: [] }}
+      />
+    );
+
+    expect(markup).toContain("Design review");
+    expect(markup).toContain("Google Meet");
+  });
+});
+
+describe("formatUpcomingEventSchedule", () => {
+  test("formats timed events with the day and time range", () => {
+    expect(
+      formatUpcomingEventSchedule({
+        id: "event-1",
+        title: "Standup",
+        startAt: "2026-03-21T09:00:00.000Z",
+        endAt: "2026-03-21T09:15:00.000Z",
+        isAllDay: false,
+        location: null,
+        htmlLink: null,
+        status: "confirmed",
+      })
+    ).toContain("9:00");
+  });
+
+  test("formats all-day events without a time range", () => {
+    expect(
+      formatUpcomingEventSchedule({
+        id: "event-2",
+        title: "Offsite",
+        startAt: "2026-03-22",
+        endAt: "2026-03-23",
+        isAllDay: true,
+        location: null,
+        htmlLink: null,
+        status: "confirmed",
+      })
+    ).toContain("All day");
   });
 });

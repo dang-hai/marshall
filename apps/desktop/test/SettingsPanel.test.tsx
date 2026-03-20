@@ -15,12 +15,11 @@ describe("desktop settings panel", () => {
   test("renders calendar visibility and display preferences", () => {
     const markup = renderToStaticMarkup(<SettingsPanel onBack={() => {}} section="calendar" />);
 
-    expect(markup).toContain("Visible calendars");
-    expect(markup).toContain("Work");
-    expect(markup).toContain("Personal");
-    expect(markup).toContain("Shared");
-    expect(markup).toContain("Display options");
-    expect(markup).toContain("Show weekends");
-    expect(markup).toContain("Compact layout");
+    expect(markup).toContain("Google Calendar");
+    expect(markup).toContain("Connect upcoming events");
+    expect(markup).toContain("Connect Google Calendar");
+    expect(markup).toContain("Refresh status");
+    expect(markup).toContain("Sync behavior");
+    expect(markup).toContain("5 upcoming events");
   });
 });

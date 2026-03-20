@@ -52,6 +52,14 @@ const pendingAuthRequests = new Map<
   }
 >();
 
+const pendingCalendarConnectionRequests = new Map<
+  string,
+  {
+    resolve: () => void;
+    reject: (error: Error) => void;
+  }
+>();
+
 // Store auth token in memory (for this session)
 let authToken: string | null = null;
 
@@ -134,11 +142,60 @@ function handleAuthCallback(url: string) {
   }
 }
 
+function handleCalendarCallback(url: string) {
+  try {
+    const parsed = new URL(url);
+    const isCalendarSuccess =
+      (parsed.host === "calendar" && parsed.pathname === "/callback") ||
+      parsed.pathname === "/calendar/callback" ||
+      parsed.pathname === "//calendar/callback";
+    const isCalendarError =
+      (parsed.host === "calendar" && parsed.pathname === "/error") ||
+      parsed.pathname === "/calendar/error" ||
+      parsed.pathname === "//calendar/error";
+
+    if (!isCalendarSuccess && !isCalendarError) {
+      return;
+    }
+
+    const state = parsed.searchParams.get("state");
+    if (!state) {
+      return;
+    }
+
+    const pending = pendingCalendarConnectionRequests.get(state);
+    if (!pending) {
+      return;
+    }
+
+    pendingCalendarConnectionRequests.delete(state);
+
+    if (isCalendarError) {
+      const error = parsed.searchParams.get("error") || "Google Calendar connection failed";
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve();
+    }
+
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  } catch (error) {
+    console.error("[Calendar] Error processing callback:", error);
+  }
+}
+
+function handleProtocolCallback(url: string) {
+  handleAuthCallback(url);
+  handleCalendarCallback(url);
+}
+
 // Handle deep link on macOS (app already running)
 app.on("open-url", (event, url) => {
   event.preventDefault();
   console.log("[Auth] Deep link received:", url);
-  handleAuthCallback(url);
+  handleProtocolCallback(url);
 });
 
 // Handle deep link on Windows/Linux (app launched with URL)
@@ -150,7 +207,7 @@ if (!gotTheLock) {
     const url = argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
     if (url) {
       console.log("[Auth] Deep link from second instance:", url);
-      handleAuthCallback(url);
+      handleProtocolCallback(url);
     }
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -383,6 +440,50 @@ app.whenReady().then(() => {
   ipcMain.handle("auth:sign-out", () => {
     authToken = null;
     return true;
+  });
+
+  ipcMain.handle("calendar:get-status", async () => {
+    return authenticatedJsonRequest("/api/calendar/google/status");
+  });
+
+  ipcMain.handle("calendar:get-upcoming-events", async (_event, limit = 5) => {
+    const payload = await authenticatedJsonRequest(`/api/calendar/google/upcoming?limit=${limit}`);
+    return (payload as { events: unknown[] }).events;
+  });
+
+  ipcMain.handle("calendar:connect-google", async () => {
+    const state = randomBytes(16).toString("hex");
+    const payload = await authenticatedJsonRequest("/api/calendar/google/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        scheme: PROTOCOL,
+        state,
+      }),
+    });
+
+    const { url } = payload as { url?: string };
+    if (!url) {
+      throw new Error("Missing Google Calendar authorization URL");
+    }
+
+    return new Promise<boolean>((resolve, reject) => {
+      pendingCalendarConnectionRequests.set(state, {
+        resolve: () => resolve(true),
+        reject,
+      });
+
+      setTimeout(() => {
+        if (pendingCalendarConnectionRequests.has(state)) {
+          pendingCalendarConnectionRequests.delete(state);
+          reject(new Error("Google Calendar connection timed out"));
+        }
+      }, AUTH_REQUEST_TTL_MS);
+
+      void shell.openExternal(url).catch((error) => {
+        pendingCalendarConnectionRequests.delete(state);
+        reject(error instanceof Error ? error : new Error("Failed to open Google Calendar auth"));
+      });
+    });
   });
 
   ipcMain.handle("notes:list", async () => {

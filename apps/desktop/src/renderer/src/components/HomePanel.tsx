@@ -20,10 +20,13 @@ import {
 import type {
   CodexMonitorState,
   CodexMonitorNotePatch,
+  GoogleCalendarConnectionStatus,
+  GoogleCalendarEvent,
   NoteRecord,
   NoteTranscriptionStatus,
   SaveNoteTranscriptionInput,
 } from "@marshall/shared";
+import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
 import { Button } from "./ui/button";
 import { CodexMonitorDebugPanel } from "./CodexMonitorDebugPanel";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
@@ -61,6 +64,38 @@ const timestampFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
 });
+
+const upcomingEventDayFormatter = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+
+const upcomingEventTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function parseCalendarDate(value: string, isAllDay: boolean) {
+  return new Date(isAllDay ? `${value}T12:00:00` : value);
+}
+
+export function formatUpcomingEventSchedule(event: GoogleCalendarEvent) {
+  const start = parseCalendarDate(event.startAt, event.isAllDay);
+  const dayLabel = upcomingEventDayFormatter.format(start);
+
+  if (event.isAllDay) {
+    return `${dayLabel} · All day`;
+  }
+
+  const startLabel = upcomingEventTimeFormatter.format(start);
+  if (!event.endAt) {
+    return `${dayLabel} · ${startLabel}`;
+  }
+
+  const end = parseCalendarDate(event.endAt, false);
+  return `${dayLabel} · ${startLabel} - ${upcomingEventTimeFormatter.format(end)}`;
+}
 
 export function resolveTranscriptionTargetNoteId({
   activeNoteId,
@@ -237,8 +272,95 @@ export function getFloatingRecorderNote(
   return notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null;
 }
 
+interface UpcomingEventsPanelProps {
+  events: GoogleCalendarEvent[];
+  error: string | null;
+  isLoading: boolean;
+  onOpenSettings: () => void;
+  onRefresh: () => void;
+  status: GoogleCalendarConnectionStatus | null;
+}
+
+export function UpcomingEventsPanel({
+  events,
+  error,
+  isLoading,
+  onOpenSettings,
+  onRefresh,
+  status,
+}: UpcomingEventsPanelProps) {
+  return (
+    <div className="rounded-lg border border-border/50 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium text-foreground">Upcoming events</p>
+          <p className="mt-1 text-2xs text-muted-foreground">
+            {status?.connected
+              ? "From your connected Google Calendar"
+              : "Connect Google Calendar to preview your next 5 events"}
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={isLoading}>
+          Refresh
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>Loading calendar events...</span>
+        </div>
+      ) : error ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-sm text-rose-600">{error}</p>
+          {!status?.connected && (
+            <Button type="button" size="sm" onClick={onOpenSettings}>
+              Open calendar settings
+            </Button>
+          )}
+        </div>
+      ) : !status?.connected ? (
+        <div className="mt-3 space-y-2">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Grant read-only access in Settings and Marshall will keep your next meetings visible on
+            Home.
+          </p>
+          <Button type="button" size="sm" onClick={onOpenSettings}>
+            Open calendar settings
+          </Button>
+        </div>
+      ) : events.length === 0 ? (
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          No upcoming events found on your primary Google Calendar.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2.5">
+          {events.map((event) => (
+            <article
+              key={event.id}
+              className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
+            >
+              <p className="text-xs font-medium text-foreground">{event.title}</p>
+              <p className="mt-1 text-2xs text-muted-foreground">
+                {formatUpcomingEventSchedule(event)}
+              </p>
+              {event.location && (
+                <p className="mt-1 truncate text-2xs text-muted-foreground">{event.location}</p>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HomePanel() {
   const [notes, setNotes] = useState<NoteRecord[]>([]);
+  const [calendarStatus, setCalendarStatus] = useState<GoogleCalendarConnectionStatus | null>(null);
+  const [upcomingEvents, setUpcomingEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(true);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
@@ -349,6 +471,35 @@ export function HomePanel() {
     };
   }, [migrateLegacyNotes]);
 
+  const loadUpcomingEvents = useCallback(async () => {
+    setIsLoadingCalendar(true);
+    setCalendarError(null);
+
+    try {
+      const status = await window.calendarAPI.getStatus();
+      setCalendarStatus(status);
+
+      if (!status.connected) {
+        setUpcomingEvents([]);
+        return;
+      }
+
+      const events = await window.calendarAPI.getUpcomingEvents(5);
+      setUpcomingEvents(events);
+    } catch (error) {
+      setCalendarError(
+        error instanceof Error ? error.message : "Failed to load upcoming calendar events"
+      );
+      setUpcomingEvents([]);
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUpcomingEvents();
+  }, [loadUpcomingEvents]);
+
   const activeNote = useMemo(
     () => notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null,
     [notes, activeNoteId]
@@ -408,6 +559,10 @@ export function HomePanel() {
 
   const noteCountLabel =
     visibleNotes.length === 1 ? "1 note captured" : `${visibleNotes.length} notes captured`;
+
+  const openCalendarSettings = useCallback(() => {
+    window.electronAPI.navigate(DESKTOP_NAVIGATION_ROUTES.settingsCalendar);
+  }, []);
 
   const openNote = (noteId: string) => {
     setOpenMenuId(null);
@@ -968,6 +1123,15 @@ export function HomePanel() {
                   {noteCountLabel}
                 </p>
               </div>
+
+              <UpcomingEventsPanel
+                events={upcomingEvents}
+                error={calendarError}
+                isLoading={isLoadingCalendar}
+                onOpenSettings={openCalendarSettings}
+                onRefresh={() => void loadUpcomingEvents()}
+                status={calendarStatus}
+              />
 
               <div className="rounded-lg border border-border/50 px-4 py-3">
                 <p className="text-xs font-medium text-foreground">Suggested use</p>

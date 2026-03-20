@@ -22,6 +22,23 @@ export interface AuthUser {
 /** Minimal user info for UI display */
 export type DisplayUser = Pick<AuthUser, "id" | "email" | "name" | "image">;
 
+export interface GoogleCalendarConnectionStatus {
+  connected: boolean;
+  accountEmail: string | null;
+  scopes: string[];
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string | null;
+  isAllDay: boolean;
+  location: string | null;
+  htmlLink: string | null;
+  status: string | null;
+}
+
 export interface Session {
   id: string;
   userId: string;
