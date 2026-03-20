@@ -26,7 +26,23 @@ export type IntegrationService = {
     | "teams"
     | "email"
     | "google-meet"
-    | "zoom";
+    | "zoom"
+    | "salesforce"
+    | "hubspot"
+    | "linear"
+    | "jira"
+    | "asana"
+    | "monday"
+    | "confluence"
+    | "gmail"
+    | "outlook"
+    | "discord"
+    | "loom"
+    | "figma"
+    | "github"
+    | "airtable"
+    | "dropbox"
+    | "drive";
 };
 
 export type IntegrationGroup = {
@@ -52,84 +68,157 @@ export type MarketingLegalSection = {
   closing: string;
 };
 
-export const heroSignals = ["Spots drift", "Flags open questions", "Tracks owners"];
+export const heroSignals = [
+  "Detects when conversations go off-track",
+  "Surfaces open questions before calls end",
+  "Captures decisions with clear owners",
+];
 
 export const storySections: StorySection[] = [
   {
     id: "ambient",
-    eyebrow: "Ambient",
-    title: "Ready when you are.",
-    description: "A quiet nudge appears before your call. One click to start with the plan loaded.",
+    eyebrow: "Before the call",
+    title: "Walk in prepared, not scrambling.",
+    description:
+      "Marshall surfaces relevant context 5 minutes before your call starts. Past decisions, open threads, account history — everything you need to hit the ground running, without digging through docs.",
     prompt: "Customer sync in 2 min",
     scenarios: [
       {
         label: "Sales call",
-        example: "Notifies you 5 min before, with account context pre-loaded.",
+        example:
+          "See the prospect's last objection, your proposed discount, and the stakeholder map — all before you say hello.",
       },
-      { label: "Team sync", example: "Reminds you standup is starting, with yesterday's actions." },
-      { label: "Client meeting", example: "Alerts you before QBR, health score visible." },
+      {
+        label: "Team sync",
+        example:
+          "Yesterday's blockers, this week's commitments, and who's waiting on what — loaded automatically.",
+      },
+      {
+        label: "Client meeting",
+        example:
+          "Account health, renewal date, and the last three support tickets — context that makes you look prepared.",
+      },
     ],
   },
   {
     id: "purpose",
-    eyebrow: "Purpose",
-    title: "Know the goal before you start.",
-    description: "Marshall drafts the decisions to make and context to gather. You start aligned.",
+    eyebrow: "Set the agenda",
+    title: "Every call should have a goal. Marshall makes sure it does.",
+    description:
+      "Based on the invite, past conversations, and pending decisions, Marshall suggests what this call should accomplish. No more 'so what are we here to discuss?'",
     prompt: "Goal: agree on pricing owner",
     scenarios: [
-      { label: "Strategy", example: 'Shows: "Leave with Q3 owners assigned."' },
-      { label: "Deal review", example: 'Shows: "Unblock legal by end of call."' },
-      { label: "Planning", example: 'Shows: "Confirm launch date and DRI."' },
+      {
+        label: "Strategy",
+        example: "Suggests: 'Leave with Q3 initiative owners assigned and timeline confirmed.'",
+      },
+      {
+        label: "Deal review",
+        example: "Suggests: 'Resolve the legal blocker or escalate to VP by end of call.'",
+      },
+      {
+        label: "Planning",
+        example: "Suggests: 'Confirm launch date and identify the single DRI.'",
+      },
     ],
   },
   {
     id: "focus",
-    eyebrow: "Focus",
-    title: "Stay on track.",
+    eyebrow: "During the call",
+    title: "Conversations drift. Marshall notices so you don't have to.",
     description:
-      "When conversation drifts, Marshall suggests parking it and getting back to the goal.",
+      "When the discussion veers off-topic for more than a few minutes, Marshall gently flags it. Park the tangent, capture it for later, and get back to what matters.",
     prompt: "Drifted 4 min. Park this?",
     scenarios: [
-      { label: "Off-topic", example: "Flags when side conversations go past 3 minutes." },
-      { label: "Rabbit hole", example: "Suggests tabling deep-dives for a follow-up." },
-      { label: "Tangent", example: "Offers to save the thread and refocus." },
+      {
+        label: "Off-topic",
+        example:
+          "Someone brings up an unrelated project. Marshall notes it and suggests: 'Worth its own meeting?'",
+      },
+      {
+        label: "Rabbit hole",
+        example:
+          "A technical deep-dive is eating time. Marshall offers to capture the thread and schedule a follow-up.",
+      },
+      {
+        label: "Tangent",
+        example:
+          "The conversation spirals into history. Marshall saves the context and prompts: 'Back to the decision?'",
+      },
     ],
   },
   {
     id: "context",
-    eyebrow: "Context",
-    title: "Facts at your fingertips.",
+    eyebrow: "Instant recall",
+    title: "Never say 'I'll have to find that and get back to you.'",
     description:
-      "Reference a doc, thread, or data point — Marshall pulls it up without breaking flow.",
+      "When someone mentions a doc, a past decision, or a data point, Marshall surfaces it in seconds. Stay in flow. Keep the momentum.",
     prompt: "Q2 memo pulled",
     scenarios: [
-      { label: "Internal doc", example: "Surfaces the pricing memo when pricing comes up." },
-      { label: "Past thread", example: "Finds the Slack convo where you made the decision." },
-      { label: "Market data", example: "Pulls competitor pricing from the web." },
+      {
+        label: "Internal doc",
+        example:
+          "Someone asks about the pricing rationale. Marshall pulls up the strategy memo before you finish the sentence.",
+      },
+      {
+        label: "Past thread",
+        example:
+          "Who approved that change? Marshall finds the Slack thread where the decision was made.",
+      },
+      {
+        label: "Market data",
+        example:
+          "Competitor just raised prices. Marshall pulls recent coverage so you can respond with facts.",
+      },
     ],
   },
   {
     id: "follow-up",
-    eyebrow: "Follow-up",
-    title: "Next steps, not loose ends.",
-    description: "Marshall drafts the follow-up meeting with attendees and agenda. Ready to send.",
+    eyebrow: "After the call",
+    title: "Turn 'let's find time' into a calendar invite in seconds.",
+    description:
+      "When someone suggests a follow-up meeting, Marshall drafts the invite with the right attendees, a clear agenda, and proposed times. One click to send.",
     prompt: "Security review scheduled",
     scenarios: [
-      { label: "Meeting needed", example: "Drafts invite with attendees and agenda pre-filled." },
-      { label: "Task assigned", example: "Creates action item with owner and due date." },
-      { label: "Escalation", example: "Suggests who else needs to be looped in." },
+      {
+        label: "Meeting needed",
+        example:
+          "Legal review mentioned? Marshall drafts an invite with Legal, Engineering, and a clear ask.",
+      },
+      {
+        label: "Task assigned",
+        example:
+          "Action item captured with owner, due date, and context — pushed to your task manager automatically.",
+      },
+      {
+        label: "Escalation",
+        example:
+          "Decision needs executive input. Marshall suggests who to loop in and drafts the ask.",
+      },
     ],
   },
   {
     id: "summary",
-    eyebrow: "Share",
-    title: "Decisions captured. Team informed.",
-    description: "A clean recap goes to Slack, email, or your workspace before momentum fades.",
+    eyebrow: "Share outcomes",
+    title: "Decisions shouldn't live in someone's memory.",
+    description:
+      "Within minutes of hanging up, Marshall sends a clean summary to the people who need it. Decisions, owners, next steps — captured and shared before anyone forgets.",
     prompt: "3 decisions, 2 owners, shared",
     scenarios: [
-      { label: "Team update", example: "Posts recap to your team channel in one click." },
-      { label: "Stakeholders", example: "Emails summary to people who weren't on the call." },
-      { label: "Documentation", example: "Saves decisions to Notion or your wiki." },
+      {
+        label: "Team update",
+        example:
+          "A structured recap hits your team Slack channel. No one asks 'what did we decide?'",
+      },
+      {
+        label: "Stakeholders",
+        example:
+          "Executives who weren't on the call get a one-paragraph summary with the key outcome.",
+      },
+      {
+        label: "Documentation",
+        example: "Decisions flow into Notion, Confluence, or your wiki — searchable forever.",
+      },
     ],
   },
 ];
@@ -160,6 +249,34 @@ export const integrationGroups: IntegrationGroup[] = [
       { name: "Teams", slug: "teams" },
     ],
   },
+];
+
+// All integrations for the grid display
+export const allIntegrations: IntegrationService[] = [
+  { name: "Google Calendar", slug: "google-calendar" },
+  { name: "Slack", slug: "slack" },
+  { name: "Notion", slug: "notion" },
+  { name: "Zoom", slug: "zoom" },
+  { name: "Google Meet", slug: "google-meet" },
+  { name: "Teams", slug: "teams" },
+  { name: "Salesforce", slug: "salesforce" },
+  { name: "HubSpot", slug: "hubspot" },
+  { name: "Linear", slug: "linear" },
+  { name: "Jira", slug: "jira" },
+  { name: "Asana", slug: "asana" },
+  { name: "Gmail", slug: "gmail" },
+  { name: "Outlook", slug: "outlook" },
+  { name: "Confluence", slug: "confluence" },
+  { name: "Notion Calendar", slug: "notion-calendar" },
+  { name: "Monday", slug: "monday" },
+  { name: "Discord", slug: "discord" },
+  { name: "Loom", slug: "loom" },
+  { name: "Figma", slug: "figma" },
+  { name: "GitHub", slug: "github" },
+  { name: "Airtable", slug: "airtable" },
+  { name: "Dropbox", slug: "dropbox" },
+  { name: "Google Drive", slug: "drive" },
+  { name: "Attio", slug: "attio" },
 ];
 
 export const legalSections: MarketingLegalSection[] = [

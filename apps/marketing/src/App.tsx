@@ -8,10 +8,10 @@ import {
   type PrivacyPreferences,
 } from "./analytics";
 import {
+  allIntegrations,
   bookCallPlaceholderHref,
   downloadPlaceholderHref,
   heroSignals,
-  integrationGroups,
   storySections,
   type IntegrationService,
 } from "./content";
@@ -126,15 +126,15 @@ function OptOutPopup({
   );
 }
 
-function IntegrationLogo({ service }: { service: IntegrationService }) {
+function IntegrationGridItem({ service }: { service: IntegrationService }) {
   const logoPath = `/images/integrations/${service.slug}.svg`;
 
   return (
-    <div className="integration-logo" data-brand={service.slug}>
-      <span className="integration-logo-icon" aria-hidden="true">
+    <div className="integration-grid-item" data-brand={service.slug}>
+      <div className="integration-grid-icon">
         <img src={logoPath} alt="" />
-      </span>
-      <span className="integration-logo-name">{service.name}</span>
+      </div>
+      <span className="integration-grid-name">{service.name}</span>
     </div>
   );
 }
@@ -287,11 +287,12 @@ export default function App() {
           </div>
 
           <div className="hero-copy">
-            <span className="eyebrow">Meeting assistant for macOS</span>
-            <h1>End every call with clear decisions and owners.</h1>
+            <span className="eyebrow">AI meeting assistant for macOS</span>
+            <h1>Meetings that actually end with decisions.</h1>
             <p className="hero-body">
-              Marshall listens to your meetings and prompts you when conversations drift, decisions
-              stall, or action items need owners.
+              Marshall is your meeting co-pilot. It listens in real-time, keeps conversations on
+              track, captures decisions as they happen, and makes sure every action item has an
+              owner before anyone hangs up.
             </p>
             <div className="hero-actions">
               <a className="cta-button" href={downloadPlaceholderHref}>
@@ -473,7 +474,11 @@ export default function App() {
         >
           <div className="story-header">
             <span className="eyebrow">How it works</span>
-            <h2>Marshall watches your calls so you can focus on the conversation.</h2>
+            <h2>From scattered conversations to clear outcomes, automatically.</h2>
+            <p>
+              Marshall runs quietly in the background of every call. It prepares you before, keeps
+              you focused during, and handles the follow-through after.
+            </p>
           </div>
 
           {/* Navigation tabs with animated pill indicator */}
@@ -548,22 +553,24 @@ export default function App() {
         </section>
 
         <section className="integrations-section" id="integrations">
-          <div className="story-header compact">
+          <div className="integrations-header">
             <span className="eyebrow">Integrations</span>
-            <h2>Works with tools you already use.</h2>
+            <h2>Fits into the way you already work.</h2>
+            <p className="integrations-subtitle">
+              Marshall pulls context from your existing tools and pushes outcomes back to them. No
+              new tabs. No copy-pasting. Decisions flow where your team already looks.
+            </p>
           </div>
 
-          <div className="integrations-logo-strip">
-            {integrationGroups.flatMap((group) =>
-              group.services.map((service) => (
-                <IntegrationLogo key={service.slug} service={service} />
-              ))
-            )}
+          <div className="integrations-grid-container">
+            {allIntegrations.map((service) => (
+              <IntegrationGridItem key={service.slug} service={service} />
+            ))}
           </div>
         </section>
 
         <section className="trusted-section">
-          <span className="trusted-label">Trusted by teams from</span>
+          <span className="trusted-label">Used by teams at</span>
           <div className="trusted-logos">
             {/* Google - Simple Icons */}
             <div className="trusted-logo" aria-label="Google">
@@ -627,8 +634,11 @@ export default function App() {
 
         <section className="download-section" id="download">
           <span className="eyebrow">Get started</span>
-          <h2>Free for personal use. No account required.</h2>
-          <p>Download Marshall for macOS. Your audio stays on-device.</p>
+          <h2>Try Marshall free. No account, no credit card.</h2>
+          <p>
+            Download for macOS and run your first meeting in under a minute. Your audio never leaves
+            your device — Marshall processes everything locally.
+          </p>
           <a className="cta-button large" href={downloadPlaceholderHref}>
             <DownloadButtonLabel />
           </a>
@@ -638,7 +648,7 @@ export default function App() {
       <footer className="site-footer">
         <div className="footer-brand">
           <span className="brand-mark">Marshall</span>
-          <p>Meetings that end with clarity.</p>
+          <p>The meeting assistant that actually follows through.</p>
         </div>
 
         <nav className="footer-links">
