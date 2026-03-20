@@ -6,6 +6,7 @@ export interface TranscriptionSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string | null;
 }
 
 export interface TranscriptionResult {
@@ -71,6 +72,46 @@ function offsetSegments(segments: TranscriptionSegment[], offsetSeconds: number)
   }));
 }
 
+function formatTranscriptSegments(segments: TranscriptionSegment[], fallbackText = ""): string {
+  const normalizedSegments = segments.filter((segment) => segment.text.trim());
+  if (normalizedSegments.length === 0) {
+    return fallbackText.trim();
+  }
+
+  if (!normalizedSegments.some((segment) => segment.speaker)) {
+    return (
+      fallbackText.trim() ||
+      normalizedSegments
+        .map((segment) => segment.text.trim())
+        .join(" ")
+        .trim()
+    );
+  }
+
+  return normalizedSegments
+    .map((segment) =>
+      segment.speaker ? `${segment.speaker}: ${segment.text.trim()}` : segment.text.trim()
+    )
+    .join("\n")
+    .trim();
+}
+
+function mergeTranscriptText(baseText: string, incomingText: string): string {
+  const trimmedBase = baseText.trim();
+  const trimmedIncoming = incomingText.trim();
+
+  if (!trimmedBase) {
+    return trimmedIncoming;
+  }
+
+  if (!trimmedIncoming) {
+    return trimmedBase;
+  }
+
+  const separator = trimmedBase.includes("\n") || trimmedIncoming.includes("\n") ? "\n" : " ";
+  return `${trimmedBase}${separator}${trimmedIncoming}`.trim();
+}
+
 export function snapshotToTranscript(
   snapshot: NoteTranscriptionSnapshot | null
 ): TranscriptionResult | null {
@@ -78,9 +119,10 @@ export function snapshotToTranscript(
     return null;
   }
 
-  const text = snapshot.transcriptText.trim()
+  const fallbackText = snapshot.transcriptText.trim()
     ? snapshot.transcriptText.trim()
-    : [snapshot.finalText.trim(), snapshot.interimText.trim()].filter(Boolean).join(" ").trim();
+    : mergeTranscriptText(snapshot.finalText, snapshot.interimText);
+  const text = formatTranscriptSegments(snapshot.segments, fallbackText);
 
   if (!text && snapshot.segments.length === 0 && snapshot.durationSeconds <= 0) {
     return null;
@@ -104,11 +146,12 @@ export function mergeTranscriptionResults(
 
   const baseText = base.text.trim();
   const incomingText = incoming.text.trim();
+  const mergedSegments = [...base.segments, ...offsetSegments(incoming.segments, base.duration)];
 
   return {
-    text: [baseText, incomingText].filter(Boolean).join(" ").trim(),
+    text: formatTranscriptSegments(mergedSegments, mergeTranscriptText(baseText, incomingText)),
     language: incoming.language || base.language,
-    segments: [...base.segments, ...offsetSegments(incoming.segments, base.duration)],
+    segments: mergedSegments,
     duration: base.duration + incoming.duration,
   };
 }
@@ -175,7 +218,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
       setState((prev) => {
         if (partial.isFinal) {
           // Final result: append to finalText, clear interimText
-          const newFinalText = prev.finalText ? prev.finalText + " " + partial.text : partial.text;
+          const newFinalText = mergeTranscriptText(prev.finalText, partial.text);
           return {
             ...prev,
             lastSegmentIndex: partial.segmentIndex,
@@ -185,9 +228,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}) {
           };
         } else {
           // Interim result: replace interimText (don't accumulate)
-          const newPartialText = prev.finalText
-            ? prev.finalText + " " + partial.text
-            : partial.text;
+          const newPartialText = mergeTranscriptText(prev.finalText, partial.text);
           return {
             ...prev,
             lastSegmentIndex: partial.segmentIndex,

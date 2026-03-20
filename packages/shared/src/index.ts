@@ -56,6 +56,7 @@ export interface NoteTranscriptionSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string | null;
 }
 
 export interface SaveNoteTranscriptionInput {

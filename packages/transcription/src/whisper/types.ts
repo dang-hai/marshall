@@ -10,6 +10,7 @@ export interface TranscriptionSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string | null;
 }
 
 export interface TranscriptionResult {
