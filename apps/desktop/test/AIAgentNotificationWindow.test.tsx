@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CodexNotificationWindowView } from "../src/renderer/src/components/CodexNotificationWindow";
+import { AIAgentNotificationWindowView } from "../src/renderer/src/components/AIAgentNotificationWindow";
 
-describe("CodexNotificationWindowView", () => {
+describe("AIAgentNotificationWindowView", () => {
   test("renders items with different statuses and the active nudge", () => {
     const markup = renderToStaticMarkup(
-      <CodexNotificationWindowView
+      <AIAgentNotificationWindowView
         state={{
           status: "monitoring",
           noteId: "note-1",
@@ -51,11 +51,12 @@ describe("CodexNotificationWindowView", () => {
             lastMode: "live",
             lastStartedAt: new Date().toISOString(),
             lastCompletedAt: new Date().toISOString(),
-            lastOutcome: "Codex returned a nudge",
+            lastOutcome: "Agent returned a nudge",
             lastPromptPreview: "prompt preview",
             lastResponsePreview: "response preview",
           },
         }}
+        meetingProposals={[]}
         onDismiss={() => {}}
         onSendChat={() => {}}
       />
@@ -76,7 +77,7 @@ describe("CodexNotificationWindowView", () => {
 
   test("renders summary when call ends", () => {
     const markup = renderToStaticMarkup(
-      <CodexNotificationWindowView
+      <AIAgentNotificationWindowView
         state={{
           status: "idle",
           noteId: "note-1",
@@ -105,11 +106,12 @@ describe("CodexNotificationWindowView", () => {
             lastMode: "final",
             lastStartedAt: new Date().toISOString(),
             lastCompletedAt: new Date().toISOString(),
-            lastOutcome: "Codex returned the final summary",
+            lastOutcome: "Agent returned the final summary",
             lastPromptPreview: "prompt preview",
             lastResponsePreview: "response preview",
           },
         }}
+        meetingProposals={[]}
         onDismiss={() => {}}
         onSendChat={() => {}}
       />
@@ -118,9 +120,9 @@ describe("CodexNotificationWindowView", () => {
     expect(markup).toContain("The team aligned on ownership and queued a legal follow-up.");
   });
 
-  test("returns null when no content to show", () => {
+  test("renders empty state when no content to show", () => {
     const markup = renderToStaticMarkup(
-      <CodexNotificationWindowView
+      <AIAgentNotificationWindowView
         state={{
           status: "idle",
           noteId: null,
@@ -147,11 +149,13 @@ describe("CodexNotificationWindowView", () => {
             lastResponsePreview: null,
           },
         }}
+        meetingProposals={[]}
         onDismiss={() => {}}
         onSendChat={() => {}}
       />
     );
 
-    expect(markup).toBe("");
+    expect(markup).toContain("Marshall is ready to help");
+    expect(markup).toContain("Start a recording to get live assistance");
   });
 });

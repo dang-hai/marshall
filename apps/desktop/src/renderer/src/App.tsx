@@ -8,7 +8,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
 import { LoginScreen } from "./components/LoginScreen";
 import { CallNotificationStack } from "./components/CallNotification";
-import { CodexNotificationWindow } from "./components/CodexNotificationWindow";
+import { AIAgentNotificationWindow } from "./components/AIAgentNotificationWindow";
 import { useAuth, useCallDetection } from "./hooks";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
 import { MARSHALL_EVENTS } from "./constants";
@@ -309,8 +309,8 @@ export default function App() {
       ? null
       : new URLSearchParams(window.location.search).get("window");
 
-  if (windowMode === "codex-monitor") {
-    return <CodexNotificationWindow />;
+  if (windowMode === "ai-agent-monitor") {
+    return <AIAgentNotificationWindow />;
   }
 
   return <MainDesktopApp />;

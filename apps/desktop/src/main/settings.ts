@@ -83,6 +83,17 @@ const store = new Store<AppSettings>({
       },
       required: ["startMinimized", "closeToTray", "checkUpdates"],
     },
+    monitor: {
+      type: "object",
+      properties: {
+        agent: {
+          type: "string",
+          enum: ["codex", "claude-code"],
+          default: "codex",
+        },
+      },
+      required: ["agent"],
+    },
   },
 });
 

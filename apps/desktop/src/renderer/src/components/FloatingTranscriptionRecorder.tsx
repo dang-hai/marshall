@@ -607,7 +607,7 @@ export function FloatingTranscriptionRecorder({
     const snapshot = buildSnapshot();
     latestSnapshotRef.current = snapshot;
 
-    void window.codexMonitorAPI?.updateSession({
+    void window.aiAgentMonitorAPI?.updateSession({
       noteId,
       noteTitle,
       noteBodyHtml,
@@ -776,9 +776,9 @@ export function FloatingTranscriptionRecorder({
 
   useEffect(() => {
     return () => {
-      // Always clear the codex monitor session when navigating away from this note.
+      // Always clear the AI agent monitor session when navigating away from this note.
       // This ensures the notification window closes and resources are freed.
-      void window.codexMonitorAPI?.clearSession(noteId);
+      void window.aiAgentMonitorAPI?.clearSession(noteId);
 
       // Persist the latest transcription snapshot before unmounting
       const latestSnapshot = latestSnapshotRef.current;

@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { CodexMonitorSessionInput } from "@marshall/shared";
+import type { AIAgentMonitorSessionInput } from "@marshall/shared";
 
 mock.module("electron", () => ({
   default: {
@@ -57,13 +57,13 @@ mock.module("electron-store", () => ({
   },
 }));
 
-describe("CodexMonitorService", () => {
+describe("AIAgentMonitorService", () => {
   test("stores the full debug prompt without truncation", async () => {
-    const { CodexMonitorService } = await import("../src/main/codex-monitor");
+    const { AIAgentMonitorService } = await import("../src/main/ai-agent-monitor");
     let capturedPrompt = "";
-    const service = new CodexMonitorService({
+    const service = new AIAgentMonitorService({
       createNotificationWindow: (() => null) as any,
-      executeCodexProcess: async ({ prompt }) => {
+      executeProcess: async ({ prompt }) => {
         capturedPrompt = prompt;
         return {
           nudge: null,
@@ -74,7 +74,7 @@ describe("CodexMonitorService", () => {
       },
     });
 
-    const session: CodexMonitorSessionInput = {
+    const session: AIAgentMonitorSessionInput = {
       noteId: "note-1",
       noteTitle: "Launch review",
       noteBodyHtml: "<p>Agenda</p>",
@@ -99,7 +99,7 @@ describe("CodexMonitorService", () => {
       },
     };
 
-    await (service as any).executeCodex(session, false, "/tmp/schema.json");
+    await (service as any).executeAgent(session, false, "/tmp/schema.json");
 
     expect(capturedPrompt.length).toBeGreaterThan(900);
     expect(service.getState().debug.lastPromptPreview).toBe(capturedPrompt);
