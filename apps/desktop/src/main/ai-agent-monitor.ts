@@ -610,7 +610,9 @@ export class AIAgentMonitorService {
         return;
       }
 
-      const mergedItems = this.mergeItems(result.items);
+      const mergedItems = Array.isArray(result.items)
+        ? this.mergeItems(result.items)
+        : this.state.items;
       const checkedPlanItems = this.filterChecklistMatches(
         extractChecklistItems(currentSession.noteBodyText),
         result.checkedPlanItems

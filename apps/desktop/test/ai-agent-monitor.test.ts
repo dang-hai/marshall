@@ -14,19 +14,6 @@ mock.module("electron", () => ({
   },
 }));
 
-mock.module("@notionhq/client", () => ({
-  Client: class Client {
-    search() {
-      return { results: [] };
-    }
-    blocks = {
-      children: {
-        list: () => ({ results: [] }),
-      },
-    };
-  },
-}));
-
 mock.module("electron-store", () => ({
   default: class Store<T extends Record<string, unknown>> {
     private data: T;

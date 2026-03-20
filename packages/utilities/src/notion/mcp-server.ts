@@ -12,8 +12,17 @@
  * - notion_save_meeting: Save meeting notes to a database
  */
 
-import { Client } from "@notionhq/client";
 import { getTokenFromMarshallStore } from "./client.js";
+import type {
+  SearchResponse,
+  ListBlockChildrenResponse,
+  GetDatabaseResponse,
+  PageObjectResponse,
+  BlockObjectRequest,
+} from "./types.js";
+
+const NOTION_API_BASE = "https://api.notion.com/v1";
+const NOTION_VERSION = "2022-06-28";
 
 interface MCPRequest {
   jsonrpc: "2.0";
@@ -147,19 +156,55 @@ const TOOLS = [
 ];
 
 class NotionMCPServer {
-  private client: Client | null = null;
+  private token: string | null = null;
 
-  private getClient(): Client {
-    if (!this.client) {
-      const token = getTokenFromMarshallStore() || process.env.NOTION_TOKEN;
-      if (!token) {
+  private getToken(): string {
+    if (!this.token) {
+      this.token = getTokenFromMarshallStore() || process.env.NOTION_TOKEN || null;
+      if (!this.token) {
         throw new Error(
           "Notion token not found. Connect Notion in Marshall Settings > Integrations, or set NOTION_TOKEN."
         );
       }
-      this.client = new Client({ auth: token });
     }
-    return this.client;
+    return this.token;
+  }
+
+  private async request<T>(
+    method: "GET" | "POST" | "PATCH",
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const token = this.getToken();
+    const url = `${NOTION_API_BASE}${path}`;
+    const options: RequestInit = {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+      },
+    };
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetch(url, options);
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      let message = `Notion API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorBody);
+        if (errorJson.message) {
+          message = errorJson.message;
+        }
+      } catch {
+        // Use default message
+      }
+      throw new Error(message);
+    }
+
+    return response.json() as Promise<T>;
   }
 
   async handleRequest(request: MCPRequest): Promise<MCPResponse> {
@@ -275,8 +320,7 @@ class NotionMCPServer {
     const query = args.query as string;
     const limit = Math.min((args.limit as number) || 5, 20);
 
-    const client = this.getClient();
-    const response = await client.search({
+    const response = await this.request<SearchResponse>("POST", "/search", {
       query,
       filter: { property: "object", value: "page" },
       page_size: limit,
@@ -305,16 +349,15 @@ class NotionMCPServer {
 
   private async toolGetPageContent(args: Record<string, unknown>) {
     const pageId = args.pageId as string;
-    const client = this.getClient();
 
-    const blocks = await client.blocks.children.list({
-      block_id: pageId,
-      page_size: 100,
-    });
+    const response = await this.request<ListBlockChildrenResponse>(
+      "GET",
+      `/blocks/${pageId}/children?page_size=100`
+    );
 
     const textParts: string[] = [];
 
-    for (const block of blocks.results) {
+    for (const block of response.results) {
       if (!("type" in block)) continue;
 
       const text = this.extractBlockText(block);
@@ -363,9 +406,7 @@ class NotionMCPServer {
   }
 
   private async toolListDatabases() {
-    const client = this.getClient();
-
-    const response = await client.search({
+    const response = await this.request<SearchResponse>("POST", "/search", {
       filter: { property: "object", value: "database" },
       page_size: 20,
     });
@@ -397,7 +438,6 @@ class NotionMCPServer {
   }
 
   private async toolSaveMeeting(args: Record<string, unknown>) {
-    const client = this.getClient();
     const databaseId = args.databaseId as string;
     const title = args.title as string;
     const date = args.date as string;
@@ -406,7 +446,12 @@ class NotionMCPServer {
     const transcript = args.transcript as string | undefined;
 
     // Get database schema
-    const database = await client.databases.retrieve({ database_id: databaseId });
+    const database = await this.request<GetDatabaseResponse>("GET", `/databases/${databaseId}`);
+
+    if (!("properties" in database)) {
+      throw new Error("Could not retrieve database properties");
+    }
+
     const properties = database.properties;
 
     // Build properties
@@ -431,10 +476,7 @@ class NotionMCPServer {
     }
 
     // Build page content
-    const children: Array<{
-      type: string;
-      [key: string]: unknown;
-    }> = [];
+    const children: BlockObjectRequest[] = [];
 
     if (summary) {
       children.push({
@@ -493,12 +535,10 @@ class NotionMCPServer {
       });
     }
 
-    const page = await client.pages.create({
+    const page = await this.request<PageObjectResponse>("POST", "/pages", {
       parent: { database_id: databaseId },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      properties: pageProperties as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      children: children as any,
+      properties: pageProperties,
+      children,
     });
 
     return {
