@@ -328,6 +328,37 @@ export class CodexMonitorService {
     return { status: "dismissed" };
   }
 
+  /**
+   * Hides the notification window without affecting session state.
+   * Used when the parent window is hidden (e.g., macOS close behavior).
+   */
+  hideWindow() {
+    this.notificationWindow?.hide();
+  }
+
+  /**
+   * Shows the notification window if there's content to display.
+   * Used when the parent window is shown again.
+   */
+  showWindowIfNeeded() {
+    this.syncNotificationWindow();
+  }
+
+  /**
+   * Closes the notification window and frees all resources.
+   * Should be called when the associated notes editor window is closed.
+   */
+  async dispose() {
+    await this.clearSession();
+
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+      this.notificationWindow = null;
+    }
+
+    return { status: "disposed" };
+  }
+
   async sendChat(message: string) {
     if (!this.session) {
       return { status: "error", error: "No active session" };

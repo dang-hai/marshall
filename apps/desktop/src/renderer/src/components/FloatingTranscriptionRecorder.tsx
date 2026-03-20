@@ -17,6 +17,41 @@ import { MARSHALL_EVENTS } from "../constants";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
 
+/**
+ * Creates a fingerprint of snapshot content fields (shared between SaveNoteTranscriptionInput
+ * and NoteTranscriptionSnapshot). This allows comparing if the actual transcription content
+ * matches what we just saved, ignoring metadata fields like id/noteId/createdAt/updatedAt.
+ */
+function getSnapshotContentFingerprint(
+  snapshot: SaveNoteTranscriptionInput | NoteTranscriptionSnapshot | null
+): string | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  // Use consistent field order for reliable comparison
+  const contentFields = [
+    snapshot.status,
+    snapshot.provider,
+    snapshot.mode,
+    snapshot.language,
+    snapshot.model,
+    snapshot.transcriptText,
+    snapshot.finalText,
+    snapshot.interimText,
+    JSON.stringify(snapshot.segments),
+    snapshot.lastSegmentIndex,
+    snapshot.durationSeconds,
+    snapshot.recordingDurationSeconds,
+    snapshot.error,
+    snapshot.startedAt,
+    snapshot.completedAt,
+    snapshot.lastPartialAt,
+  ];
+
+  return JSON.stringify(contentFields);
+}
+
 const SOUNDWAVE_CSS = `
 @keyframes soundwave {
   0%, 100% { height: 4px; }
@@ -141,7 +176,11 @@ export function FloatingTranscriptionRecorderView({
 }: FloatingTranscriptionRecorderViewProps) {
   const transcriptRef = useRef<HTMLDivElement>(null);
   const liveTranscript = partialText.trim();
-  const displayedTranscript = transcript?.text?.trim() || liveTranscript;
+  // During recording, show live partialText (which includes old + new text)
+  // After recording, show finalized transcript.text
+  const displayedTranscript = isRecording
+    ? liveTranscript
+    : transcript?.text?.trim() || liveTranscript;
   const showPreparingState = isBootstrapping && !isRecording && !isTranscribing;
   const hasContent = Boolean(displayedTranscript);
 
@@ -375,7 +414,8 @@ export function FloatingTranscriptionRecorder({
     const isNoteChange = prevNoteIdRef.current !== noteId;
     prevNoteIdRef.current = noteId;
 
-    const incomingFingerprint = persistedSnapshot ? JSON.stringify(persistedSnapshot) : null;
+    // Use content-only fingerprint to avoid false mismatches from metadata fields
+    const incomingFingerprint = getSnapshotContentFingerprint(persistedSnapshot);
 
     // For note changes: always hydrate and reset UI
     if (isNoteChange) {
@@ -397,8 +437,16 @@ export function FloatingTranscriptionRecorder({
       return;
     }
 
-    // Skip if we're the ones who saved this snapshot
+    // Skip if we're the ones who saved this snapshot (content matches what we just saved)
     if (incomingFingerprint === lastPersistedFingerprintRef.current) {
+      return;
+    }
+
+    // Skip if local state has more content than persisted snapshot
+    // (we just completed a transcription and haven't saved yet)
+    const localText = transcript?.text?.trim() || partialText.trim();
+    const persistedText = persistedSnapshot?.transcriptText?.trim() || "";
+    if (localText && localText.length > persistedText.length) {
       return;
     }
 
@@ -408,7 +456,15 @@ export function FloatingTranscriptionRecorder({
     completedAtRef.current = persistedSnapshot?.completedAt ?? null;
     lastPartialAtRef.current = persistedSnapshot?.lastPartialAt ?? null;
     lastPersistedFingerprintRef.current = incomingFingerprint;
-  }, [hydrateSnapshot, noteId, persistedSnapshot, isRecording, isTranscribing]);
+  }, [
+    hydrateSnapshot,
+    noteId,
+    persistedSnapshot,
+    isRecording,
+    isTranscribing,
+    transcript,
+    partialText,
+  ]);
 
   useEffect(() => {
     if (partialText.trim()) {
@@ -500,7 +556,7 @@ export function FloatingTranscriptionRecorder({
       return;
     }
 
-    const fingerprint = JSON.stringify(snapshot);
+    const fingerprint = getSnapshotContentFingerprint(snapshot);
     if (fingerprint === lastPersistedFingerprintRef.current) {
       return;
     }
@@ -552,7 +608,7 @@ export function FloatingTranscriptionRecorder({
         setIsBootstrapping(false);
       }
     }
-  }, [clearTranscript, ensureInitialized, startRecording, audioSource]);
+  }, [clearTranscript, ensureInitialized, startRecording, audioSource, transcript, partialText]);
 
   const handleOpen = async () => {
     if (isRecording || isTranscribing) {
@@ -628,10 +684,12 @@ export function FloatingTranscriptionRecorder({
 
   useEffect(() => {
     return () => {
+      // Always clear the codex monitor session when navigating away from this note.
+      // This ensures the notification window closes and resources are freed.
+      void window.codexMonitorAPI?.clearSession(noteId);
+
+      // Persist the latest transcription snapshot before unmounting
       const latestSnapshot = latestSnapshotRef.current;
-      if (!latestSnapshot || !isTranscriptionInProgress(latestSnapshot.status)) {
-        void window.codexMonitorAPI?.clearSession(noteId);
-      }
       if (latestSnapshot) {
         void onSnapshotChangeRef.current(latestSnapshot);
       }

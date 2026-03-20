@@ -35,6 +35,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let codexNotificationWindow: BrowserWindow | null = null;
+let codexMonitorInstance: CodexMonitorService | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -265,6 +266,25 @@ function createCodexNotificationWindow() {
   return codexNotificationWindow;
 }
 
+function setupCodexMonitorWindowHandlers(window: BrowserWindow) {
+  if (!codexMonitorInstance) return;
+
+  // Hide codex notification window when main window is hidden (macOS close behavior)
+  window.on("hide", () => {
+    codexMonitorInstance?.hideWindow();
+  });
+
+  // Show codex notification window when main window is shown again
+  window.on("show", () => {
+    codexMonitorInstance?.showWindowIfNeeded();
+  });
+
+  // Clean up codex resources when main window is actually destroyed
+  window.on("closed", () => {
+    void codexMonitorInstance?.dispose();
+  });
+}
+
 app.whenReady().then(() => {
   const codexMonitor = new CodexMonitorService({
     createNotificationWindow: createCodexNotificationWindow,
@@ -418,18 +438,26 @@ app.whenReady().then(() => {
     return shell.openPath(path);
   });
 
+  codexMonitorInstance = codexMonitor;
+
   createWindow();
   tray = createTray(mainWindow);
 
-  // Set up transcription IPC handlers
+  // Set up transcription IPC handlers and codex monitor window lifecycle
   if (mainWindow) {
     setupTranscriptionIPC(mainWindow);
     setupCallDetectionIPC(mainWindow);
+    setupCodexMonitorWindowHandlers(mainWindow);
   }
 
   app.on("activate", () => {
     if (mainWindow === null) {
       createWindow();
+      if (mainWindow) {
+        setupTranscriptionIPC(mainWindow);
+        setupCallDetectionIPC(mainWindow);
+        setupCodexMonitorWindowHandlers(mainWindow);
+      }
     } else {
       mainWindow.show();
     }
