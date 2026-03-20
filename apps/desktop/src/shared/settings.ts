@@ -2,6 +2,8 @@ import type { WhisperModelName } from "@marshall/transcription";
 
 export type TranscriptionProvider = "local" | "deepgram" | "assemblyAI" | "speechmatics";
 
+export type MonitorAgent = "codex" | "claude-code";
+
 export interface AppSettings {
   transcription: {
     selectedModel: WhisperModelName;
@@ -35,6 +37,9 @@ export interface AppSettings {
     startMinimized: boolean;
     closeToTray: boolean;
     checkUpdates: boolean;
+  };
+  monitor: {
+    agent: MonitorAgent;
   };
 }
 
@@ -71,5 +76,8 @@ export const defaultAppSettings: AppSettings = {
     startMinimized: false,
     closeToTray: true,
     checkUpdates: true,
+  },
+  monitor: {
+    agent: "codex",
   },
 };

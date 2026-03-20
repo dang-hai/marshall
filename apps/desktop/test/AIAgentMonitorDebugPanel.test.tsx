@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CodexMonitorDebugPanel } from "../src/renderer/src/components/CodexMonitorDebugPanel";
+import { AIAgentMonitorDebugPanel } from "../src/renderer/src/components/AIAgentMonitorDebugPanel";
 
-describe("CodexMonitorDebugPanel", () => {
+describe("AIAgentMonitorDebugPanel", () => {
   test("renders monitor telemetry for the active note", () => {
     const markup = renderToStaticMarkup(
-      <CodexMonitorDebugPanel
+      <AIAgentMonitorDebugPanel
         noteId="note-1"
         transcription={null}
         state={{
@@ -13,8 +13,9 @@ describe("CodexMonitorDebugPanel", () => {
           noteId: "note-1",
           noteTitle: "Roadmap sync",
           nudge: null,
-          followUps: [],
+          items: [],
           summary: null,
+          chatMessages: [],
           lastAnalyzedAt: new Date().toISOString(),
           error: null,
           debug: {
@@ -28,7 +29,7 @@ describe("CodexMonitorDebugPanel", () => {
             lastMode: "live",
             lastStartedAt: new Date().toISOString(),
             lastCompletedAt: new Date().toISOString(),
-            lastOutcome: "Codex returned no nudge",
+            lastOutcome: "Agent returned no nudge",
             lastPromptPreview: "prompt preview",
             lastResponsePreview: "response preview",
           },
@@ -36,10 +37,10 @@ describe("CodexMonitorDebugPanel", () => {
       />
     );
 
-    expect(markup).toContain("Codex Debug");
+    expect(markup).toContain("Agent Debug");
     expect(markup).toContain("Transcript chars");
     expect(markup).toContain("812");
-    expect(markup).toContain("Codex returned no nudge");
+    expect(markup).toContain("Agent returned no nudge");
     expect(markup).toContain("prompt preview");
   });
 });

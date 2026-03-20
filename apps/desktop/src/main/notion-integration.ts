@@ -1,6 +1,4 @@
 import { ipcMain } from "electron";
-import { Client } from "@notionhq/client";
-import type { BlockObjectRequest } from "@notionhq/client/build/src/api-endpoints";
 import { getNotionToken } from "./integrations";
 import type {
   MeetingNoteData,
@@ -9,23 +7,90 @@ import type {
   NotionPage,
 } from "@marshall/shared";
 
-function getClient(): Client {
+const NOTION_API_BASE = "https://api.notion.com/v1";
+const NOTION_VERSION = "2022-06-28";
+
+interface BlockObjectRequest {
+  type: string;
+  [key: string]: unknown;
+}
+
+async function notionRequest<T>(
+  method: "GET" | "POST" | "PATCH",
+  path: string,
+  body?: unknown
+): Promise<T> {
   const token = getNotionToken();
   if (!token) {
     throw new Error("Notion is not connected. Please connect Notion in Settings > Integrations.");
   }
-  return new Client({ auth: token.accessToken });
+
+  const url = `${NOTION_API_BASE}${path}`;
+  const options: RequestInit = {
+    method,
+    headers: {
+      Authorization: `Bearer ${token.accessToken}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
+    },
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    let message = `Notion API error: ${response.status} ${response.statusText}`;
+    try {
+      const errorJson = JSON.parse(errorBody);
+      if (errorJson.message) {
+        message = errorJson.message;
+      }
+    } catch {
+      // Use default message
+    }
+    throw new Error(message);
+  }
+
+  return response.json() as Promise<T>;
 }
 
 // ============ Search & Context ============
+
+interface SearchResponse {
+  results: Array<{
+    object: string;
+    id: string;
+    properties?: Record<string, unknown>;
+    last_edited_time?: string;
+    url?: string;
+    icon?: { type: string; emoji?: string };
+    title?: Array<{ plain_text: string }>;
+  }>;
+}
+
+interface BlockChildrenResponse {
+  results: Array<{
+    type?: string;
+    [key: string]: unknown;
+  }>;
+}
+
+interface DatabaseResponse {
+  properties: Record<string, { type: string; [key: string]: unknown }>;
+}
+
+interface PageResponse {
+  id: string;
+  url?: string;
+}
 
 /**
  * Search Notion for pages related to a meeting title or topic
  */
 export async function searchRelatedPages(query: string, limit = 5): Promise<NotionPage[]> {
-  const client = getClient();
-
-  const response = await client.search({
+  const response = await notionRequest<SearchResponse>("POST", "/search", {
     query,
     filter: { property: "object", value: "page" },
     page_size: limit,
@@ -33,7 +98,7 @@ export async function searchRelatedPages(query: string, limit = 5): Promise<Noti
   });
 
   return response.results.flatMap((result) => {
-    if (result.object !== "page" || !("properties" in result)) {
+    if (result.object !== "page" || !result.properties) {
       return [];
     }
 
@@ -44,7 +109,7 @@ export async function searchRelatedPages(query: string, limit = 5): Promise<Noti
       {
         id: result.id,
         title,
-        url: (result as { url?: string }).url || `https://notion.so/${result.id.replace(/-/g, "")}`,
+        url: result.url || `https://notion.so/${result.id.replace(/-/g, "")}`,
         lastEditedTime: result.last_edited_time,
         icon: extractIcon(result),
       },
@@ -56,17 +121,15 @@ export async function searchRelatedPages(query: string, limit = 5): Promise<Noti
  * Get the content of a Notion page as plain text for context
  */
 export async function getPageContent(pageId: string): Promise<string> {
-  const client = getClient();
-
-  const blocks = await client.blocks.children.list({
-    block_id: pageId,
-    page_size: 100,
-  });
+  const response = await notionRequest<BlockChildrenResponse>(
+    "GET",
+    `/blocks/${pageId}/children?page_size=100`
+  );
 
   const textParts: string[] = [];
 
-  for (const block of blocks.results) {
-    if (!("type" in block)) continue;
+  for (const block of response.results) {
+    if (!block.type) continue;
 
     const richTextTypes = [
       "paragraph",
@@ -82,9 +145,7 @@ export async function getPageContent(pageId: string): Promise<string> {
 
     for (const type of richTextTypes) {
       if (block.type === type && type in block) {
-        const content = (
-          block as unknown as Record<string, { rich_text?: Array<{ plain_text: string }> }>
-        )[type];
+        const content = block[type] as { rich_text?: Array<{ plain_text: string }> };
         if (content?.rich_text) {
           const text = content.rich_text.map((t) => t.plain_text).join("");
           if (text) textParts.push(text);
@@ -141,32 +202,24 @@ export async function getMeetingContext(meetingTitle: string): Promise<NotionMee
  * List databases the user can save meeting notes to
  */
 export async function listDatabases(): Promise<NotionDatabase[]> {
-  const client = getClient();
-
-  const response = await client.search({
+  const response = await notionRequest<SearchResponse>("POST", "/search", {
     filter: { property: "object", value: "database" },
     page_size: 20,
   });
 
   return response.results.flatMap((result) => {
-    if (result.object !== "database" || !("title" in result)) {
+    if (result.object !== "database" || !result.title) {
       return [];
     }
 
-    const db = result as {
-      id: string;
-      title: Array<{ plain_text: string }>;
-      icon?: { type: string; emoji?: string };
-    };
-
-    const title = db.title.map((t) => t.plain_text).join("");
+    const title = result.title.map((t) => t.plain_text).join("");
     if (!title) return [];
 
     return [
       {
-        id: db.id,
+        id: result.id,
         title,
-        icon: db.icon?.type === "emoji" ? db.icon.emoji : undefined,
+        icon: result.icon?.type === "emoji" ? result.icon.emoji : undefined,
       },
     ];
   });
@@ -179,10 +232,8 @@ export async function saveMeetingToDatabase(
   databaseId: string,
   data: MeetingNoteData
 ): Promise<{ pageId: string; url: string }> {
-  const client = getClient();
-
   // Get database schema to understand properties
-  const database = await client.databases.retrieve({ database_id: databaseId });
+  const database = await notionRequest<DatabaseResponse>("GET", `/databases/${databaseId}`);
   const properties = database.properties;
 
   // Build properties based on what's available
@@ -271,16 +322,15 @@ export async function saveMeetingToDatabase(
     });
   }
 
-  const page = await client.pages.create({
+  const page = await notionRequest<PageResponse>("POST", "/pages", {
     parent: { database_id: databaseId },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    properties: pageProperties as any,
+    properties: pageProperties,
     children,
   });
 
   return {
     pageId: page.id,
-    url: (page as { url?: string }).url || `https://notion.so/${page.id.replace(/-/g, "")}`,
+    url: page.url || `https://notion.so/${page.id.replace(/-/g, "")}`,
   };
 }
 
@@ -291,8 +341,6 @@ export async function saveMeetingAsPage(
   parentPageId: string,
   data: MeetingNoteData
 ): Promise<{ pageId: string; url: string }> {
-  const client = getClient();
-
   const children: BlockObjectRequest[] = [];
 
   // Meeting metadata
@@ -364,7 +412,7 @@ export async function saveMeetingAsPage(
     });
   }
 
-  const page = await client.pages.create({
+  const page = await notionRequest<PageResponse>("POST", "/pages", {
     parent: { page_id: parentPageId },
     properties: {
       title: {
@@ -376,7 +424,7 @@ export async function saveMeetingAsPage(
 
   return {
     pageId: page.id,
-    url: (page as { url?: string }).url || `https://notion.so/${page.id.replace(/-/g, "")}`,
+    url: page.url || `https://notion.so/${page.id.replace(/-/g, "")}`,
   };
 }
 

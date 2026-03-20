@@ -11,16 +11,17 @@ import {
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type {
-  CodexMonitorSessionInput,
+  AIAgentMonitorSessionInput,
   CreateNoteInput,
   SaveNoteTranscriptionInput,
   UpdateNoteInput,
 } from "@marshall/shared";
 import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
-import { setupSettingsIPC } from "./settings";
+import { setupSettingsIPC, getSetting } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
-import { CodexMonitorMCPService } from "./codex-monitor-mcp";
+import { AIAgentMonitorMCPService } from "./ai-agent-monitor-mcp";
+import { detectAvailableAgents } from "./coding-agents";
 import { setupIntegrationsIPC, setNotionToken } from "./integrations";
 import { setupNotionIntegrationIPC } from "./notion-integration";
 import { NotchCompanionManager } from "./notch-companion";
@@ -38,8 +39,8 @@ app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
-let codexNotificationWindow: BrowserWindow | null = null;
-let codexMonitorInstance: CodexMonitorMCPService | null = null;
+let aiAgentNotificationWindow: BrowserWindow | null = null;
+let aiAgentMonitorInstance: AIAgentMonitorMCPService | null = null;
 let notchCompanionInstance: NotchCompanionManager | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
@@ -359,13 +360,13 @@ function getOpenWindows() {
   return [mainWindow].filter((window): window is BrowserWindow => window !== null);
 }
 
-function createCodexNotificationWindow() {
-  if (codexNotificationWindow && !codexNotificationWindow.isDestroyed()) {
-    return codexNotificationWindow;
+function createAIAgentNotificationWindow() {
+  if (aiAgentNotificationWindow && !aiAgentNotificationWindow.isDestroyed()) {
+    return aiAgentNotificationWindow;
   }
 
   const { workArea } = screen.getPrimaryDisplay();
-  codexNotificationWindow = new BrowserWindow({
+  aiAgentNotificationWindow = new BrowserWindow({
     width: 380,
     height: 560,
     minWidth: 320,
@@ -392,38 +393,39 @@ function createCodexNotificationWindow() {
     },
   });
 
-  codexNotificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  loadRendererWindow(codexNotificationWindow, { window: "codex-monitor" });
+  aiAgentNotificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  loadRendererWindow(aiAgentNotificationWindow, { window: "ai-agent-monitor" });
 
-  codexNotificationWindow.on("closed", () => {
-    codexNotificationWindow = null;
+  aiAgentNotificationWindow.on("closed", () => {
+    aiAgentNotificationWindow = null;
   });
 
-  return codexNotificationWindow;
+  return aiAgentNotificationWindow;
 }
 
-function setupCodexMonitorWindowHandlers(window: BrowserWindow) {
-  if (!codexMonitorInstance) return;
+function setupAIAgentMonitorWindowHandlers(window: BrowserWindow) {
+  if (!aiAgentMonitorInstance) return;
 
-  // Hide codex notification window when main window is hidden (macOS close behavior)
+  // Hide AI agent notification window when main window is hidden (macOS close behavior)
   window.on("hide", () => {
-    codexMonitorInstance?.hideWindow();
+    aiAgentMonitorInstance?.hideWindow();
   });
 
-  // Show codex notification window when main window is shown again
+  // Show AI agent notification window when main window is shown again
   window.on("show", () => {
-    codexMonitorInstance?.showWindowIfNeeded();
+    aiAgentMonitorInstance?.showWindowIfNeeded();
   });
 
-  // Clean up codex resources when main window is actually destroyed
+  // Clean up AI agent resources when main window is actually destroyed
   window.on("closed", () => {
-    void codexMonitorInstance?.dispose();
+    void aiAgentMonitorInstance?.dispose();
   });
 }
 
 app.whenReady().then(() => {
-  const codexMonitor = new CodexMonitorMCPService({
-    createNotificationWindow: createCodexNotificationWindow,
+  const aiAgentMonitor = new AIAgentMonitorMCPService({
+    createNotificationWindow: createAIAgentNotificationWindow,
+    getSelectedAgent: () => getSetting("monitor").agent,
     fetchNotes: async (params) => {
       try {
         const query = new URLSearchParams();
@@ -633,31 +635,32 @@ app.whenReady().then(() => {
     }
   );
 
-  ipcMain.handle("codex-monitor:update-session", async (_event, input: CodexMonitorSessionInput) =>
-    codexMonitor.updateSession(input)
+  ipcMain.handle(
+    "ai-agent-monitor:update-session",
+    async (_event, input: AIAgentMonitorSessionInput) => aiAgentMonitor.updateSession(input)
   );
-  ipcMain.handle("codex-monitor:clear-session", async (_event, noteId?: string) =>
-    codexMonitor.clearSession(noteId)
+  ipcMain.handle("ai-agent-monitor:clear-session", async (_event, noteId?: string) =>
+    aiAgentMonitor.clearSession(noteId)
   );
-  ipcMain.handle("codex-monitor:get-state", () => codexMonitor.getState());
-  ipcMain.handle("codex-monitor:dismiss-window", () => codexMonitor.dismissWindow());
-  ipcMain.handle("codex-monitor:show-window", () => {
-    codexMonitor.showWindow();
+  ipcMain.handle("ai-agent-monitor:get-state", () => aiAgentMonitor.getState());
+  ipcMain.handle("ai-agent-monitor:dismiss-window", () => aiAgentMonitor.dismissWindow());
+  ipcMain.handle("ai-agent-monitor:show-window", () => {
+    aiAgentMonitor.showWindow();
     return { status: "shown" };
   });
-  ipcMain.handle("codex-monitor:send-chat", async (_event, message: string) =>
-    codexMonitor.sendChat(message)
+  ipcMain.handle("ai-agent-monitor:send-chat", async (_event, message: string) =>
+    aiAgentMonitor.sendChat(message)
   );
   ipcMain.handle(
-    "codex-monitor:accept-meeting-proposal",
+    "ai-agent-monitor:accept-meeting-proposal",
     async (_event, proposalId: string, participants?: string[]) => {
-      const result = await codexMonitor.acceptMeetingProposal(proposalId, participants);
+      const result = await aiAgentMonitor.acceptMeetingProposal(proposalId, participants);
       if (result.status !== "accepted") {
         return result;
       }
 
       // Get the proposal and create the calendar event
-      const proposal = codexMonitor.getMeetingProposal(proposalId);
+      const proposal = aiAgentMonitor.getMeetingProposal(proposalId);
       if (!proposal) {
         return { status: "error", error: "Proposal not found after accept" };
       }
@@ -693,13 +696,17 @@ app.whenReady().then(() => {
     }
   );
   ipcMain.handle(
-    "codex-monitor:remind-meeting-proposal",
+    "ai-agent-monitor:remind-meeting-proposal",
     async (_event, proposalId: string, participants?: string[]) =>
-      codexMonitor.remindMeetingProposal(proposalId, participants)
+      aiAgentMonitor.remindMeetingProposal(proposalId, participants)
   );
-  ipcMain.handle("codex-monitor:discard-meeting-proposal", async (_event, proposalId: string) =>
-    codexMonitor.discardMeetingProposal(proposalId)
+  ipcMain.handle("ai-agent-monitor:discard-meeting-proposal", async (_event, proposalId: string) =>
+    aiAgentMonitor.discardMeetingProposal(proposalId)
   );
+
+  // Coding agent detection handler
+  ipcMain.handle("coding-agents:detect", async () => detectAvailableAgents());
+
   // AI completion handler
   ipcMain.handle("ai:completion", async (_event, input: { prompt: string; system?: string }) => {
     const payload = await authenticatedJsonRequest("/api/ai/completion", {
@@ -714,7 +721,7 @@ app.whenReady().then(() => {
     return shell.openPath(path);
   });
 
-  codexMonitorInstance = codexMonitor;
+  aiAgentMonitorInstance = aiAgentMonitor;
 
   // Initialize NotchCompanion (native macOS notch overlay)
   if (process.platform === "darwin") {
@@ -724,17 +731,17 @@ app.whenReady().then(() => {
     });
 
     // Wire up state broadcasting
-    codexMonitor.setNotchCompanion(notchCompanionInstance);
+    aiAgentMonitor.setNotchCompanion(notchCompanionInstance);
   }
 
   createWindow();
   tray = createTray(mainWindow);
 
-  // Set up transcription IPC handlers and codex monitor window lifecycle
+  // Set up transcription IPC handlers and AI agent monitor window lifecycle
   if (mainWindow) {
     setupTranscriptionIPC(getOpenWindows);
     setupCallDetectionIPC(mainWindow);
-    setupCodexMonitorWindowHandlers(mainWindow);
+    setupAIAgentMonitorWindowHandlers(mainWindow);
   }
 
   app.on("activate", () => {
@@ -743,7 +750,7 @@ app.whenReady().then(() => {
       if (mainWindow) {
         setupTranscriptionIPC(getOpenWindows);
         setupCallDetectionIPC(mainWindow);
-        setupCodexMonitorWindowHandlers(mainWindow);
+        setupAIAgentMonitorWindowHandlers(mainWindow);
       }
     } else {
       mainWindow.show();

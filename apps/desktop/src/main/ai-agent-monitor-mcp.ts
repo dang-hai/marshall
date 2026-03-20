@@ -1,34 +1,36 @@
 /**
- * Codex Monitor with MCP Tools
+ * AI Agent Monitor with MCP Tools
  *
  * This version gives the agent tools to access transcript and notes on-demand,
  * rather than embedding everything in the prompt.
+ * Supports multiple coding agents (Codex, Claude Code, etc.)
  */
 
 import { BrowserWindow } from "electron";
 import { randomUUID } from "crypto";
-import { mkdtemp, writeFile } from "fs/promises";
+import { mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import type {
-  CodexMonitorNotePatch,
-  CodexMonitorSessionInput,
-  CodexMonitorState,
-  CodexMonitorItem,
-  CodexMonitorItemStatus,
+  AIAgentMonitorNotePatch,
+  AIAgentMonitorSessionInput,
+  AIAgentMonitorState,
+  AIAgentMonitorItem,
+  AIAgentMonitorItemStatus,
   AgentOperation,
   NoteRecord,
   MeetingProposal,
 } from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
 import type { NotchCompanionManager } from "./notch-companion";
+import type { MonitorAgent } from "../shared/settings";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface CodexMonitorMCPServiceOptions {
+interface AIAgentMonitorMCPServiceOptions {
   createNotificationWindow: () => BrowserWindow;
   /** Callback to fetch notes from database */
   fetchNotes?: (params: {
@@ -38,11 +40,13 @@ interface CodexMonitorMCPServiceOptions {
   }) => Promise<NoteRecord[]>;
   /** Callback to fetch a single note */
   fetchNote?: (noteId: string) => Promise<NoteRecord | null>;
+  /** Callback to get the selected monitoring agent */
+  getSelectedAgent?: () => MonitorAgent;
 }
 
-interface CodexMonitorResultItem {
+interface AIAgentMonitorResultItem {
   text: string;
-  status: CodexMonitorItemStatus;
+  status: AIAgentMonitorItemStatus;
 }
 
 // Agent's final response after using tools
@@ -51,7 +55,7 @@ interface AgentFinalResponse {
     text: string;
     suggestedPhrase: string | null;
   } | null;
-  items: CodexMonitorResultItem[];
+  items: AIAgentMonitorResultItem[];
   summary: string | null;
   meetingProposal: {
     title: string;
@@ -133,7 +137,7 @@ const FINAL_RESPONSE_SCHEMA = {
 // Helpers
 // ============================================================================
 
-function isActiveCall(status: CodexMonitorSessionInput["transcription"]["status"]) {
+function isActiveCall(status: AIAgentMonitorSessionInput["transcription"]["status"]) {
   return status === "recording" || status === "transcribing";
 }
 
@@ -145,7 +149,20 @@ function normalizeSignature(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function createEmptyDebugState(): CodexMonitorState["debug"] {
+function normalizeMeetingProposalSignature(proposal: {
+  title: string;
+  startAt: string;
+  endAt: string;
+}): string {
+  // Normalize by title + start/end times to detect duplicate proposals
+  const normalizedTitle = normalizeSignature(proposal.title);
+  // Truncate timestamps to minute precision to handle slight variations
+  const startMinute = proposal.startAt.slice(0, 16);
+  const endMinute = proposal.endAt.slice(0, 16);
+  return `${normalizedTitle}|${startMinute}|${endMinute}`;
+}
+
+function createEmptyDebugState(): AIAgentMonitorState["debug"] {
   return {
     transcriptionStatus: null,
     transcriptLength: 0,
@@ -226,7 +243,7 @@ Respond ONLY with valid JSON matching this schema. No other text.`;
 }
 
 // ============================================================================
-// Codex Process
+// Agent Process Execution
 // ============================================================================
 
 interface ToolCall {
@@ -330,12 +347,12 @@ async function runCodexWithContext(
       cleanup();
 
       if (code !== 0) {
-        reject(new Error(stderr.trim() || `Codex exited with code ${code}`));
+        reject(new Error(stderr.trim() || `Agent exited with code ${code}`));
         return;
       }
 
       if (!lastAgentMessage) {
-        reject(new Error("Codex returned no response"));
+        reject(new Error("Agent returned no response"));
         return;
       }
 
@@ -343,7 +360,10 @@ async function runCodexWithContext(
         resolve(JSON.parse(lastAgentMessage) as AgentFinalResponse);
       } catch {
         // Agent returned plain text instead of JSON - treat as a nudge
-        console.warn("[Codex] Agent returned non-JSON response:", lastAgentMessage.slice(0, 100));
+        console.warn(
+          "[AIAgentMonitor] Agent returned non-JSON response:",
+          lastAgentMessage.slice(0, 100)
+        );
         resolve({
           nudge: {
             text: lastAgentMessage.trim(),
@@ -362,16 +382,135 @@ async function runCodexWithContext(
   });
 }
 
+async function runClaudeCodeWithContext(
+  prompt: string,
+  schemaPath: string,
+  conversationId: string | null,
+  noteId: string,
+  onThreadStarted: (threadId: string) => void,
+  setProcess: (child: ChildProcessWithoutNullStreams | null) => void
+): Promise<AgentFinalResponse> {
+  // Claude Code uses --json-schema which accepts a JSON string, not a file path
+  const schemaContent = await readFile(schemaPath, "utf8");
+
+  return new Promise((resolve, reject) => {
+    const args = conversationId
+      ? ["--resume", conversationId, "--print", "--output-format", "json", "-p", prompt]
+      : ["--print", "--output-format", "json", "--json-schema", schemaContent, "-p", prompt];
+
+    const child = spawn("claude", args, {
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    setProcess(child);
+
+    let stdout = "";
+    let stderr = "";
+
+    const handleStdout = (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    };
+
+    const handleStderr = (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    };
+
+    const cleanup = () => {
+      child.stdout.removeListener("data", handleStdout);
+      child.stderr.removeListener("data", handleStderr);
+    };
+
+    child.stdout.on("data", handleStdout);
+    child.stderr.on("data", handleStderr);
+
+    child.on("error", (err) => {
+      cleanup();
+      reject(err);
+    });
+
+    child.on("close", (code) => {
+      cleanup();
+
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `Claude Code exited with code ${code}`));
+        return;
+      }
+
+      if (!stdout.trim()) {
+        reject(new Error("Claude Code returned no response"));
+        return;
+      }
+
+      try {
+        // Try to parse the output as JSON
+        const lines = stdout.trim().split("\n");
+        let result: string | null = null;
+
+        // Look for JSON output (might be mixed with other output)
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i].trim();
+          if (line.startsWith("{") || line.startsWith("[")) {
+            try {
+              JSON.parse(line);
+              result = line;
+              break;
+            } catch {
+              continue;
+            }
+          }
+        }
+
+        // If no valid JSON found, try parsing entire output
+        if (!result) {
+          try {
+            JSON.parse(stdout.trim());
+            result = stdout.trim();
+          } catch {
+            result = lines[lines.length - 1] || stdout.trim();
+          }
+        }
+
+        // Extract session ID for conversation continuity
+        const sessionMatch = stdout.match(/session[_-]?id["\s:]+["']?([a-zA-Z0-9_-]+)/i);
+        if (sessionMatch) {
+          onThreadStarted(sessionMatch[1]);
+          if (noteId) {
+            setConversationId(noteId, sessionMatch[1]);
+          }
+        }
+
+        resolve(JSON.parse(result) as AgentFinalResponse);
+      } catch {
+        // Agent returned plain text instead of JSON - treat as a nudge
+        console.warn(
+          "[AIAgentMonitor] Claude Code returned non-JSON response:",
+          stdout.slice(0, 100)
+        );
+        resolve({
+          nudge: {
+            text: stdout.trim(),
+            suggestedPhrase: null,
+          },
+          items: [],
+          summary: null,
+          meetingProposal: null,
+        });
+      }
+    });
+  });
+}
+
 // ============================================================================
 // Service Class
 // ============================================================================
 
-export class CodexMonitorMCPService {
+export class AIAgentMonitorMCPService {
   private readonly createNotificationWindow: () => BrowserWindow;
-  private readonly options: CodexMonitorMCPServiceOptions;
+  private readonly options: AIAgentMonitorMCPServiceOptions;
+  private readonly getSelectedAgent: () => MonitorAgent;
   private schemaPathPromise: Promise<string> | null = null;
-  private session: CodexMonitorSessionInput | null = null;
-  private state: CodexMonitorState = {
+  private session: AIAgentMonitorSessionInput | null = null;
+  private state: AIAgentMonitorState = {
     status: "idle",
     noteId: null,
     noteTitle: null,
@@ -398,10 +537,41 @@ export class CodexMonitorMCPService {
   private pendingMeetingProposals: Map<string, MeetingProposal> = new Map();
   private pendingChatMessage: string | null = null;
   private notchCompanion: NotchCompanionManager | null = null;
+  private lastMeetingProposalSignature: string | null = null;
 
-  constructor(options: CodexMonitorMCPServiceOptions) {
+  constructor(options: AIAgentMonitorMCPServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
     this.options = options;
+    this.getSelectedAgent = options.getSelectedAgent ?? (() => "codex");
+  }
+
+  private runAgentWithContext(
+    prompt: string,
+    schemaPath: string,
+    conversationId: string | null,
+    noteId: string,
+    onThreadStarted: (threadId: string) => void,
+    setProcess: (child: ChildProcessWithoutNullStreams | null) => void
+  ): Promise<AgentFinalResponse> {
+    const agent = this.getSelectedAgent();
+    if (agent === "claude-code") {
+      return runClaudeCodeWithContext(
+        prompt,
+        schemaPath,
+        conversationId,
+        noteId,
+        onThreadStarted,
+        setProcess
+      );
+    }
+    return runCodexWithContext(
+      prompt,
+      schemaPath,
+      conversationId,
+      noteId,
+      onThreadStarted,
+      setProcess
+    );
   }
 
   getState() {
@@ -417,7 +587,7 @@ export class CodexMonitorMCPService {
     });
   }
 
-  async updateSession(input: CodexMonitorSessionInput) {
+  async updateSession(input: AIAgentMonitorSessionInput) {
     const previousSession = this.session;
     const previousWasActive = previousSession
       ? isActiveCall(previousSession.transcription.status)
@@ -492,9 +662,11 @@ export class CodexMonitorMCPService {
       debug: createEmptyDebugState(),
     };
     this.lastNudgeSignature = null;
+    this.lastMeetingProposalSignature = null;
     this.windowDismissed = false;
     this.conversationId = null;
     this.pendingDocumentOps = [];
+    this.pendingMeetingProposals.clear();
     this.broadcastState();
     return { status: "cleared" };
   }
@@ -666,8 +838,10 @@ export class CodexMonitorMCPService {
     this.lastAnalyzedTranscriptLength = 0;
     this.lastFinalizedTranscriptSignature = null;
     this.lastNudgeSignature = null;
+    this.lastMeetingProposalSignature = null;
     this.windowDismissed = false;
     this.pendingDocumentOps = [];
+    this.pendingMeetingProposals.clear();
 
     const existingConversationId = getConversationId(noteId);
     if (existingConversationId) {
@@ -705,6 +879,13 @@ export class CodexMonitorMCPService {
 
   private scheduleAnalysis(finalize: boolean, delayMs: number) {
     const nextMode = finalize ? "final" : "live";
+
+    // If an analysis is already running, just mark for rerun instead of scheduling
+    if (this.analysisProcess) {
+      this.rerunRequested = true;
+      return;
+    }
+
     if (this.analysisTimer) {
       if (this.scheduledAnalysisMode === "final" || this.scheduledAnalysisMode === nextMode) {
         return;
@@ -776,8 +957,8 @@ export class CodexMonitorMCPService {
 
       const schemaPath = await this.getSchemaPath();
 
-      // Run Codex with context embedded in prompt
-      const result = await runCodexWithContext(
+      // Run agent with context embedded in prompt (uses selected agent from settings)
+      const result = await this.runAgentWithContext(
         prompt,
         schemaPath,
         this.conversationId,
@@ -794,25 +975,33 @@ export class CodexMonitorMCPService {
         return;
       }
 
-      // Process result
-      const mergedItems = this.mergeItems(result.items);
+      // Process result (defensive: ensure items is an array)
+      const mergedItems = Array.isArray(result.items)
+        ? this.mergeItems(result.items)
+        : this.state.items;
       const summary = finalize ? result.summary?.trim() || null : this.state.summary;
       const nextNudge = finalize ? null : this.buildNudge(result);
 
-      // Handle meeting proposal if present
+      // Handle meeting proposal if present (with deduplication)
       if (result.meetingProposal) {
-        const proposal: MeetingProposal = {
-          id: randomUUID(),
-          title: result.meetingProposal.title,
-          startAt: result.meetingProposal.startAt,
-          endAt: result.meetingProposal.endAt,
-          participants: result.meetingProposal.participants || [],
-          location: result.meetingProposal.location || null,
-          description: result.meetingProposal.description || null,
-          createdAt: new Date().toISOString(),
-          status: "pending",
-        };
-        this.emitMeetingProposal(proposal);
+        const proposalSignature = normalizeMeetingProposalSignature(result.meetingProposal);
+
+        // Skip if we've already emitted an equivalent proposal
+        if (proposalSignature !== this.lastMeetingProposalSignature) {
+          this.lastMeetingProposalSignature = proposalSignature;
+          const proposal: MeetingProposal = {
+            id: randomUUID(),
+            title: result.meetingProposal.title,
+            startAt: result.meetingProposal.startAt,
+            endAt: result.meetingProposal.endAt,
+            participants: result.meetingProposal.participants || [],
+            location: result.meetingProposal.location || null,
+            description: result.meetingProposal.description || null,
+            createdAt: new Date().toISOString(),
+            status: "pending",
+          };
+          this.emitMeetingProposal(proposal);
+        }
       }
 
       this.lastAnalyzedTranscriptLength = transcriptText.length;
@@ -884,8 +1073,8 @@ export class CodexMonitorMCPService {
     }
   }
 
-  private mergeItems(nextItems: CodexMonitorResultItem[]): CodexMonitorItem[] {
-    const merged: CodexMonitorItem[] = [];
+  private mergeItems(nextItems: AIAgentMonitorResultItem[]): AIAgentMonitorItem[] {
+    const merged: AIAgentMonitorItem[] = [];
     const seenSignatures = new Set<string>();
 
     for (const existing of this.state.items) {
@@ -929,10 +1118,10 @@ export class CodexMonitorMCPService {
     };
   }
 
-  private emitNotePatch(patch: CodexMonitorNotePatch) {
+  private emitNotePatch(patch: AIAgentMonitorNotePatch) {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:note-patch", patch);
+        window.webContents.send("ai-agent-monitor:note-patch", patch);
       }
     }
   }
@@ -943,7 +1132,7 @@ export class CodexMonitorMCPService {
 
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:meeting-proposal", proposal);
+        window.webContents.send("ai-agent-monitor:meeting-proposal", proposal);
       }
     }
   }
@@ -951,7 +1140,7 @@ export class CodexMonitorMCPService {
   private emitMeetingProposalUpdate(proposal: MeetingProposal) {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:meeting-proposal-update", proposal);
+        window.webContents.send("ai-agent-monitor:meeting-proposal-update", proposal);
       }
     }
   }
@@ -959,7 +1148,7 @@ export class CodexMonitorMCPService {
   private broadcastState() {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send("codex-monitor:state", this.state);
+        window.webContents.send("ai-agent-monitor:state", this.state);
       }
     }
     this.syncNotificationWindow();

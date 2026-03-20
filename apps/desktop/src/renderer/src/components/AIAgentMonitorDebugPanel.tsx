@@ -1,7 +1,7 @@
-import type { CodexMonitorState, NoteTranscriptionSnapshot } from "@marshall/shared";
+import type { AIAgentMonitorState, NoteTranscriptionSnapshot } from "@marshall/shared";
 
-interface CodexMonitorDebugPanelProps {
-  state: CodexMonitorState;
+interface AIAgentMonitorDebugPanelProps {
+  state: AIAgentMonitorState;
   noteId: string;
   transcription: NoteTranscriptionSnapshot | null;
 }
@@ -24,11 +24,11 @@ function row(label: string, value: string | number | null | boolean) {
   );
 }
 
-export function CodexMonitorDebugPanel({
+export function AIAgentMonitorDebugPanel({
   state,
   noteId,
   transcription,
-}: CodexMonitorDebugPanelProps) {
+}: AIAgentMonitorDebugPanelProps) {
   const isForActiveNote = state.noteId === noteId;
   const debug = state.debug;
 
@@ -37,7 +37,7 @@ export function CodexMonitorDebugPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700">
-            Codex Debug
+            Agent Debug
           </p>
           <p className="mt-1 text-sm text-stone-700">
             Inspect what the live monitor sees and whether it is actually running analyses.

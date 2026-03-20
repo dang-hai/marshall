@@ -1,26 +1,31 @@
-import { Client, isFullPage, isFullBlock, isFullDatabase } from "@notionhq/client";
-import type {
-  SearchParameters,
-  SearchResponse,
-  QueryDatabaseParameters,
-  QueryDatabaseResponse,
-  GetPageResponse,
-  CreatePageParameters,
-  CreatePageResponse,
-  UpdatePageParameters,
-  UpdatePageResponse,
-  GetBlockResponse,
-  ListBlockChildrenResponse,
-  AppendBlockChildrenParameters,
-  AppendBlockChildrenResponse,
-  UpdateBlockParameters,
-  UpdateBlockResponse,
-  GetDatabaseResponse,
-  BlockObjectRequest,
-} from "@notionhq/client/build/src/api-endpoints";
+import {
+  isFullPage,
+  isFullBlock,
+  isFullDatabase,
+  type SearchParameters,
+  type SearchResponse,
+  type QueryDatabaseParameters,
+  type QueryDatabaseResponse,
+  type GetPageResponse,
+  type CreatePageParameters,
+  type CreatePageResponse,
+  type UpdatePageParameters,
+  type UpdatePageResponse,
+  type GetBlockResponse,
+  type ListBlockChildrenResponse,
+  type AppendBlockChildrenParameters,
+  type AppendBlockChildrenResponse,
+  type UpdateBlockParameters,
+  type UpdateBlockResponse,
+  type GetDatabaseResponse,
+  type BlockObjectRequest,
+} from "./types.js";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+
+const NOTION_API_BASE = "https://api.notion.com/v1";
+const NOTION_VERSION = "2022-06-28";
 
 export interface NotionClientConfig {
   auth?: string;
@@ -124,7 +129,7 @@ export interface UpdateBlockOptions {
 }
 
 export class NotionClient {
-  private client: Client;
+  private auth: string;
 
   constructor(config: NotionClientConfig = {}) {
     // Priority: explicit config > env vars > Marshall desktop app token
@@ -142,21 +147,57 @@ export class NotionClient {
           "  3. Pass auth option to NotionClient"
       );
     }
-    this.client = new Client({ auth });
+    this.auth = auth;
+  }
+
+  private async request<T>(
+    method: "GET" | "POST" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const url = `${NOTION_API_BASE}${path}`;
+    const options: RequestInit = {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.auth}`,
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+      },
+    };
+    if (body) {
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetch(url, options);
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      let message = `Notion API error: ${response.status} ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorBody);
+        if (errorJson.message) {
+          message = errorJson.message;
+        }
+      } catch {
+        // Use default message
+      }
+      throw new Error(message);
+    }
+
+    return response.json() as Promise<T>;
   }
 
   // ============ Search ============
 
   async search(options: SearchOptions = {}): Promise<SearchResponse> {
-    const params: SearchParameters = {};
+    const body: SearchParameters = {};
 
-    if (options.query) params.query = options.query;
-    if (options.filter) params.filter = options.filter;
-    if (options.sort) params.sort = options.sort;
-    if (options.pageSize) params.page_size = options.pageSize;
-    if (options.startCursor) params.start_cursor = options.startCursor;
+    if (options.query) body.query = options.query;
+    if (options.filter) body.filter = options.filter;
+    if (options.sort) body.sort = options.sort;
+    if (options.pageSize) body.page_size = options.pageSize;
+    if (options.startCursor) body.start_cursor = options.startCursor;
 
-    return this.client.search(params);
+    return this.request<SearchResponse>("POST", "/search", body);
   }
 
   async searchPages(query?: string, pageSize = 100): Promise<SearchResponse> {
@@ -178,11 +219,11 @@ export class NotionClient {
   // ============ Pages ============
 
   async getPage(pageId: string): Promise<GetPageResponse> {
-    return this.client.pages.retrieve({ page_id: pageId });
+    return this.request<GetPageResponse>("GET", `/pages/${pageId}`);
   }
 
   async createPage(options: CreatePageOptions): Promise<CreatePageResponse> {
-    const params: CreatePageParameters = {
+    const body: CreatePageParameters = {
       parent:
         options.parentType === "database"
           ? { database_id: options.parentId }
@@ -190,24 +231,22 @@ export class NotionClient {
       properties: options.properties || {},
     };
 
-    if (options.children) params.children = options.children;
-    if (options.icon) params.icon = options.icon;
-    if (options.cover) params.cover = options.cover;
+    if (options.children) body.children = options.children;
+    if (options.icon) body.icon = options.icon;
+    if (options.cover) body.cover = options.cover;
 
-    return this.client.pages.create(params);
+    return this.request<CreatePageResponse>("POST", "/pages", body);
   }
 
   async updatePage(options: UpdatePageOptions): Promise<UpdatePageResponse> {
-    const params: UpdatePageParameters = {
-      page_id: options.pageId,
-    };
+    const body: Omit<UpdatePageParameters, "page_id"> = {};
 
-    if (options.properties) params.properties = options.properties;
-    if (options.archived !== undefined) params.archived = options.archived;
-    if (options.icon) params.icon = options.icon;
-    if (options.cover) params.cover = options.cover;
+    if (options.properties) body.properties = options.properties;
+    if (options.archived !== undefined) body.archived = options.archived;
+    if (options.icon !== undefined) body.icon = options.icon;
+    if (options.cover !== undefined) body.cover = options.cover;
 
-    return this.client.pages.update(params);
+    return this.request<UpdatePageResponse>("PATCH", `/pages/${options.pageId}`, body);
   }
 
   async archivePage(pageId: string): Promise<UpdatePageResponse> {
@@ -221,7 +260,7 @@ export class NotionClient {
   // ============ Blocks ============
 
   async getBlock(blockId: string): Promise<GetBlockResponse> {
-    return this.client.blocks.retrieve({ block_id: blockId });
+    return this.request<GetBlockResponse>("GET", `/blocks/${blockId}`);
   }
 
   async getBlockChildren(
@@ -229,11 +268,11 @@ export class NotionClient {
     pageSize = 100,
     startCursor?: string
   ): Promise<ListBlockChildrenResponse> {
-    return this.client.blocks.children.list({
-      block_id: blockId,
-      page_size: pageSize,
-      start_cursor: startCursor,
-    });
+    let path = `/blocks/${blockId}/children?page_size=${pageSize}`;
+    if (startCursor) {
+      path += `&start_cursor=${startCursor}`;
+    }
+    return this.request<ListBlockChildrenResponse>("GET", path);
   }
 
   async getAllBlockChildren(blockId: string): Promise<ListBlockChildrenResponse["results"]> {
@@ -250,26 +289,25 @@ export class NotionClient {
   }
 
   async appendBlocks(options: AppendBlocksOptions): Promise<AppendBlockChildrenResponse> {
-    const params: AppendBlockChildrenParameters = {
-      block_id: options.blockId,
+    const body: Omit<AppendBlockChildrenParameters, "block_id"> = {
       children: options.children,
     };
 
-    if (options.after) params.after = options.after;
+    if (options.after) (body as { after?: string }).after = options.after;
 
-    return this.client.blocks.children.append(params);
+    return this.request<AppendBlockChildrenResponse>(
+      "PATCH",
+      `/blocks/${options.blockId}/children`,
+      body
+    );
   }
 
   async updateBlock(options: UpdateBlockOptions): Promise<UpdateBlockResponse> {
-    return this.client.blocks.update({
-      block_id: options.blockId,
-      ...options.block,
-    });
+    return this.request<UpdateBlockResponse>("PATCH", `/blocks/${options.blockId}`, options.block);
   }
 
   async deleteBlock(blockId: string): Promise<UpdateBlockResponse> {
-    return this.client.blocks.update({
-      block_id: blockId,
+    return this.request<UpdateBlockResponse>("PATCH", `/blocks/${blockId}`, {
       archived: true,
     });
   }
@@ -277,20 +315,22 @@ export class NotionClient {
   // ============ Databases ============
 
   async getDatabase(databaseId: string): Promise<GetDatabaseResponse> {
-    return this.client.databases.retrieve({ database_id: databaseId });
+    return this.request<GetDatabaseResponse>("GET", `/databases/${databaseId}`);
   }
 
   async queryDatabase(options: QueryDatabaseOptions): Promise<QueryDatabaseResponse> {
-    const params: QueryDatabaseParameters = {
-      database_id: options.databaseId,
-    };
+    const body: Omit<QueryDatabaseParameters, "database_id"> = {};
 
-    if (options.filter) params.filter = options.filter;
-    if (options.sorts) params.sorts = options.sorts;
-    if (options.pageSize) params.page_size = options.pageSize;
-    if (options.startCursor) params.start_cursor = options.startCursor;
+    if (options.filter) body.filter = options.filter;
+    if (options.sorts) body.sorts = options.sorts;
+    if (options.pageSize) body.page_size = options.pageSize;
+    if (options.startCursor) body.start_cursor = options.startCursor;
 
-    return this.client.databases.query(params);
+    return this.request<QueryDatabaseResponse>(
+      "POST",
+      `/databases/${options.databaseId}/query`,
+      body
+    );
   }
 
   async queryAllDatabasePages(
@@ -381,7 +421,7 @@ export class NotionClient {
     const properties = page.properties;
     for (const key of Object.keys(properties)) {
       const prop = properties[key];
-      if (prop.type === "title" && prop.title.length > 0) {
+      if (prop.type === "title" && prop.title && prop.title.length > 0) {
         return prop.title.map((t) => t.plain_text).join("");
       }
     }

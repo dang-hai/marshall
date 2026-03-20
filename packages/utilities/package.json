@@ -24,9 +24,7 @@
     "dev": "tsc --watch",
     "test": "bun test"
   },
-  "dependencies": {
-    "@notionhq/client": "^2.2.15"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "^1.2.12",
     "typescript": "^5.4.0"

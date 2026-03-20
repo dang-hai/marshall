@@ -19,8 +19,8 @@ import {
   UserRound,
 } from "lucide-react";
 import type {
-  CodexMonitorState,
-  CodexMonitorNotePatch,
+  AIAgentMonitorState,
+  AIAgentMonitorNotePatch,
   GoogleCalendarConnectionStatus,
   GoogleCalendarEvent,
   NoteRecord,
@@ -31,7 +31,7 @@ import { DESKTOP_NAVIGATION_ROUTES } from "../../../shared/navigation";
 import { Button } from "./ui/button";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
 import {
-  applyCodexNotePatch,
+  applyAIAgentNotePatch,
   DIVIDER_BLOCK_CLASS,
   extractPlainTextFromHtml,
   getBlockClassName,
@@ -476,7 +476,7 @@ export function HomePanel() {
     noteId: string;
     token: number;
   } | null>(null);
-  const [_codexMonitorState, setCodexMonitorState] = useState<CodexMonitorState>({
+  const [_aiAgentMonitorState, setAIAgentMonitorState] = useState<AIAgentMonitorState>({
     status: "idle",
     noteId: null,
     noteTitle: null,
@@ -800,19 +800,19 @@ export function HomePanel() {
   useEffect(() => {
     let mounted = true;
 
-    window.codexMonitorAPI
+    window.aiAgentMonitorAPI
       ?.getState()
       .then((state) => {
         if (mounted) {
-          setCodexMonitorState(state);
+          setAIAgentMonitorState(state);
         }
       })
       .catch(() => {
         // Ignore initial debug load failures.
       });
 
-    const cleanup = window.codexMonitorAPI?.onState((state) => {
-      setCodexMonitorState(state);
+    const cleanup = window.aiAgentMonitorAPI?.onState((state) => {
+      setAIAgentMonitorState(state);
     });
 
     return () => {
@@ -822,17 +822,17 @@ export function HomePanel() {
   }, []);
 
   useEffect(() => {
-    if (!window.codexMonitorAPI) {
+    if (!window.aiAgentMonitorAPI) {
       return;
     }
 
-    const handleNotePatch = (patch: CodexMonitorNotePatch) => {
+    const handleNotePatch = (patch: AIAgentMonitorNotePatch) => {
       if (patch.noteId !== activeNoteId) {
         return;
       }
 
       const currentHtml = bodyRef.current?.innerHTML ?? activeNote?.body ?? "";
-      const nextHtml = applyCodexNotePatch(currentHtml, patch);
+      const nextHtml = applyAIAgentNotePatch(currentHtml, patch);
       if (normalizeEditorHtml(nextHtml) === normalizeEditorHtml(currentHtml)) {
         return;
       }
@@ -844,7 +844,7 @@ export function HomePanel() {
       updateActiveNote("body", nextHtml);
     };
 
-    return window.codexMonitorAPI.onNotePatch(handleNotePatch);
+    return window.aiAgentMonitorAPI.onNotePatch(handleNotePatch);
   }, [activeNote?.body, activeNoteId]);
 
   const handlePlanGenerated = useCallback(
@@ -1115,7 +1115,7 @@ export function HomePanel() {
                 <button
                   type="button"
                   className={`${METADATA_CHIP_CLASS} border-dashed bg-background/50`}
-                  onClick={() => window.codexMonitorAPI?.showWindow()}
+                  onClick={() => window.aiAgentMonitorAPI?.showWindow()}
                 >
                   <Bot className="h-3 w-3" />
                   <span>Marshall AI</span>

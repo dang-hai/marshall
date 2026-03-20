@@ -78,7 +78,7 @@ export interface MeetingNoteData {
   title: string;
   date: string;
   summary: string | null;
-  items: CodexMonitorItem[];
+  items: AIAgentMonitorItem[];
   transcript?: string;
 }
 
@@ -227,7 +227,7 @@ export interface UpdateNoteInput {
   trashedAt?: string | null;
 }
 
-export interface CodexMonitorSessionInput {
+export interface AIAgentMonitorSessionInput {
   noteId: string;
   noteTitle: string;
   noteBodyHtml: string;
@@ -235,29 +235,29 @@ export interface CodexMonitorSessionInput {
   transcription: SaveNoteTranscriptionInput;
 }
 
-export interface CodexMonitorNudge {
+export interface AIAgentMonitorNudge {
   id: string;
   text: string;
   suggestedPhrase: string | null;
   createdAt: string;
 }
 
-export type CodexMonitorItemStatus = "pending" | "done" | "attention";
+export type AIAgentMonitorItemStatus = "pending" | "done" | "attention";
 
-export interface CodexMonitorItem {
+export interface AIAgentMonitorItem {
   id: string;
   text: string;
-  status: CodexMonitorItemStatus;
+  status: AIAgentMonitorItemStatus;
   addedAt: string;
 }
 
-export interface CodexMonitorNotePatch {
+export interface AIAgentMonitorNotePatch {
   noteId: string;
   /** @deprecated Use documentOps instead */
   checkedPlanItems: string[];
   /** Document block operations to apply */
   documentOps?: import("./document-service").AgentOperation[];
-  items: CodexMonitorItem[];
+  items: AIAgentMonitorItem[];
   /** Meeting proposals (accepted or reminded, not discarded) */
   meetingProposals?: MeetingProposal[];
   summary: string | null;
@@ -265,21 +265,21 @@ export interface CodexMonitorNotePatch {
   generatedAt: string;
 }
 
-export interface CodexMonitorChatMessage {
+export interface AIAgentMonitorChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   createdAt: string;
 }
 
-export interface CodexMonitorState {
+export interface AIAgentMonitorState {
   status: "idle" | "monitoring" | "analyzing" | "chatting" | "error";
   noteId: string | null;
   noteTitle: string | null;
-  nudge: CodexMonitorNudge | null;
-  items: CodexMonitorItem[];
+  nudge: AIAgentMonitorNudge | null;
+  items: AIAgentMonitorItem[];
   summary: string | null;
-  chatMessages: CodexMonitorChatMessage[];
+  chatMessages: AIAgentMonitorChatMessage[];
   lastAnalyzedAt: string | null;
   error: string | null;
   debug: {
@@ -298,6 +298,21 @@ export interface CodexMonitorState {
     lastResponsePreview: string | null;
   };
 }
+
+/** @deprecated Use AIAgentMonitorSessionInput instead */
+export type CodexMonitorSessionInput = AIAgentMonitorSessionInput;
+/** @deprecated Use AIAgentMonitorNudge instead */
+export type CodexMonitorNudge = AIAgentMonitorNudge;
+/** @deprecated Use AIAgentMonitorItemStatus instead */
+export type CodexMonitorItemStatus = AIAgentMonitorItemStatus;
+/** @deprecated Use AIAgentMonitorItem instead */
+export type CodexMonitorItem = AIAgentMonitorItem;
+/** @deprecated Use AIAgentMonitorNotePatch instead */
+export type CodexMonitorNotePatch = AIAgentMonitorNotePatch;
+/** @deprecated Use AIAgentMonitorChatMessage instead */
+export type CodexMonitorChatMessage = AIAgentMonitorChatMessage;
+/** @deprecated Use AIAgentMonitorState instead */
+export type CodexMonitorState = AIAgentMonitorState;
 
 export const APP_NAME = "Marshall";
 export const APP_VERSION = "0.0.1";

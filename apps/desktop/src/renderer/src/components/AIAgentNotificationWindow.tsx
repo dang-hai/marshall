@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, type KeyboardEvent } from "react";
 import type {
-  CodexMonitorState,
-  CodexMonitorItem,
-  CodexMonitorChatMessage,
+  AIAgentMonitorState,
+  AIAgentMonitorItem,
+  AIAgentMonitorChatMessage,
   MeetingProposal,
 } from "@marshall/shared";
 import {
@@ -20,8 +20,8 @@ import {
   Bug,
 } from "lucide-react";
 
-export interface CodexNotificationWindowViewProps {
-  state: CodexMonitorState;
+export interface AIAgentNotificationWindowViewProps {
+  state: AIAgentMonitorState;
   meetingProposals: MeetingProposal[];
   onDismiss: () => void;
   onSendChat: (message: string) => void;
@@ -33,7 +33,7 @@ export interface CodexNotificationWindowViewProps {
   onToggleDebug?: () => void;
 }
 
-function ItemIcon({ status }: { status: CodexMonitorItem["status"] }) {
+function ItemIcon({ status }: { status: AIAgentMonitorItem["status"] }) {
   switch (status) {
     case "done":
       return <Check className="h-3.5 w-3.5 text-emerald-500" />;
@@ -44,7 +44,7 @@ function ItemIcon({ status }: { status: CodexMonitorItem["status"] }) {
   }
 }
 
-function itemStyles(status: CodexMonitorItem["status"]) {
+function itemStyles(status: AIAgentMonitorItem["status"]) {
   switch (status) {
     case "done":
       return "text-zinc-500 line-through";
@@ -55,7 +55,7 @@ function itemStyles(status: CodexMonitorItem["status"]) {
   }
 }
 
-function ChatMessage({ message }: { message: CodexMonitorChatMessage }) {
+function ChatMessage({ message }: { message: AIAgentMonitorChatMessage }) {
   const isUser = message.role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -85,7 +85,7 @@ function DebugRow({ label, value }: { label: string; value: string | number | bo
   );
 }
 
-function DebugPanel({ state }: { state: CodexMonitorState }) {
+function DebugPanel({ state }: { state: AIAgentMonitorState }) {
   const debug = state.debug;
 
   return (
@@ -93,7 +93,7 @@ function DebugPanel({ state }: { state: CodexMonitorState }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-500">
-            Codex Debug
+            Agent Debug
           </p>
           <p className="mt-1 text-[12px] text-zinc-400">
             Inspect what the live monitor sees and whether it is actually running analyses.
@@ -155,7 +155,7 @@ function DebugPanel({ state }: { state: CodexMonitorState }) {
   );
 }
 
-function StatusIndicator({ state }: { state: CodexMonitorState }) {
+function StatusIndicator({ state }: { state: AIAgentMonitorState }) {
   const isComputing = state.status === "analyzing" || state.status === "chatting";
   const isPending = state.debug.pendingAnalysis;
   const isMonitoring = state.status === "monitoring";
@@ -358,7 +358,7 @@ function MeetingProposalCard({
   );
 }
 
-export function CodexNotificationWindowView({
+export function AIAgentNotificationWindowView({
   state,
   meetingProposals,
   onDismiss,
@@ -369,7 +369,7 @@ export function CodexNotificationWindowView({
   loadingMeetingId,
   showDebug,
   onToggleDebug,
-}: CodexNotificationWindowViewProps) {
+}: AIAgentNotificationWindowViewProps) {
   const { nudge, items, error, summary, chatMessages } = state;
   const [chatInput, setChatInput] = useState("");
   const [showChat, setShowChat] = useState(false);
@@ -614,7 +614,7 @@ export function CodexNotificationWindowView({
   );
 }
 
-const defaultState: CodexMonitorState = {
+const defaultState: AIAgentMonitorState = {
   status: "idle",
   noteId: null,
   noteTitle: null,
@@ -641,8 +641,8 @@ const defaultState: CodexMonitorState = {
   },
 };
 
-export function CodexNotificationWindow() {
-  const [state, setState] = useState<CodexMonitorState>(defaultState);
+export function AIAgentNotificationWindow() {
+  const [state, setState] = useState<AIAgentMonitorState>(defaultState);
   const [meetingProposals, setMeetingProposals] = useState<MeetingProposal[]>([]);
   const [loadingMeetingId, setLoadingMeetingId] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -660,7 +660,7 @@ export function CodexNotificationWindow() {
   useEffect(() => {
     let mounted = true;
 
-    window.codexMonitorAPI
+    window.aiAgentMonitorAPI
       ?.getState()
       .then((nextState) => {
         if (mounted) {
@@ -671,11 +671,11 @@ export function CodexNotificationWindow() {
         // Ignore initial load failures in the overlay window.
       });
 
-    const cleanupState = window.codexMonitorAPI?.onState((nextState) => {
+    const cleanupState = window.aiAgentMonitorAPI?.onState((nextState) => {
       setState(nextState);
     });
 
-    const cleanupProposal = window.codexMonitorAPI?.onMeetingProposal((proposal) => {
+    const cleanupProposal = window.aiAgentMonitorAPI?.onMeetingProposal((proposal) => {
       setMeetingProposals((prev) => {
         // Avoid duplicates
         if (prev.some((p) => p.id === proposal.id)) {
@@ -693,13 +693,16 @@ export function CodexNotificationWindow() {
   }, []);
 
   const handleSendChat = (message: string) => {
-    void window.codexMonitorAPI?.sendChat(message);
+    void window.aiAgentMonitorAPI?.sendChat(message);
   };
 
   const handleAcceptMeeting = async (proposalId: string, participants: string[]) => {
     setLoadingMeetingId(proposalId);
     try {
-      const result = await window.codexMonitorAPI?.acceptMeetingProposal(proposalId, participants);
+      const result = await window.aiAgentMonitorAPI?.acceptMeetingProposal(
+        proposalId,
+        participants
+      );
       if (result?.status === "accepted") {
         setMeetingProposals((prev) =>
           prev.map((p) => (p.id === proposalId ? { ...p, status: "accepted" as const } : p))
@@ -711,7 +714,7 @@ export function CodexNotificationWindow() {
   };
 
   const handleRemindMeeting = async (proposalId: string, participants: string[]) => {
-    await window.codexMonitorAPI?.remindMeetingProposal(proposalId, participants);
+    await window.aiAgentMonitorAPI?.remindMeetingProposal(proposalId, participants);
     setMeetingProposals((prev) =>
       prev.map((p) =>
         p.id === proposalId ? { ...p, status: "reminded" as const, participants } : p
@@ -720,18 +723,18 @@ export function CodexNotificationWindow() {
   };
 
   const handleDiscardMeeting = async (proposalId: string) => {
-    await window.codexMonitorAPI?.discardMeetingProposal(proposalId);
+    await window.aiAgentMonitorAPI?.discardMeetingProposal(proposalId);
     setMeetingProposals((prev) =>
       prev.map((p) => (p.id === proposalId ? { ...p, status: "discarded" as const } : p))
     );
   };
 
   return (
-    <CodexNotificationWindowView
+    <AIAgentNotificationWindowView
       state={state}
       meetingProposals={meetingProposals}
       onDismiss={() => {
-        void window.codexMonitorAPI?.dismissWindow();
+        void window.aiAgentMonitorAPI?.dismissWindow();
       }}
       onSendChat={handleSendChat}
       onAcceptMeeting={handleAcceptMeeting}

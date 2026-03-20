@@ -10,3 +10,31 @@ export type {
 } from "./client.js";
 
 export { blocks, properties } from "./blocks.js";
+
+export { isFullPage, isFullBlock, isFullDatabase } from "./types.js";
+
+export type {
+  BlockObjectRequest,
+  BlockObjectResponse,
+  GetBlockResponse,
+  ListBlockChildrenResponse,
+  AppendBlockChildrenParameters,
+  AppendBlockChildrenResponse,
+  UpdateBlockParameters,
+  UpdateBlockResponse,
+  PageObjectResponse,
+  GetPageResponse,
+  CreatePageParameters,
+  CreatePageResponse,
+  UpdatePageParameters,
+  UpdatePageResponse,
+  GetDatabaseResponse,
+  QueryDatabaseParameters,
+  QueryDatabaseResponse,
+  SearchParameters,
+  SearchResponse,
+  PropertyValueRequest,
+  PropertyValueResponse,
+  RichTextItemRequest,
+  RichTextItemResponse,
+} from "./types.js";
