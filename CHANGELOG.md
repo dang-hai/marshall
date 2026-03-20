@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.12](https://github.com/dang-hai/marshall/compare/v0.0.11...v0.0.12) (2026-03-20)
+
+
+### Bug Fixes
+
+* **ci:** add serverless function entry point for backend deployment ([522de11](https://github.com/dang-hai/marshall/commit/522de11c0bdbb7a0e3255bf41cf9ebb502f5bbd1))
+
 ## [0.0.11](https://github.com/dang-hai/marshall/compare/v0.0.10...v0.0.11) (2026-03-20)
 
 
