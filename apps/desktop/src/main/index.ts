@@ -23,6 +23,7 @@ import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
 import { CodexMonitorMCPService } from "./codex-monitor-mcp";
 import { setupIntegrationsIPC, setNotionToken } from "./integrations";
 import { setupNotionIntegrationIPC } from "./notion-integration";
+import { NotchCompanionManager } from "./notch-companion";
 import type { NoteRecord, StoredNotionToken } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
@@ -39,6 +40,7 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let codexNotificationWindow: BrowserWindow | null = null;
 let codexMonitorInstance: CodexMonitorMCPService | null = null;
+let notchCompanionInstance: NotchCompanionManager | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -714,6 +716,17 @@ app.whenReady().then(() => {
 
   codexMonitorInstance = codexMonitor;
 
+  // Initialize NotchCompanion (native macOS notch overlay)
+  if (process.platform === "darwin") {
+    notchCompanionInstance = new NotchCompanionManager();
+    notchCompanionInstance.start().catch((error) => {
+      console.error("[NotchCompanion] Failed to start:", error);
+    });
+
+    // Wire up state broadcasting
+    codexMonitor.setNotchCompanion(notchCompanionInstance);
+  }
+
   createWindow();
   tray = createTray(mainWindow);
 
@@ -747,6 +760,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   stopCallDetection();
+  notchCompanionInstance?.stop();
   if (tray) {
     tray.destroy();
   }

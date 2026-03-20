@@ -22,6 +22,7 @@ import type {
   MeetingProposal,
 } from "@marshall/shared";
 import { getConversationId, setConversationId, updateLastUsed } from "./codex-sessions";
+import type { NotchCompanionManager } from "./notch-companion";
 
 // ============================================================================
 // Types
@@ -396,6 +397,7 @@ export class CodexMonitorMCPService {
   private pendingDocumentOps: AgentOperation[] = [];
   private pendingMeetingProposals: Map<string, MeetingProposal> = new Map();
   private pendingChatMessage: string | null = null;
+  private notchCompanion: NotchCompanionManager | null = null;
 
   constructor(options: CodexMonitorMCPServiceOptions) {
     this.createNotificationWindow = options.createNotificationWindow;
@@ -404,6 +406,10 @@ export class CodexMonitorMCPService {
 
   getState() {
     return this.state;
+  }
+
+  setNotchCompanion(companion: NotchCompanionManager) {
+    this.notchCompanion = companion;
   }
 
   async updateSession(input: CodexMonitorSessionInput) {
@@ -952,6 +958,9 @@ export class CodexMonitorMCPService {
       }
     }
     this.syncNotificationWindow();
+
+    // Broadcast to native notch companion
+    this.notchCompanion?.broadcastState(this.state);
   }
 
   private syncNotificationWindow() {
