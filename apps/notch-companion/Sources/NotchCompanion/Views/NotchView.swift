@@ -1,20 +1,50 @@
 import SwiftUI
 import Combine
 
-/// ViewModel for NotchView
+// MARK: - Layout Constants (like boring.notch sizing/matters.swift)
+
+enum NotchSizing {
+    // Closed state - matches hardware notch
+    static let closedWidth: CGFloat = 185
+    static let closedHeight: CGFloat = 32
+
+    // Open state - fixed expanded size (includes internal padding)
+    static let openWidth: CGFloat = 660
+    static let openHeight: CGFloat = 240
+
+    // Corner radii
+    static let closedTopRadius: CGFloat = 6
+    static let closedBottomRadius: CGFloat = 14
+    static let openTopRadius: CGFloat = 16
+    static let openBottomRadius: CGFloat = 22
+
+    // Content padding
+    static let horizontalPadding: CGFloat = 16
+    static let verticalPadding: CGFloat = 12
+
+    // Header height (same as closed notch height)
+    static let headerHeight: CGFloat = 32
+}
+
+// MARK: - View Model
+
 class NotchViewModel: ObservableObject {
-    @Published var status: NotchStatus = .idle
+    @Published var status: NotchStatus = .monitoring
     @Published var nudge: NotchNudge?
-    @Published var itemCount: Int = 0
-    @Published var pendingItemCount: Int = 0
-    @Published var noteTitle: String?
+    @Published var itemCount: Int = 5
+    @Published var pendingItemCount: Int = 3
+    @Published var noteTitle: String? = "Weekly Sync"
     @Published var error: String?
-    @Published var isConnected: Bool = false
+    @Published var isConnected: Bool = true
+    @Published var isExpanded: Bool = false
+
+    // Mock data for demo
+    @Published var events: [CalendarEvent] = CalendarEvent.mockEvents
+    @Published var actionItems: [ActionItem] = ActionItem.mockItems
 
     private var cancellables = Set<AnyCancellable>()
 
     init(webSocketService: WebSocketService) {
-        // Observe WebSocket state changes
         webSocketService.$state
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
@@ -37,95 +67,419 @@ class NotchViewModel: ObservableObject {
     }
 }
 
-/// Main notch overlay view
+// MARK: - Data Models
+
+struct CalendarEvent: Identifiable {
+    let id = UUID()
+    let title: String
+    let time: String
+    let endTime: String
+    let color: Color
+    let location: String?
+
+    static var mockEvents: [CalendarEvent] {
+        [
+            CalendarEvent(title: "Team Standup", time: "10:00", endTime: "10:15", color: .blue, location: "Zoom"),
+            CalendarEvent(title: "Product Review", time: "14:00", endTime: "15:00", color: .green, location: "Room 3B"),
+            CalendarEvent(title: "1:1 with Sarah", time: "16:00", endTime: "16:30", color: .purple, location: nil),
+        ]
+    }
+}
+
+struct ActionItem: Identifiable {
+    let id = UUID()
+    let text: String
+    let isDone: Bool
+
+    static var mockItems: [ActionItem] {
+        [
+            ActionItem(text: "Send Q2 roadmap draft", isDone: false),
+            ActionItem(text: "Review design specs", isDone: true),
+            ActionItem(text: "Schedule follow-up meeting", isDone: false),
+        ]
+    }
+}
+
+// MARK: - Main Notch View
+
 struct NotchView: View {
     @ObservedObject var viewModel: NotchViewModel
+    @State private var isHovering = false
+
+    private var notchWidth: CGFloat {
+        viewModel.isExpanded ? NotchSizing.openWidth : NotchSizing.closedWidth
+    }
+
+    private var notchHeight: CGFloat {
+        viewModel.isExpanded ? NotchSizing.openHeight : NotchSizing.closedHeight
+    }
+
+    private var topRadius: CGFloat {
+        viewModel.isExpanded ? NotchSizing.openTopRadius : NotchSizing.closedTopRadius
+    }
+
+    private var bottomRadius: CGFloat {
+        viewModel.isExpanded ? NotchSizing.openBottomRadius : NotchSizing.closedBottomRadius
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Status indicator dot
-            StatusIndicator(status: viewModel.status, isConnected: viewModel.isConnected)
+        notchContent
+            .frame(width: notchWidth, height: notchHeight, alignment: .top)
+            .background(Color.black)
+            .clipShape(NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: viewModel.isExpanded)
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering && !viewModel.isExpanded {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        if isHovering {
+                            withAnimation { viewModel.isExpanded = true }
+                        }
+                    }
+                }
+            }
+            .onTapGesture {
+                withAnimation { viewModel.isExpanded.toggle() }
+            }
+    }
 
-            // Nudge text (when available)
+    @ViewBuilder
+    private var notchContent: some View {
+        if viewModel.isExpanded {
+            expandedLayout
+        } else {
+            closedLayout
+        }
+    }
+
+    // MARK: - Closed Layout
+
+    private var closedLayout: some View {
+        HStack(spacing: 8) {
+            StatusDot(status: viewModel.status, isConnected: viewModel.isConnected)
+
             if let nudge = viewModel.nudge {
                 Text(nudge.text)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-            } else if let error = viewModel.error {
-                Text(error)
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(.red.opacity(0.9))
-                    .lineLimit(1)
-            } else if viewModel.status == .monitoring {
-                Text("Listening...")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(.white.opacity(0.6))
-            } else if viewModel.status == .analyzing {
-                Text("Analyzing...")
-                    .font(.system(size: 10, weight: .regular))
+            } else {
+                Text(statusLabel)
+                    .font(.system(size: 10))
                     .foregroundColor(.white.opacity(0.6))
             }
 
             Spacer(minLength: 0)
 
-            // Item count badge
             if viewModel.pendingItemCount > 0 {
-                Text("\(viewModel.pendingItemCount)")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.white.opacity(0.2)))
+                BadgeView(count: viewModel.pendingItemCount)
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 32)
-        .frame(maxWidth: .infinity)
-        .background(Color.black)
-        .clipShape(NotchShape())
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var statusLabel: String {
+        switch viewModel.status {
+        case .monitoring: return "Listening..."
+        case .analyzing: return "Analyzing..."
+        case .chatting: return "Chatting..."
+        case .error: return viewModel.error ?? "Error"
+        case .idle: return "Idle"
+        }
+    }
+
+    // MARK: - Expanded Layout
+
+    private var expandedLayout: some View {
+        VStack(spacing: 0) {
+            // Header bar - fixed height, same as closed notch
+            expandedHeader
+                .frame(height: NotchSizing.headerHeight)
+
+            // Main content area - takes remaining space
+            HStack(alignment: .top, spacing: 16) {
+                // Left panel: Status & Actions (fixed width)
+                leftPanel
+                    .frame(width: 200)
+
+                // Divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 1)
+
+                // Right panel: Calendar (flexible width)
+                rightPanel
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.top, 8)
+            .frame(maxHeight: .infinity)
+        }
+        // Internal padding - creates space inside the black background
+        .padding(.horizontal, 32)
+        .padding(.bottom, 24)
+        .padding(.top, 12)
+    }
+
+    private var expandedHeader: some View {
+        HStack(spacing: 10) {
+            StatusDot(status: viewModel.status, isConnected: viewModel.isConnected)
+
+            Text(viewModel.noteTitle ?? "Marshall")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+
+            Spacer()
+
+            // Collapse button
+            Button(action: { withAnimation { viewModel.isExpanded = false } }) {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.5))
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    // MARK: - Left Panel (Status & Actions)
+
+    private var leftPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Nudge/Suggestion card
+            if let nudge = viewModel.nudge {
+                NudgeCard(nudge: nudge)
+            } else {
+                StatusCard(status: viewModel.status, isConnected: viewModel.isConnected)
+            }
+
+            // Action items
+            VStack(alignment: .leading, spacing: 6) {
+                Text("ACTION ITEMS")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.4))
+                    .tracking(0.5)
+
+                ForEach(viewModel.actionItems.prefix(3)) { item in
+                    ActionItemRow(item: item)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: - Right Panel (Calendar)
+
+    private var rightPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack {
+                Text("UPCOMING")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.4))
+                    .tracking(0.5)
+
+                Spacer()
+
+                Text(todayLabel)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+
+            // Events list
+            VStack(spacing: 4) {
+                ForEach(viewModel.events) { event in
+                    CalendarEventRow(event: event)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var todayLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d"
+        return formatter.string(from: Date())
     }
 }
 
-/// Status indicator component
-struct StatusIndicator: View {
+// MARK: - Subcomponents
+
+struct StatusDot: View {
     let status: NotchStatus
     let isConnected: Bool
 
     var body: some View {
         Circle()
-            .fill(statusColor)
+            .fill(color)
             .frame(width: 8, height: 8)
-            .shadow(color: statusColor.opacity(0.5), radius: 2)
     }
 
-    var statusColor: Color {
-        if !isConnected {
-            return .gray.opacity(0.5)
-        }
-
+    private var color: Color {
+        guard isConnected else { return .gray.opacity(0.5) }
         switch status {
-        case .monitoring:
-            return .green
-        case .analyzing, .chatting:
-            return .blue
-        case .error:
-            return .red
-        case .idle:
-            return .gray
+        case .monitoring: return .green
+        case .analyzing, .chatting: return .blue
+        case .error: return .red
+        case .idle: return .gray
         }
     }
 }
 
-#Preview {
+struct BadgeView: View {
+    let count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.white.opacity(0.2)))
+    }
+}
+
+struct NudgeCard: View {
+    let nudge: NotchNudge
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(nudge.text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white)
+                .lineLimit(2)
+
+            if let phrase = nudge.suggestedPhrase {
+                Text("\"\(phrase)\"")
+                    .font(.system(size: 10))
+                    .foregroundColor(.blue)
+                    .italic()
+                    .lineLimit(1)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.08))
+        .cornerRadius(8)
+    }
+}
+
+struct StatusCard: View {
+    let status: NotchStatus
+    let isConnected: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            StatusDot(status: status, isConnected: isConnected)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.08))
+        .cornerRadius(8)
+    }
+
+    private var label: String {
+        switch status {
+        case .monitoring: return "Monitoring call"
+        case .analyzing: return "Analyzing..."
+        case .chatting: return "Chatting"
+        case .error: return "Error"
+        case .idle: return "Idle"
+        }
+    }
+}
+
+struct ActionItemRow: View {
+    let item: ActionItem
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: item.isDone ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 10))
+                .foregroundColor(item.isDone ? .green : .white.opacity(0.4))
+
+            Text(item.text)
+                .font(.system(size: 10))
+                .foregroundColor(item.isDone ? .white.opacity(0.5) : .white.opacity(0.8))
+                .strikethrough(item.isDone)
+                .lineLimit(1)
+        }
+    }
+}
+
+struct CalendarEventRow: View {
+    let event: CalendarEvent
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Color indicator
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(event.color)
+                .frame(width: 3, height: 28)
+
+            // Event info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                if let location = event.location {
+                    Text(location)
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.5))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            // Time
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(event.time)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white)
+                Text(event.endTime)
+                    .font(.system(size: 9))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Previews
+
+#Preview("Closed") {
     let mockService = WebSocketService()
     let viewModel = NotchViewModel(webSocketService: mockService)
-    viewModel.status = .monitoring
-    viewModel.pendingItemCount = 3
-    viewModel.isConnected = true
+    viewModel.isExpanded = false
 
     return NotchView(viewModel: viewModel)
-        .frame(width: 300, height: 32)
+        .padding(40)
+        .background(Color.gray.opacity(0.3))
+}
+
+#Preview("Expanded") {
+    let mockService = WebSocketService()
+    let viewModel = NotchViewModel(webSocketService: mockService)
+    viewModel.isExpanded = true
+    viewModel.nudge = NotchNudge(
+        text: "Ask about the Q2 timeline",
+        suggestedPhrase: "What's the expected timeline?"
+    )
+
+    return NotchView(viewModel: viewModel)
+        .padding(40)
         .background(Color.gray.opacity(0.3))
 }

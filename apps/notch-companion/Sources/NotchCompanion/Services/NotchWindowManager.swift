@@ -54,9 +54,10 @@ class NotchWindowManager {
             return
         }
 
-        let notchSize = getNotchSize(screen: screen)
-        let windowWidth = max(notchSize.width + 100, 300) // Extend beyond notch
-        let windowHeight: CGFloat = 32
+        // Window size must accommodate the expanded view
+        // Content will be top-aligned within this frame
+        let windowWidth: CGFloat = 640   // Slightly larger than open width (620)
+        let windowHeight: CGFloat = 230  // Slightly larger than open height (210)
 
         let contentRect = NSRect(
             x: 0,
@@ -97,11 +98,13 @@ class NotchWindowManager {
     }
 
     /// Position window centered at top of screen (over notch area)
+    /// Window is anchored at the top edge, expanding downward when content grows
     private func positionWindow(_ window: NSWindow, on screen: NSScreen) {
         let screenFrame = screen.frame
         let windowFrame = window.frame
 
         let x = screenFrame.origin.x + (screenFrame.width / 2) - (windowFrame.width / 2)
+        // Position at top of screen - window content will expand downward
         let y = screenFrame.origin.y + screenFrame.height - windowFrame.height
 
         window.setFrameOrigin(NSPoint(x: x, y: y))
