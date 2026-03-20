@@ -37,6 +37,12 @@ export default defineConfig({
       }),
       copyResourcesPlugin(),
     ],
+    define: {
+      "process.env.BETTER_AUTH_URL": JSON.stringify(
+        process.env.BETTER_AUTH_URL || "http://localhost:3000"
+      ),
+      "process.env.BACKEND_URL": JSON.stringify(process.env.BACKEND_URL || "http://localhost:3000"),
+    },
     build: {
       rollupOptions: {
         input: {
