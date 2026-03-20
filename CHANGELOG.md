@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.11](https://github.com/dang-hai/marshall/compare/v0.0.10...v0.0.11) (2026-03-20)
+
+
+### Bug Fixes
+
+* **ci:** add vercel pull before build to fetch project settings ([93e193b](https://github.com/dang-hai/marshall/commit/93e193b789917e6a32ec45f5347e1318cd1e815f))
+* **desktop:** inject backend urls at build time via vite define ([c5d75d4](https://github.com/dang-hai/marshall/commit/c5d75d4b5fc2a097d3d4974e4a43db113d3884c3))
+
 ## [0.0.10](https://github.com/dang-hai/marshall/compare/v0.0.9...v0.0.10) (2026-03-20)
 
 
