@@ -2,14 +2,6 @@ import { describe, expect, mock, test } from "bun:test";
 import type { AIAgentMonitorSessionInput } from "@marshall/shared";
 
 mock.module("electron", () => ({
-  default: {
-    app: {
-      getPath: () => "/tmp",
-      getAppPath: () => "/tmp/app",
-      getName: () => "Marshall",
-      getVersion: () => "0.0.0",
-    },
-  },
   app: {
     getPath: () => "/tmp",
     getAppPath: () => "/tmp/app",
@@ -20,9 +12,6 @@ mock.module("electron", () => ({
     static getAllWindows() {
       return [];
     }
-  },
-  ipcMain: {
-    handle: () => {},
   },
 }));
 
