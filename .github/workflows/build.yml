@@ -128,9 +128,10 @@ jobs:
           if-no-files-found: error
 
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release == 'true'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release == 'true' || inputs.tag_name != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
           files: |
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.zip
