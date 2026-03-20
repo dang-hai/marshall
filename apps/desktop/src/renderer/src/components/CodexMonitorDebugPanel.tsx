@@ -78,7 +78,7 @@ export function CodexMonitorDebugPanel({
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">
               Last response preview
             </p>
-            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed text-stone-700">
+            <pre className="mt-2 max-h-[28rem] overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-stone-700">
               {debug.lastResponsePreview}
             </pre>
           </div>
@@ -87,9 +87,9 @@ export function CodexMonitorDebugPanel({
         {debug.lastPromptPreview && (
           <div className="rounded-xl border border-amber-200 bg-white/80 px-3 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">
-              Last prompt preview
+              Last prompt
             </p>
-            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed text-stone-700">
+            <pre className="mt-2 max-h-[28rem] overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed text-stone-700">
               {debug.lastPromptPreview}
             </pre>
           </div>
