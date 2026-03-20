@@ -3,6 +3,7 @@
 export * from "./document-blocks.js";
 export * from "./document-service.js";
 export * from "./codex-document-integration.js";
+export * from "./marshall-mcp-server.js";
 
 export interface User {
   id: string;
@@ -41,6 +42,19 @@ export interface GoogleCalendarEvent {
   location: string | null;
   htmlLink: string | null;
   status: string | null;
+}
+
+/** Agent-proposed meeting draft for user review */
+export interface MeetingProposal {
+  id: string;
+  title: string;
+  startAt: string; // ISO 8601 datetime
+  endAt: string; // ISO 8601 datetime
+  participants: string[]; // email addresses
+  location: string | null;
+  description: string | null;
+  createdAt: string;
+  status: "pending" | "accepted" | "discarded";
 }
 
 export interface Session {
