@@ -18,6 +18,8 @@ export interface StreamingTranscriberConfig extends Omit<WhisperConfig, "modelPa
   maxSegmentDuration?: number;
   /** Enable streaming mode */
   streamingEnabled?: boolean;
+  /** Interval for interim transcription during active speech (seconds). Set to 0 to disable. */
+  interimInterval?: number;
 }
 
 export interface PartialTranscription {
@@ -48,6 +50,7 @@ interface ResolvedConfig {
   minSegmentDuration: number;
   maxSegmentDuration: number;
   streamingEnabled: boolean;
+  interimInterval: number;
   vad: Partial<Omit<VADConfig, "sampleRate">>;
   language: string;
   threads: number;
@@ -76,6 +79,11 @@ export class StreamingTranscriber extends EventEmitter {
   private wasSpeaking = false;
   private speechStartTime = 0;
 
+  // Interim transcription state
+  private interimTimer: ReturnType<typeof setInterval> | null = null;
+  private lastInterimText = "";
+  private isInterimTranscribing = false;
+
   constructor(config: StreamingTranscriberConfig) {
     super();
     this.config = {
@@ -84,6 +92,7 @@ export class StreamingTranscriber extends EventEmitter {
       minSegmentDuration: 0.35,
       maxSegmentDuration: 12.0,
       streamingEnabled: true,
+      interimInterval: 2.0, // Transcribe every 2 seconds during speech
       vad: {},
       language: "en",
       threads: 4,
@@ -124,6 +133,9 @@ export class StreamingTranscriber extends EventEmitter {
     this.segmentIndex = 0;
     this.isRecording = true;
     this.wasSpeaking = false;
+    this.lastInterimText = "";
+    this.isInterimTranscribing = false;
+    this.clearInterimTimer();
     this.vad.reset();
     this.emit("recording:start");
   }
@@ -159,11 +171,17 @@ export class StreamingTranscriber extends EventEmitter {
       this.wasSpeaking = true;
       this.speechStartTime = Date.now();
       this.emit("vad:speech-start");
+
+      // Start interim transcription timer
+      this.startInterimTimer();
     } else if (!vadResult.isSpeech && this.wasSpeaking) {
       // Speech ended
       this.wasSpeaking = false;
       const speechDuration = (Date.now() - this.speechStartTime) / 1000;
       this.emit("vad:speech-end", speechDuration);
+
+      // Stop interim timer
+      this.clearInterimTimer();
 
       // Trigger transcription of the segment if streaming enabled
       if (this.config.streamingEnabled && speechDuration >= this.config.minSegmentDuration) {
@@ -188,6 +206,74 @@ export class StreamingTranscriber extends EventEmitter {
   private getCurrentSegmentDuration(): number {
     const totalSamples = this.currentSegmentChunks.reduce((sum, chunk) => sum + chunk.length, 0);
     return totalSamples / this.sourceSampleRate;
+  }
+
+  /**
+   * Start the interim transcription timer
+   */
+  private startInterimTimer(): void {
+    if (!this.config.streamingEnabled || this.config.interimInterval <= 0) {
+      return;
+    }
+
+    this.clearInterimTimer();
+
+    this.interimTimer = setInterval(() => {
+      this.transcribeInterim();
+    }, this.config.interimInterval * 1000);
+  }
+
+  /**
+   * Clear the interim transcription timer
+   */
+  private clearInterimTimer(): void {
+    if (this.interimTimer) {
+      clearInterval(this.interimTimer);
+      this.interimTimer = null;
+    }
+  }
+
+  /**
+   * Transcribe current buffer as interim (non-final) result
+   */
+  private async transcribeInterim(): Promise<void> {
+    if (
+      this.isInterimTranscribing ||
+      this.isTranscribing ||
+      this.currentSegmentChunks.length === 0
+    ) {
+      return;
+    }
+
+    const duration = this.getCurrentSegmentDuration();
+    if (duration < this.config.minSegmentDuration) {
+      return;
+    }
+
+    try {
+      this.isInterimTranscribing = true;
+
+      // Copy current chunks (don't clear - this is interim)
+      const chunks = [...this.currentSegmentChunks];
+      const result = await this.transcribeChunks(chunks);
+
+      if (result.text.trim() && result.text !== this.lastInterimText) {
+        this.lastInterimText = result.text;
+
+        // Emit as interim (non-final) result
+        this.emit("transcription:partial", {
+          text: result.text,
+          isFinal: false,
+          segmentIndex: this.segmentIndex,
+          timestamp: Date.now(),
+        });
+      }
+    } catch (error) {
+      // Silently ignore interim transcription errors
+      console.error("[StreamingTranscriber] Interim transcription error:", error);
+    } finally {
+      this.isInterimTranscribing = false;
+    }
   }
 
   /**
@@ -392,12 +478,15 @@ export class StreamingTranscriber extends EventEmitter {
    * Cancel recording and transcription
    */
   cancel(): void {
+    this.clearInterimTimer();
     this.whisper.kill();
     this.isRecording = false;
     this.isTranscribing = false;
+    this.isInterimTranscribing = false;
     this.currentSegmentChunks = [];
     this.allSessionChunks = [];
     this.segmentResults = [];
+    this.lastInterimText = "";
     this.vad.reset();
   }
 

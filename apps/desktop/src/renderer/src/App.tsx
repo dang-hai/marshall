@@ -8,6 +8,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { SidebarProfileMenu } from "./components/SidebarProfileMenu";
 import { LoginScreen } from "./components/LoginScreen";
 import { CallNotificationStack } from "./components/CallNotification";
+import { CodexNotificationWindow } from "./components/CodexNotificationWindow";
 import { useAuth, useCallDetection } from "./hooks";
 import { settingsSidebarItems, type SettingsSectionId } from "./components/settings-config";
 import { MARSHALL_EVENTS } from "./constants";
@@ -208,7 +209,7 @@ export function AppShell({
 
         <section className="app-no-drag flex flex-1 flex-col overflow-auto p-5">
           <div className={cn("flex flex-1 flex-col", activeView !== "home" && "hidden")}>
-            <HomePanel isVisible={activeView === "home"} />
+            <HomePanel />
           </div>
 
           {activeView === "chat" && (
@@ -252,7 +253,7 @@ export function AppShell({
   );
 }
 
-export default function App() {
+function MainDesktopApp() {
   const { user, isLoading, isAuthenticated, signOut, signIn } = useAuth();
 
   const handleCreateNote = useCallback((title: string) => {
@@ -292,4 +293,17 @@ export default function App() {
       onStartTranscription={handleStartTranscription}
     />
   );
+}
+
+export default function App() {
+  const windowMode =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("window");
+
+  if (windowMode === "codex-monitor") {
+    return <CodexNotificationWindow />;
+  }
+
+  return <MainDesktopApp />;
 }

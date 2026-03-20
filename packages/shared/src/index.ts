@@ -109,6 +109,73 @@ export interface UpdateNoteInput {
   trashedAt?: string | null;
 }
 
+export interface CodexMonitorSessionInput {
+  noteId: string;
+  noteTitle: string;
+  noteBodyHtml: string;
+  noteBodyText: string;
+  transcription: SaveNoteTranscriptionInput;
+}
+
+export interface CodexMonitorNudge {
+  id: string;
+  text: string;
+  suggestedPhrase: string | null;
+  createdAt: string;
+}
+
+export type CodexMonitorItemStatus = "pending" | "done" | "attention";
+
+export interface CodexMonitorItem {
+  id: string;
+  text: string;
+  status: CodexMonitorItemStatus;
+  addedAt: string;
+}
+
+export interface CodexMonitorNotePatch {
+  noteId: string;
+  checkedPlanItems: string[];
+  items: CodexMonitorItem[];
+  summary: string | null;
+  final: boolean;
+  generatedAt: string;
+}
+
+export interface CodexMonitorChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  createdAt: string;
+}
+
+export interface CodexMonitorState {
+  status: "idle" | "monitoring" | "analyzing" | "chatting" | "error";
+  noteId: string | null;
+  noteTitle: string | null;
+  nudge: CodexMonitorNudge | null;
+  items: CodexMonitorItem[];
+  summary: string | null;
+  chatMessages: CodexMonitorChatMessage[];
+  lastAnalyzedAt: string | null;
+  error: string | null;
+  debug: {
+    transcriptionStatus: NoteTranscriptionStatus | null;
+    transcriptLength: number;
+    checklistItemCount: number;
+    sessionUpdatedAt: string | null;
+    pendingAnalysis: boolean;
+    analysisInFlight: boolean;
+    analysisCount: number;
+    lastMode: "live" | "final" | null;
+    lastStartedAt: string | null;
+    lastCompletedAt: string | null;
+    lastOutcome: string | null;
+    lastPromptPreview: string | null;
+    lastResponsePreview: string | null;
+  };
+}
+
 export const APP_NAME = "Marshall";
 export const APP_VERSION = "0.0.1";
 

@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  CodexMonitorNotePatch,
+  CodexMonitorSessionInput,
+  CodexMonitorState,
   CreateNoteInput,
   NoteRecord,
   NoteTranscriptionSnapshot,
@@ -84,6 +87,27 @@ contextBridge.exposeInMainWorld("notesAPI", {
     ipcRenderer.invoke("notes:update", noteId, input),
   saveTranscription: (noteId: string, input: SaveNoteTranscriptionInput) =>
     ipcRenderer.invoke("notes:save-transcription", noteId, input),
+});
+
+contextBridge.exposeInMainWorld("codexMonitorAPI", {
+  updateSession: (input: CodexMonitorSessionInput) =>
+    ipcRenderer.invoke("codex-monitor:update-session", input),
+  clearSession: (noteId?: string) => ipcRenderer.invoke("codex-monitor:clear-session", noteId),
+  getState: () => ipcRenderer.invoke("codex-monitor:get-state"),
+  dismissWindow: () => ipcRenderer.invoke("codex-monitor:dismiss-window"),
+  sendChat: (message: string) => ipcRenderer.invoke("codex-monitor:send-chat", message),
+  onState: (callback: (state: CodexMonitorState) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: CodexMonitorState) =>
+      callback(state);
+    ipcRenderer.on("codex-monitor:state", handler);
+    return () => ipcRenderer.removeListener("codex-monitor:state", handler);
+  },
+  onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, patch: CodexMonitorNotePatch) =>
+      callback(patch);
+    ipcRenderer.on("codex-monitor:note-patch", handler);
+    return () => ipcRenderer.removeListener("codex-monitor:note-patch", handler);
+  },
 });
 
 // AI API
@@ -319,6 +343,15 @@ declare global {
         noteId: string,
         input: SaveNoteTranscriptionInput
       ) => Promise<NoteTranscriptionSnapshot>;
+    };
+    codexMonitorAPI?: {
+      updateSession: (input: CodexMonitorSessionInput) => Promise<{ status: string }>;
+      clearSession: (noteId?: string) => Promise<{ status: string }>;
+      getState: () => Promise<CodexMonitorState>;
+      dismissWindow: () => Promise<{ status: string }>;
+      sendChat: (message: string) => Promise<{ status: string; response?: string; error?: string }>;
+      onState: (callback: (state: CodexMonitorState) => void) => () => void;
+      onNotePatch: (callback: (patch: CodexMonitorNotePatch) => void) => () => void;
     };
     aiAPI: {
       completion: (input: { prompt: string; system?: string }) => Promise<{ text: string }>;

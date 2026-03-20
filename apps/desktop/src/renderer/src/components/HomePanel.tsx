@@ -17,9 +17,27 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
-import type { NoteRecord, SaveNoteTranscriptionInput } from "@marshall/shared";
+import type {
+  CodexMonitorState,
+  CodexMonitorNotePatch,
+  NoteRecord,
+  NoteTranscriptionStatus,
+  SaveNoteTranscriptionInput,
+} from "@marshall/shared";
 import { Button } from "./ui/button";
+import { CodexMonitorDebugPanel } from "./CodexMonitorDebugPanel";
 import { FloatingTranscriptionRecorder } from "./FloatingTranscriptionRecorder";
+import {
+  applyCodexNotePatch,
+  DIVIDER_BLOCK_CLASS,
+  extractPlainTextFromHtml,
+  getBlockClassName,
+  normalizeEditorHtml,
+  PARAGRAPH_BLOCK_CLASS,
+  renderInlineMarkdown,
+  textToParagraphHtml,
+  type MarkdownBlockType,
+} from "../lib/note-body";
 import { PlanMeetingModal } from "./PlanMeetingModal";
 import { MARSHALL_EVENTS } from "../constants";
 
@@ -33,18 +51,6 @@ interface LegacyQuickNote {
 }
 
 const QUICK_NOTES_STORAGE_KEY = "marshall.quick-notes";
-const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
-const HEADING_ONE_BLOCK_CLASS =
-  "min-h-[2.5rem] font-serif text-[1.5rem] font-medium leading-tight tracking-[-0.01em]";
-const HEADING_TWO_BLOCK_CLASS =
-  "min-h-[2.2rem] font-serif text-[1.25rem] font-medium leading-tight tracking-[-0.01em]";
-const BULLET_BLOCK_CLASS =
-  "relative min-h-[1.85rem] pl-6 before:absolute before:left-0 before:top-0 before:text-foreground/65 before:content-['•']";
-const QUOTE_BLOCK_CLASS = "min-h-[1.85rem] border-l-2 border-border/80 pl-4 text-muted-foreground";
-const DIVIDER_BLOCK_CLASS = "my-4 border-0 border-t border-border/80";
-const INLINE_CODE_CLASS = "rounded bg-muted px-1 py-0.5 font-mono text-[0.875em] text-foreground";
-
-type MarkdownBlockType = "paragraph" | "heading-1" | "heading-2" | "bullet" | "quote";
 
 const METADATA_CHIP_CLASS =
   "inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-background hover:text-foreground";
@@ -182,62 +188,6 @@ function insertPlainTextAtSelection(text: string) {
   selection.addRange(range);
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function renderInlineMarkdown(text: string) {
-  return escapeHtml(text)
-    .replace(/`([^`]+)`/g, `<code class="${INLINE_CODE_CLASS}">$1</code>`)
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>")
-    .replace(/(^|[^_])_([^_]+)_(?!_)/g, "$1<em>$2</em>");
-}
-
-function textToParagraphHtml(text: string) {
-  const lines = text.split("\n");
-  return lines
-    .map(
-      (line) =>
-        `<div class="${PARAGRAPH_BLOCK_CLASS}">${renderInlineMarkdown(line) || "<br>"}</div>`
-    )
-    .join("");
-}
-
-function extractPlainTextFromHtml(html: string) {
-  if (typeof window === "undefined") {
-    return html.replace(/<[^>]+>/g, " ");
-  }
-
-  const container = window.document.createElement("div");
-  container.innerHTML = html;
-  return container.innerText.replace(/\r\n/g, "\n");
-}
-
-function normalizeEditorHtml(html: string) {
-  return html.trim();
-}
-
-function getBlockClassName(type: MarkdownBlockType) {
-  switch (type) {
-    case "heading-1":
-      return HEADING_ONE_BLOCK_CLASS;
-    case "heading-2":
-      return HEADING_TWO_BLOCK_CLASS;
-    case "bullet":
-      return BULLET_BLOCK_CLASS;
-    case "quote":
-      return QUOTE_BLOCK_CLASS;
-    default:
-      return PARAGRAPH_BLOCK_CLASS;
-  }
-}
-
 function findEditorBlock(editor: HTMLDivElement, node: Node | null): HTMLElement | null {
   let currentNode = node;
 
@@ -266,11 +216,28 @@ function insertParagraphAfter(target: HTMLElement) {
   focusEditableAtEnd(paragraph as HTMLDivElement);
 }
 
-interface HomePanelProps {
-  isVisible?: boolean;
+function isActiveTranscriptionStatus(status: NoteTranscriptionStatus | null | undefined) {
+  return status === "recording" || status === "transcribing";
 }
 
-export function HomePanel({ isVisible = true }: HomePanelProps) {
+export function getFloatingRecorderNote(
+  notes: NoteRecord[],
+  activeNoteId: string | null
+): NoteRecord | null {
+  const activeTranscriptionNote =
+    notes.find(
+      (note) =>
+        note.trashedAt === null && isActiveTranscriptionStatus(note.transcription?.status ?? null)
+    ) ?? null;
+
+  if (activeTranscriptionNote) {
+    return activeTranscriptionNote;
+  }
+
+  return notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null;
+}
+
+export function HomePanel() {
   const [notes, setNotes] = useState<NoteRecord[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -278,8 +245,32 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
   const [showPlanMeetingModal, setShowPlanMeetingModal] = useState(false);
-  const [transcriptionTargetNoteId, setTranscriptionTargetNoteId] = useState<string | null>(null);
-  const [isTranscriptionSessionActive, setIsTranscriptionSessionActive] = useState(false);
+  const [codexMonitorState, setCodexMonitorState] = useState<CodexMonitorState>({
+    status: "idle",
+    noteId: null,
+    noteTitle: null,
+    nudge: null,
+    items: [],
+    summary: null,
+    chatMessages: [],
+    lastAnalyzedAt: null,
+    error: null,
+    debug: {
+      transcriptionStatus: null,
+      transcriptLength: 0,
+      checklistItemCount: 0,
+      sessionUpdatedAt: null,
+      pendingAnalysis: false,
+      analysisInFlight: false,
+      analysisCount: 0,
+      lastMode: null,
+      lastStartedAt: null,
+      lastCompletedAt: null,
+      lastOutcome: null,
+      lastPromptPreview: null,
+      lastResponsePreview: null,
+    },
+  });
   const titleRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const pendingNoteUpdatesRef = useRef<Record<string, { title?: string; body?: string }>>({});
@@ -362,32 +353,12 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
     () => notes.find((note) => note.id === activeNoteId && note.trashedAt === null) ?? null,
     [notes, activeNoteId]
   );
-  const transcriptionTargetNote = useMemo(
-    () =>
-      notes.find((note) => note.id === transcriptionTargetNoteId && note.trashedAt === null) ??
-      null,
-    [notes, transcriptionTargetNoteId]
+  const recorderNote = useMemo(
+    () => getFloatingRecorderNote(notes, activeNoteId),
+    [notes, activeNoteId]
   );
+  const recorderNoteId = recorderNote?.id ?? activeNote?.id ?? null;
   const visibleNotes = useMemo(() => notes.filter((note) => note.trashedAt === null), [notes]);
-  const recorderNote = transcriptionTargetNote ?? activeNote;
-  const shouldRenderRecorder =
-    recorderNote !== null && (isTranscriptionSessionActive || (isVisible && activeNote !== null));
-
-  useEffect(() => {
-    setTranscriptionTargetNoteId((currentTargetNoteId) =>
-      resolveTranscriptionTargetNoteId({
-        activeNoteId,
-        currentTargetNoteId,
-        sessionActive: isTranscriptionSessionActive,
-      })
-    );
-  }, [activeNoteId, isTranscriptionSessionActive]);
-
-  useEffect(() => {
-    if (transcriptionTargetNoteId && !transcriptionTargetNote && !isTranscriptionSessionActive) {
-      setTranscriptionTargetNoteId(null);
-    }
-  }, [isTranscriptionSessionActive, transcriptionTargetNote, transcriptionTargetNoteId]);
 
   useEffect(() => {
     if (openMenuId === null) {
@@ -523,6 +494,56 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
     };
   }, [createNote]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    window.codexMonitorAPI
+      ?.getState()
+      .then((state) => {
+        if (mounted) {
+          setCodexMonitorState(state);
+        }
+      })
+      .catch(() => {
+        // Ignore initial debug load failures.
+      });
+
+    const cleanup = window.codexMonitorAPI?.onState((state) => {
+      setCodexMonitorState(state);
+    });
+
+    return () => {
+      mounted = false;
+      cleanup?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!window.codexMonitorAPI) {
+      return;
+    }
+
+    const handleNotePatch = (patch: CodexMonitorNotePatch) => {
+      if (patch.noteId !== activeNoteId) {
+        return;
+      }
+
+      const currentHtml = bodyRef.current?.innerHTML ?? activeNote?.body ?? "";
+      const nextHtml = applyCodexNotePatch(currentHtml, patch);
+      if (normalizeEditorHtml(nextHtml) === normalizeEditorHtml(currentHtml)) {
+        return;
+      }
+
+      if (bodyRef.current) {
+        setEditableHtml(bodyRef.current, nextHtml);
+      }
+
+      updateActiveNote("body", nextHtml);
+    };
+
+    return window.codexMonitorAPI.onNotePatch(handleNotePatch);
+  }, [activeNote?.body, activeNoteId]);
+
   const handlePlanGenerated = useCallback(
     (plan: string, title: string) => {
       setShowPlanMeetingModal(false);
@@ -583,21 +604,35 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
   };
 
   const handleSnapshotChange = useCallback(
-    async (snapshot: SaveNoteTranscriptionInput) => {
-      if (!transcriptionTargetNoteId) {
-        return;
-      }
+    async (noteId: string, snapshot: SaveNoteTranscriptionInput) => {
+      const now = new Date().toISOString();
+
+      setNotes((currentNotes) =>
+        currentNotes
+          .map((note) =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  transcription: {
+                    id: note.transcription?.id ?? `pending-${noteId}`,
+                    noteId,
+                    createdAt: note.transcription?.createdAt ?? now,
+                    updatedAt: now,
+                    ...snapshot,
+                  },
+                  updatedAt: now,
+                }
+              : note
+          )
+          .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+      );
 
       try {
-        const savedSnapshot = await window.notesAPI.saveTranscription(
-          transcriptionTargetNoteId,
-          snapshot
-        );
-        const now = new Date().toISOString();
+        const savedSnapshot = await window.notesAPI.saveTranscription(noteId, snapshot);
         setNotes((currentNotes) =>
           currentNotes
             .map((note) =>
-              note.id === transcriptionTargetNoteId
+              note.id === noteId
                 ? {
                     ...note,
                     transcription: savedSnapshot,
@@ -611,7 +646,18 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
         setNotesError(error instanceof Error ? error.message : "Failed to save transcription");
       }
     },
-    [transcriptionTargetNoteId]
+    []
+  );
+
+  const handleRecorderSnapshotChange = useCallback(
+    (snapshot: SaveNoteTranscriptionInput) => {
+      if (!recorderNoteId) {
+        return;
+      }
+
+      return handleSnapshotChange(recorderNoteId, snapshot);
+    },
+    [handleSnapshotChange, recorderNoteId]
   );
 
   const syncBodyHtml = () => {
@@ -779,17 +825,22 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
                   onPaste={handleBodyPaste}
                 />
               </div>
+
+              <CodexMonitorDebugPanel
+                state={codexMonitorState}
+                noteId={activeNote.id}
+                transcription={activeNote.transcription}
+              />
             </div>
           </div>
         </div>
-        {shouldRenderRecorder && recorderNote && (
-          <FloatingTranscriptionRecorder
-            noteId={recorderNote.id}
-            persistedSnapshot={recorderNote.transcription}
-            onActivityChange={setIsTranscriptionSessionActive}
-            onSnapshotChange={handleSnapshotChange}
-          />
-        )}
+        <FloatingTranscriptionRecorder
+          noteId={recorderNote?.id ?? activeNote.id}
+          noteBodyHtml={recorderNote?.body ?? activeNote.body}
+          noteTitle={recorderNote?.title ?? activeNote.title}
+          persistedSnapshot={recorderNote?.transcription ?? activeNote.transcription}
+          onSnapshotChange={handleRecorderSnapshotChange}
+        />
         {showPlanMeetingModal && (
           <PlanMeetingModal
             onClose={() => setShowPlanMeetingModal(false)}
@@ -928,12 +979,13 @@ export function HomePanel({ isVisible = true }: HomePanelProps) {
           </aside>
         </div>
       </div>
-      {shouldRenderRecorder && recorderNote && (
+      {recorderNote && (
         <FloatingTranscriptionRecorder
           noteId={recorderNote.id}
+          noteBodyHtml={recorderNote.body}
+          noteTitle={recorderNote.title}
           persistedSnapshot={recorderNote.transcription}
-          onActivityChange={setIsTranscriptionSessionActive}
-          onSnapshotChange={handleSnapshotChange}
+          onSnapshotChange={handleRecorderSnapshotChange}
         />
       )}
     </>

@@ -11,6 +11,7 @@ import {
 import { join } from "path";
 import { randomBytes } from "crypto";
 import type {
+  CodexMonitorSessionInput,
   CreateNoteInput,
   SaveNoteTranscriptionInput,
   UpdateNoteInput,
@@ -19,6 +20,7 @@ import { createTray } from "./tray";
 import { setupTranscriptionIPC } from "./transcription";
 import { setupSettingsIPC } from "./settings";
 import { setupCallDetectionIPC, stopCallDetection } from "./call-detection";
+import { CodexMonitorService } from "./codex-monitor";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
@@ -30,9 +32,10 @@ app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
 app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
 
 let mainWindow: BrowserWindow | null = null;
-let overlayWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let codexNotificationWindow: BrowserWindow | null = null;
+let codexMonitorInstance: CodexMonitorService | null = null;
 
 const PROTOCOL = process.env.BETTER_AUTH_ELECTRON_PROTOCOL || "marshall";
 const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || "http://localhost:3000";
@@ -185,13 +188,10 @@ function createWindow() {
     }
   });
 
-  // electron-vite injects these env vars
+  loadRendererWindow(mainWindow);
+
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-    // Open DevTools in development
     mainWindow.webContents.openDevTools({ mode: "detach" });
-  } else {
-    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
   mainWindow.on("closed", () => {
@@ -206,62 +206,52 @@ function createWindow() {
   });
 }
 
-const OVERLAY_WINDOW_SIZE = {
-  height: 100,
-  width: 44,
-};
-const OVERLAY_EDGE_MARGIN = 24;
-const OVERLAY_TOP_FRACTION = 1 / 3;
-
-function getOpenWindows() {
-  return [mainWindow, overlayWindow].filter((window): window is BrowserWindow => window !== null);
-}
-
-function positionOverlayWindow() {
-  if (!overlayWindow) {
+function loadRendererWindow(window: BrowserWindow, query?: Record<string, string>) {
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const url = new URL(process.env.ELECTRON_RENDERER_URL);
+    if (query) {
+      Object.entries(query).forEach(([key, value]) => {
+        url.searchParams.set(key, value);
+      });
+    }
+    window.loadURL(url.toString());
     return;
   }
 
-  const display = screen.getPrimaryDisplay();
-  const { workArea } = display;
-  const x = Math.round(
-    workArea.x + workArea.width - OVERLAY_WINDOW_SIZE.width - OVERLAY_EDGE_MARGIN
-  );
-  const preferredY =
-    workArea.y + workArea.height * OVERLAY_TOP_FRACTION - OVERLAY_WINDOW_SIZE.height / 2;
-  const maxY = workArea.y + workArea.height - OVERLAY_WINDOW_SIZE.height - OVERLAY_EDGE_MARGIN;
-  const y = Math.round(Math.min(Math.max(workArea.y + OVERLAY_EDGE_MARGIN, preferredY), maxY));
-
-  overlayWindow.setBounds({
-    x,
-    y,
-    width: OVERLAY_WINDOW_SIZE.width,
-    height: OVERLAY_WINDOW_SIZE.height,
+  window.loadFile(join(__dirname, "../renderer/index.html"), {
+    query,
   });
 }
 
-function createOverlayWindow() {
-  if (process.platform !== "darwin") {
-    return;
+function getOpenWindows() {
+  return [mainWindow].filter((window): window is BrowserWindow => window !== null);
+}
+
+function createCodexNotificationWindow() {
+  if (codexNotificationWindow && !codexNotificationWindow.isDestroyed()) {
+    return codexNotificationWindow;
   }
 
-  overlayWindow = new BrowserWindow({
-    width: OVERLAY_WINDOW_SIZE.width,
-    height: OVERLAY_WINDOW_SIZE.height,
-    x: 0,
-    y: 0,
+  const { workArea } = screen.getPrimaryDisplay();
+  codexNotificationWindow = new BrowserWindow({
+    width: 380,
+    height: 560,
+    minWidth: 320,
+    minHeight: 300,
+    maxWidth: 500,
+    maxHeight: 800,
+    x: workArea.x + workArea.width - 400,
+    y: workArea.y + 56,
+    show: false,
     frame: false,
     transparent: true,
-    show: false,
-    resizable: false,
-    movable: true,
-    minimizable: false,
-    maximizable: false,
-    skipTaskbar: true,
     hasShadow: false,
-    focusable: true,
+    resizable: true,
+    maximizable: false,
+    minimizable: false,
     fullscreenable: false,
-    roundedCorners: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
     webPreferences: {
       preload: join(__dirname, "../preload/index.mjs"),
       nodeIntegration: false,
@@ -270,31 +260,40 @@ function createOverlayWindow() {
     },
   });
 
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  overlayWindow.setAlwaysOnTop(true, "floating");
+  codexNotificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  loadRendererWindow(codexNotificationWindow, { window: "codex-monitor" });
 
-  positionOverlayWindow();
-
-  if (process.env.ELECTRON_RENDERER_URL) {
-    overlayWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}?overlay=pill`);
-  } else {
-    overlayWindow.loadFile(join(__dirname, "../renderer/index.html"), {
-      query: {
-        overlay: "pill",
-      },
-    });
-  }
-
-  overlayWindow.once("ready-to-show", () => {
-    overlayWindow?.showInactive();
+  codexNotificationWindow.on("closed", () => {
+    codexNotificationWindow = null;
   });
 
-  overlayWindow.on("closed", () => {
-    overlayWindow = null;
+  return codexNotificationWindow;
+}
+
+function setupCodexMonitorWindowHandlers(window: BrowserWindow) {
+  if (!codexMonitorInstance) return;
+
+  // Hide codex notification window when main window is hidden (macOS close behavior)
+  window.on("hide", () => {
+    codexMonitorInstance?.hideWindow();
+  });
+
+  // Show codex notification window when main window is shown again
+  window.on("show", () => {
+    codexMonitorInstance?.showWindowIfNeeded();
+  });
+
+  // Clean up codex resources when main window is actually destroyed
+  window.on("closed", () => {
+    void codexMonitorInstance?.dispose();
   });
 }
 
 app.whenReady().then(() => {
+  const codexMonitor = new CodexMonitorService({
+    createNotificationWindow: createCodexNotificationWindow,
+  });
+
   // Set up permission handlers for media access
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     // Allow media permissions (microphone, screen capture)
@@ -418,6 +417,17 @@ app.whenReady().then(() => {
     }
   );
 
+  ipcMain.handle("codex-monitor:update-session", async (_event, input: CodexMonitorSessionInput) =>
+    codexMonitor.updateSession(input)
+  );
+  ipcMain.handle("codex-monitor:clear-session", async (_event, noteId?: string) =>
+    codexMonitor.clearSession(noteId)
+  );
+  ipcMain.handle("codex-monitor:get-state", () => codexMonitor.getState());
+  ipcMain.handle("codex-monitor:dismiss-window", () => codexMonitor.dismissWindow());
+  ipcMain.handle("codex-monitor:send-chat", async (_event, message: string) =>
+    codexMonitor.sendChat(message)
+  );
   // AI completion handler
   ipcMain.handle("ai:completion", async (_event, input: { prompt: string; system?: string }) => {
     const payload = await authenticatedJsonRequest("/api/ai/completion", {
@@ -432,33 +442,30 @@ app.whenReady().then(() => {
     return shell.openPath(path);
   });
 
+  codexMonitorInstance = codexMonitor;
+
   createWindow();
-  createOverlayWindow();
   tray = createTray(mainWindow);
 
-  // Set up transcription IPC handlers
+  // Set up transcription IPC handlers and codex monitor window lifecycle
   if (mainWindow) {
     setupTranscriptionIPC(getOpenWindows);
     setupCallDetectionIPC(mainWindow);
+    setupCodexMonitorWindowHandlers(mainWindow);
   }
 
   app.on("activate", () => {
     if (mainWindow === null) {
       createWindow();
+      if (mainWindow) {
+        setupTranscriptionIPC(getOpenWindows);
+        setupCallDetectionIPC(mainWindow);
+        setupCodexMonitorWindowHandlers(mainWindow);
+      }
     } else {
       mainWindow.show();
     }
-
-    if (overlayWindow === null) {
-      createOverlayWindow();
-    } else {
-      overlayWindow.showInactive();
-    }
   });
-
-  screen.on("display-added", positionOverlayWindow);
-  screen.on("display-removed", positionOverlayWindow);
-  screen.on("display-metrics-changed", positionOverlayWindow);
 });
 
 app.on("window-all-closed", () => {
@@ -470,12 +477,6 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   stopCallDetection();
-  screen.removeListener("display-added", positionOverlayWindow);
-  screen.removeListener("display-removed", positionOverlayWindow);
-  screen.removeListener("display-metrics-changed", positionOverlayWindow);
-  if (overlayWindow) {
-    overlayWindow.destroy();
-  }
   if (tray) {
     tray.destroy();
   }

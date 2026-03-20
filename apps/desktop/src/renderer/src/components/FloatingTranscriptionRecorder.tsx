@@ -11,10 +11,46 @@ import {
   type TranscriptionResult,
 } from "../hooks/useTranscription";
 import { cn } from "../lib/utils";
+import { extractPlainTextFromHtml } from "../lib/note-body";
 import { ModelSetupDialog } from "./ModelSetupDialog";
 import { MARSHALL_EVENTS } from "../constants";
 
 const FALLBACK_MODEL = defaultAppSettings.transcription.selectedModel;
+
+/**
+ * Creates a fingerprint of snapshot content fields (shared between SaveNoteTranscriptionInput
+ * and NoteTranscriptionSnapshot). This allows comparing if the actual transcription content
+ * matches what we just saved, ignoring metadata fields like id/noteId/createdAt/updatedAt.
+ */
+function getSnapshotContentFingerprint(
+  snapshot: SaveNoteTranscriptionInput | NoteTranscriptionSnapshot | null
+): string | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  // Use consistent field order for reliable comparison
+  const contentFields = [
+    snapshot.status,
+    snapshot.provider,
+    snapshot.mode,
+    snapshot.language,
+    snapshot.model,
+    snapshot.transcriptText,
+    snapshot.finalText,
+    snapshot.interimText,
+    JSON.stringify(snapshot.segments),
+    snapshot.lastSegmentIndex,
+    snapshot.durationSeconds,
+    snapshot.recordingDurationSeconds,
+    snapshot.error,
+    snapshot.startedAt,
+    snapshot.completedAt,
+    snapshot.lastPartialAt,
+  ];
+
+  return JSON.stringify(contentFields);
+}
 
 const SOUNDWAVE_CSS = `
 @keyframes soundwave {
@@ -27,6 +63,16 @@ const SOUNDWAVE_CSS = `
 `;
 
 const STATIC_WAVE_HEIGHTS = [4, 8, 12, 8, 4] as const;
+
+function isTranscriptionInProgress(
+  status: SaveNoteTranscriptionInput["status"] | null | undefined
+) {
+  return status === "recording" || status === "transcribing";
+}
+
+export function getSnapshotSaveDelayMs(status: SaveNoteTranscriptionInput["status"]) {
+  return isTranscriptionInProgress(status) ? 0 : 300;
+}
 
 export interface RecorderResolvedModel {
   model: ModelInfo | null;
@@ -130,7 +176,11 @@ export function FloatingTranscriptionRecorderView({
 }: FloatingTranscriptionRecorderViewProps) {
   const transcriptRef = useRef<HTMLDivElement>(null);
   const liveTranscript = partialText.trim();
-  const displayedTranscript = transcript?.text?.trim() || liveTranscript;
+  // During recording, show live partialText (which includes old + new text)
+  // After recording, show finalized transcript.text
+  const displayedTranscript = isRecording
+    ? liveTranscript
+    : transcript?.text?.trim() || liveTranscript;
   const showPreparingState = isBootstrapping && !isRecording && !isTranscribing;
   const hasContent = Boolean(displayedTranscript);
 
@@ -289,15 +339,17 @@ export function FloatingTranscriptionRecorderView({
 
 interface FloatingTranscriptionRecorderProps {
   noteId: string;
+  noteBodyHtml: string;
+  noteTitle: string;
   persistedSnapshot: NoteTranscriptionSnapshot | null;
-  onActivityChange?: (isActive: boolean) => void;
   onSnapshotChange: (snapshot: SaveNoteTranscriptionInput) => Promise<void> | void;
 }
 
 export function FloatingTranscriptionRecorder({
   noteId,
+  noteBodyHtml,
+  noteTitle,
   persistedSnapshot,
-  onActivityChange,
   onSnapshotChange,
 }: FloatingTranscriptionRecorderProps) {
   const { settings } = useSettings();
@@ -320,7 +372,6 @@ export function FloatingTranscriptionRecorder({
     initialize,
     startRecording,
     stopRecording,
-    cancel,
     clearTranscript,
     hydrateSnapshot,
     audioCapture,
@@ -350,30 +401,70 @@ export function FloatingTranscriptionRecorder({
   const lastPartialAtRef = useRef<string | null>(null);
   const latestSnapshotRef = useRef<SaveNoteTranscriptionInput | null>(null);
   const lastPersistedFingerprintRef = useRef<string | null>(null);
+  const onSnapshotChangeRef = useRef(onSnapshotChange);
 
   useEffect(() => {
-    onActivityChange?.(isRecording || isTranscribing);
-  }, [isRecording, isTranscribing, onActivityChange]);
+    onSnapshotChangeRef.current = onSnapshotChange;
+  }, [onSnapshotChange]);
+
+  // Track noteId to detect note changes vs snapshot updates
+  const prevNoteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    launchSessionRef.current += 1;
+    const isNoteChange = prevNoteIdRef.current !== noteId;
+    prevNoteIdRef.current = noteId;
 
-    if (isRecording || isTranscribing) {
-      cancel({ clearTranscript: false });
+    // Use content-only fingerprint to avoid false mismatches from metadata fields
+    const incomingFingerprint = getSnapshotContentFingerprint(persistedSnapshot);
+
+    // For note changes: always hydrate and reset UI
+    if (isNoteChange) {
+      launchSessionRef.current += 1;
+      hydrateSnapshot(persistedSnapshot);
+      startedAtRef.current = persistedSnapshot?.startedAt ?? null;
+      completedAtRef.current = persistedSnapshot?.completedAt ?? null;
+      lastPartialAtRef.current = persistedSnapshot?.lastPartialAt ?? null;
+      setIsExpanded(false);
+      setIsBootstrapping(false);
+      setIsDownloadingModel(false);
+      setIsModelDialogOpen(false);
+      lastPersistedFingerprintRef.current = incomingFingerprint;
+      return;
     }
 
+    // For snapshot updates on same note: hydrate if not recording and snapshot is new
+    if (isRecording || isTranscribing) {
+      return;
+    }
+
+    // Skip if we're the ones who saved this snapshot (content matches what we just saved)
+    if (incomingFingerprint === lastPersistedFingerprintRef.current) {
+      return;
+    }
+
+    // Skip if local state has more content than persisted snapshot
+    // (we just completed a transcription and haven't saved yet)
+    const localText = transcript?.text?.trim() || partialText.trim();
+    const persistedText = persistedSnapshot?.transcriptText?.trim() || "";
+    if (localText && localText.length > persistedText.length) {
+      return;
+    }
+
+    // New snapshot arrived (e.g., async fetch completed) - hydrate it
     hydrateSnapshot(persistedSnapshot);
     startedAtRef.current = persistedSnapshot?.startedAt ?? null;
     completedAtRef.current = persistedSnapshot?.completedAt ?? null;
     lastPartialAtRef.current = persistedSnapshot?.lastPartialAt ?? null;
-    setIsExpanded(false);
-    setIsBootstrapping(false);
-    setIsDownloadingModel(false);
-    setIsModelDialogOpen(false);
-    lastPersistedFingerprintRef.current = persistedSnapshot
-      ? JSON.stringify(persistedSnapshot)
-      : null;
-  }, [cancel, hydrateSnapshot, noteId]);
+    lastPersistedFingerprintRef.current = incomingFingerprint;
+  }, [
+    hydrateSnapshot,
+    noteId,
+    persistedSnapshot,
+    isRecording,
+    isTranscribing,
+    transcript,
+    partialText,
+  ]);
 
   useEffect(() => {
     if (partialText.trim()) {
@@ -448,6 +539,14 @@ export function FloatingTranscriptionRecorder({
     const snapshot = buildSnapshot();
     latestSnapshotRef.current = snapshot;
 
+    void window.codexMonitorAPI?.updateSession({
+      noteId,
+      noteTitle,
+      noteBodyHtml,
+      noteBodyText: extractPlainTextFromHtml(noteBodyHtml).replace(/\s+/g, " ").trim(),
+      transcription: snapshot,
+    });
+
     if (
       snapshot.status === "draft" &&
       !snapshot.startedAt &&
@@ -457,18 +556,18 @@ export function FloatingTranscriptionRecorder({
       return;
     }
 
-    const fingerprint = JSON.stringify(snapshot);
+    const fingerprint = getSnapshotContentFingerprint(snapshot);
     if (fingerprint === lastPersistedFingerprintRef.current) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
       lastPersistedFingerprintRef.current = fingerprint;
-      void onSnapshotChange(snapshot);
-    }, 300);
+      void onSnapshotChangeRef.current(snapshot);
+    }, getSnapshotSaveDelayMs(snapshot.status));
 
     return () => window.clearTimeout(timeoutId);
-  }, [buildSnapshot, onSnapshotChange, persistedSnapshot]);
+  }, [buildSnapshot, noteBodyHtml, noteId, noteTitle, persistedSnapshot]);
 
   const ensureInitialized = useCallback(async () => {
     if (!resolvedModel.model) {
@@ -509,7 +608,7 @@ export function FloatingTranscriptionRecorder({
         setIsBootstrapping(false);
       }
     }
-  }, [clearTranscript, ensureInitialized, startRecording, audioSource]);
+  }, [clearTranscript, ensureInitialized, startRecording, audioSource, transcript, partialText]);
 
   const handleOpen = async () => {
     if (isRecording || isTranscribing) {
@@ -526,8 +625,6 @@ export function FloatingTranscriptionRecorder({
   };
 
   const handleClose = () => {
-    launchSessionRef.current += 1;
-
     setIsBootstrapping(false);
     setIsDownloadingModel(false);
     setIsExpanded(false);
@@ -587,13 +684,17 @@ export function FloatingTranscriptionRecorder({
 
   useEffect(() => {
     return () => {
-      cancel({ clearTranscript: false });
-      onActivityChange?.(false);
-      if (latestSnapshotRef.current) {
-        void onSnapshotChange(latestSnapshotRef.current);
+      // Always clear the codex monitor session when navigating away from this note.
+      // This ensures the notification window closes and resources are freed.
+      void window.codexMonitorAPI?.clearSession(noteId);
+
+      // Persist the latest transcription snapshot before unmounting
+      const latestSnapshot = latestSnapshotRef.current;
+      if (latestSnapshot) {
+        void onSnapshotChangeRef.current(latestSnapshot);
       }
     };
-  }, [cancel, onActivityChange, onSnapshotChange]);
+  }, [noteId]);
 
   return (
     <FloatingTranscriptionRecorderView

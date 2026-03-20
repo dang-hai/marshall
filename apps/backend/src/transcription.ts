@@ -12,7 +12,11 @@ export interface TranscriptionMessage {
 interface DeepgramConnection {
   dgSocket: WebSocket | null;
   isConnected: boolean;
+  pendingChunks: (ArrayBuffer | Uint8Array)[];
 }
+
+// Limit pending chunks to ~3 seconds of audio at typical chunk sizes to prevent memory leaks
+const MAX_PENDING_CHUNKS = 100;
 
 // Store active connections and their Deepgram sockets
 const activeConnections = new Map<string, DeepgramConnection>();
@@ -52,6 +56,7 @@ export function createTranscriptionRoutes() {
         activeConnections.set(connectionId, {
           dgSocket: null,
           isConnected: false,
+          pendingChunks: [],
         });
 
         // Build Deepgram WebSocket URL with query parameters
@@ -87,6 +92,17 @@ export function createTranscriptionRoutes() {
           const conn = activeConnections.get(connectionId);
           if (conn) {
             conn.isConnected = true;
+
+            // Flush any pending audio chunks
+            if (conn.pendingChunks.length > 0) {
+              console.log(
+                `[Transcription] Flushing ${conn.pendingChunks.length} pending audio chunks`
+              );
+              for (const chunk of conn.pendingChunks) {
+                conn.dgSocket?.send(chunk);
+              }
+              conn.pendingChunks = [];
+            }
           }
         });
 
@@ -152,20 +168,26 @@ export function createTranscriptionRoutes() {
         const connectionId = ws.id;
         const connection = activeConnections.get(connectionId);
 
-        if (!connection?.dgSocket || connection.dgSocket.readyState !== WebSocket.OPEN) {
-          // Connection not ready yet
+        if (!connection) {
           return;
         }
 
         // Message is binary audio data (ArrayBuffer or Buffer)
         if (message instanceof ArrayBuffer || message instanceof Uint8Array) {
-          connection.dgSocket.send(message);
+          if (connection.dgSocket?.readyState === WebSocket.OPEN) {
+            connection.dgSocket.send(message);
+          } else if (connection.pendingChunks.length < MAX_PENDING_CHUNKS) {
+            // Queue audio chunks until Deepgram connection is ready (bounded to prevent memory leaks)
+            connection.pendingChunks.push(message);
+          } else if (connection.pendingChunks.length === MAX_PENDING_CHUNKS) {
+            console.warn(`[Transcription] Buffer full, dropping audio chunks: ${connectionId}`);
+          }
         } else if (typeof message === "string") {
           // Handle control messages
           try {
             const control = JSON.parse(message);
             if (control.type === "close") {
-              connection.dgSocket.close();
+              connection.dgSocket?.close();
             }
           } catch {
             // Not a control message, ignore
