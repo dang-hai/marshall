@@ -356,7 +356,7 @@ function EventCard({ event }: EventCardProps) {
   const weekday = eventWeekdayFormatter.format(start).toLowerCase();
 
   return (
-    <article className="group flex h-16 overflow-hidden rounded-xl border border-border/40 bg-card/80 shadow-sm transition-all hover:border-border/70 hover:shadow-md">
+    <article className="group flex h-16 cursor-default overflow-hidden rounded-xl border border-border/30 bg-card/50 transition-colors hover:border-border/60 hover:bg-card">
       {/* Date block */}
       <div className="flex shrink-0 items-center gap-2 bg-muted/30 pl-3 pr-3">
         <span className="w-9 text-right font-serif text-3xl font-semibold tabular-nums tracking-normal text-foreground">
