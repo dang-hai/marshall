@@ -4,8 +4,8 @@ import Combine
 // MARK: - Layout Constants (like boring.notch sizing/matters.swift)
 
 enum NotchSizing {
-    // Closed state - matches hardware notch
-    static let closedWidth: CGFloat = 185
+    // Closed state - wider than hardware notch to show content on sides
+    static let closedWidth: CGFloat = 260  // 185 * 1.4 ≈ 260
     static let closedHeight: CGFloat = 32
 
     // Open state - fixed expanded size (includes internal padding)
