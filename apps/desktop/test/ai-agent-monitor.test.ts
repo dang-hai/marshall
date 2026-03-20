@@ -1,5 +1,4 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { AIAgentMonitorSessionInput } from "@marshall/shared";
 
 mock.module("electron", () => ({
   app: {
@@ -63,7 +62,7 @@ describe("AIAgentMonitorService", () => {
       },
     });
 
-    const session: AIAgentMonitorSessionInput = {
+    const session = {
       noteId: "note-1",
       noteTitle: "Launch review",
       noteBodyHtml: "<p>Agenda</p>",
