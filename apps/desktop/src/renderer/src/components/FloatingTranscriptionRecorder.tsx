@@ -65,6 +65,33 @@ const SOUNDWAVE_CSS = `
 
 const STATIC_WAVE_HEIGHTS = [4, 8, 12, 8, 4] as const;
 
+/**
+ * Formats seconds to m:ss format (e.g., 0:12, 1:34, 10:05)
+ */
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Returns a consistent side (left/right) for each unique speaker.
+ * First speaker seen gets left, second gets right, then alternates.
+ */
+function getSpeakerSide(
+  speaker: string | null | undefined,
+  speakerMap: Map<string, "left" | "right">
+): "left" | "right" {
+  if (!speaker) return "left";
+
+  if (!speakerMap.has(speaker)) {
+    const side = speakerMap.size % 2 === 0 ? "left" : "right";
+    speakerMap.set(speaker, side);
+  }
+
+  return speakerMap.get(speaker)!;
+}
+
 function isTranscriptionInProgress(
   status: SaveNoteTranscriptionInput["status"] | null | undefined
 ) {
@@ -304,37 +331,68 @@ export function FloatingTranscriptionRecorderView({
                     )}
                   >
                     {hasContent ? (
-                      <div className="space-y-3">
-                        {displayedUtterances.map((utterance) => (
-                          <div
-                            key={utterance.id}
-                            className="rounded-2xl border border-stone-200/80 bg-white/90 px-3 py-2 shadow-sm"
-                          >
-                            {utterance.speaker && (
-                              <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
-                                {utterance.speaker}
-                              </p>
-                            )}
-                            <p className="font-serif text-[15px] leading-relaxed text-stone-700 whitespace-pre-wrap">
-                              {utterance.text}
-                            </p>
-                          </div>
-                        ))}
+                      (() => {
+                        const speakerMap = new Map<string, "left" | "right">();
+                        return (
+                          <div className="space-y-4">
+                            {displayedUtterances.map((utterance) => {
+                              const side = getSpeakerSide(utterance.speaker, speakerMap);
+                              const isRight = side === "right";
 
-                        {volatileText && (
-                          <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 px-3 py-2">
-                            <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.12em] text-stone-400">
-                              Listening
-                            </p>
-                            <p className="font-serif text-[15px] leading-relaxed text-stone-600 whitespace-pre-wrap">
-                              {volatileText}
-                              {isRecording && (
-                                <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-stone-300" />
-                              )}
-                            </p>
+                              return (
+                                <div
+                                  key={utterance.id}
+                                  className={cn(
+                                    "flex flex-col max-w-[85%]",
+                                    isRight ? "ml-auto items-end" : "mr-auto items-start"
+                                  )}
+                                >
+                                  <div
+                                    className={cn(
+                                      "rounded-2xl px-3 py-2 shadow-sm",
+                                      isRight
+                                        ? "bg-stone-700 text-white rounded-br-md"
+                                        : "bg-white border border-stone-200/80 text-stone-700 rounded-bl-md"
+                                    )}
+                                  >
+                                    <p className="font-serif text-[15px] leading-relaxed whitespace-pre-wrap">
+                                      {utterance.text}
+                                    </p>
+                                  </div>
+                                  <p
+                                    className={cn(
+                                      "mt-1 text-[10px] text-stone-400",
+                                      isRight ? "text-right" : "text-left"
+                                    )}
+                                  >
+                                    {utterance.speaker && <span>{utterance.speaker}</span>}
+                                    {utterance.speaker && <span className="mx-1">·</span>}
+                                    <span>{formatTime(utterance.start)}</span>
+                                  </p>
+                                </div>
+                              );
+                            })}
+
+                            {volatileText && (
+                              <div className="flex flex-col max-w-[85%] mr-auto items-start">
+                                <div className="rounded-2xl rounded-bl-md border border-dashed border-stone-300 bg-stone-50/80 px-3 py-2">
+                                  <p className="font-serif text-[15px] leading-relaxed text-stone-600 whitespace-pre-wrap">
+                                    {volatileText}
+                                    {isRecording && (
+                                      <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-stone-400" />
+                                    )}
+                                  </p>
+                                </div>
+                                <p className="mt-1 text-[10px] text-stone-400">
+                                  <span>Listening</span>
+                                  <span className="mx-1">·</span>
+                                  <span>now</span>
+                                </p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()
                     ) : (
                       <p className="text-center text-sm text-stone-400">
                         {showPreparingState ? "Starting..." : "Your words will appear here."}
