@@ -54,7 +54,7 @@ export interface MeetingProposal {
   location: string | null;
   description: string | null;
   createdAt: string;
-  status: "pending" | "accepted" | "discarded";
+  status: "pending" | "accepted" | "reminded" | "discarded";
 }
 
 export interface Session {
@@ -209,6 +209,8 @@ export interface CodexMonitorNotePatch {
   /** Document block operations to apply */
   documentOps?: import("./document-service").AgentOperation[];
   items: CodexMonitorItem[];
+  /** Meeting proposals (accepted or reminded, not discarded) */
+  meetingProposals?: MeetingProposal[];
   summary: string | null;
   final: boolean;
   generatedAt: string;

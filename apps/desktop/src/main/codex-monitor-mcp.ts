@@ -540,7 +540,17 @@ export class CodexMonitorMCPService {
     return Array.from(this.pendingMeetingProposals.values()).filter((p) => p.status === "pending");
   }
 
-  async acceptMeetingProposal(proposalId: string): Promise<{ status: string; error?: string }> {
+  /** Get meeting proposals that should appear in notes (accepted or reminded, not discarded) */
+  getVisibleMeetingProposals(): MeetingProposal[] {
+    return Array.from(this.pendingMeetingProposals.values()).filter(
+      (p) => p.status === "accepted" || p.status === "reminded"
+    );
+  }
+
+  async acceptMeetingProposal(
+    proposalId: string,
+    participants?: string[]
+  ): Promise<{ status: string; error?: string }> {
     const proposal = this.pendingMeetingProposals.get(proposalId);
     if (!proposal) {
       return { status: "error", error: "Proposal not found" };
@@ -550,14 +560,69 @@ export class CodexMonitorMCPService {
       return { status: "error", error: `Proposal already ${proposal.status}` };
     }
 
-    // Update status optimistically
+    // Update participants if provided
+    if (participants) {
+      proposal.participants = participants;
+    }
     proposal.status = "accepted";
     this.pendingMeetingProposals.set(proposalId, proposal);
 
     // Emit update to UI
     this.emitMeetingProposalUpdate(proposal);
 
+    // Emit note patch with meeting proposal
+    if (this.session) {
+      this.emitNotePatch({
+        noteId: this.session.noteId,
+        checkedPlanItems: [],
+        items: [],
+        meetingProposals: this.getVisibleMeetingProposals(),
+        summary: null,
+        final: false,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
     return { status: "accepted" };
+  }
+
+  async remindMeetingProposal(
+    proposalId: string,
+    participants?: string[]
+  ): Promise<{ status: string; error?: string }> {
+    const proposal = this.pendingMeetingProposals.get(proposalId);
+    if (!proposal) {
+      return { status: "error", error: "Proposal not found" };
+    }
+
+    if (proposal.status !== "pending") {
+      return { status: "error", error: `Proposal already ${proposal.status}` };
+    }
+
+    // Update participants if provided
+    if (participants) {
+      proposal.participants = participants;
+    }
+    proposal.status = "reminded";
+    this.pendingMeetingProposals.set(proposalId, proposal);
+
+    // Emit update to UI
+    this.emitMeetingProposalUpdate(proposal);
+
+    // Emit note patch with meeting proposal
+    if (this.session) {
+      this.emitNotePatch({
+        noteId: this.session.noteId,
+        checkedPlanItems: [],
+        items: [],
+        meetingProposals: this.getVisibleMeetingProposals(),
+        summary: null,
+        final: false,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    return { status: "reminded" };
   }
 
   async discardMeetingProposal(proposalId: string): Promise<{ status: string; error?: string }> {

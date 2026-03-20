@@ -1,4 +1,4 @@
-import type { CodexMonitorNotePatch } from "@marshall/shared";
+import type { CodexMonitorNotePatch, MeetingProposal } from "@marshall/shared";
 import { applyDocumentOperations, extractDocumentContext } from "@marshall/shared";
 
 export const PARAGRAPH_BLOCK_CLASS = "min-h-[1.85rem]";
@@ -99,7 +99,7 @@ function createBlock(document: Document, type: MarkdownBlockType, text: string) 
 
 function replaceSection(
   body: HTMLElement,
-  section: "followups" | "summary",
+  section: "followups" | "summary" | "meetings",
   nextBlocks: HTMLElement[]
 ) {
   const existing = Array.from(body.children).filter(
@@ -194,6 +194,47 @@ function buildSummarySection(document: Document, summary: string | null) {
   return [heading, ...paragraphs];
 }
 
+function formatMeetingTime(startAt: string, endAt: string): string {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  };
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+  };
+  return `${start.toLocaleDateString("en-US", dateOptions)} · ${start.toLocaleTimeString("en-US", timeOptions)} - ${end.toLocaleTimeString("en-US", timeOptions)}`;
+}
+
+function buildMeetingProposalsSection(document: Document, proposals: MeetingProposal[]) {
+  if (proposals.length === 0) {
+    return [];
+  }
+
+  const heading = createBlock(document, "heading-2", "Proposed meetings");
+  heading.dataset.marshallSection = "meetings";
+  heading.dataset.marshallRole = "heading";
+
+  const items = proposals.map((proposal) => {
+    const statusIcon = proposal.status === "accepted" ? "✓" : "⏰";
+    const participants =
+      proposal.participants.length > 0 ? ` (${proposal.participants.join(", ")})` : "";
+    const text = `${statusIcon} ${proposal.title} — ${formatMeetingTime(proposal.startAt, proposal.endAt)}${participants}`;
+
+    const item = createBlock(document, "bullet", text);
+    item.dataset.marshallSection = "meetings";
+    item.dataset.marshallRole = "item";
+    item.dataset.meetingId = proposal.id;
+    item.dataset.meetingStatus = proposal.status;
+    return item;
+  });
+
+  return [heading, ...items];
+}
+
 function buildBlockHtml(
   type: MarkdownBlockType,
   text: string,
@@ -208,7 +249,7 @@ function buildBlockHtml(
   }</div>`;
 }
 
-function buildSectionHtml(section: "followups" | "summary", items: string[]) {
+function buildSectionHtml(section: "followups" | "summary" | "meetings", items: string[]) {
   if (section === "followups") {
     if (items.length === 0) {
       return "";
@@ -222,6 +263,25 @@ function buildSectionHtml(section: "followups" | "summary", items: string[]) {
       ...items.map((item) =>
         buildBlockHtml("bullet", item, {
           "data-marshall-section": "followups",
+          "data-marshall-role": "item",
+        })
+      ),
+    ].join("");
+  }
+
+  if (section === "meetings") {
+    if (items.length === 0) {
+      return "";
+    }
+
+    return [
+      buildBlockHtml("heading-2", "Proposed meetings", {
+        "data-marshall-section": "meetings",
+        "data-marshall-role": "heading",
+      }),
+      ...items.map((item) =>
+        buildBlockHtml("bullet", item, {
+          "data-marshall-section": "meetings",
           "data-marshall-role": "item",
         })
       ),
@@ -246,6 +306,13 @@ function buildSectionHtml(section: "followups" | "summary", items: string[]) {
   ].join("");
 }
 
+function formatMeetingProposalText(proposal: MeetingProposal): string {
+  const statusIcon = proposal.status === "accepted" ? "✓" : "⏰";
+  const participants =
+    proposal.participants.length > 0 ? ` (${proposal.participants.join(", ")})` : "";
+  return `${statusIcon} ${proposal.title} — ${formatMeetingTime(proposal.startAt, proposal.endAt)}${participants}`;
+}
+
 function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNotePatch) {
   let nextHtml = bodyHtml;
 
@@ -260,6 +327,10 @@ function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNote
     ""
   );
   nextHtml = nextHtml.replace(/<div[^>]*data-marshall-section="summary"[^>]*>[\s\S]*?<\/div>/g, "");
+  nextHtml = nextHtml.replace(
+    /<div[^>]*data-marshall-section="meetings"[^>]*>[\s\S]*?<\/div>/g,
+    ""
+  );
 
   const followUpsHtml = buildSectionHtml(
     "followups",
@@ -274,8 +345,12 @@ function applyCodexNotePatchWithoutDom(bodyHtml: string, patch: CodexMonitorNote
           .filter(Boolean)
       : []
   );
+  const meetingsHtml = buildSectionHtml(
+    "meetings",
+    (patch.meetingProposals ?? []).map(formatMeetingProposalText)
+  );
 
-  return normalizeEditorHtml(`${nextHtml}${followUpsHtml}${summaryHtml}`);
+  return normalizeEditorHtml(`${nextHtml}${meetingsHtml}${followUpsHtml}${summaryHtml}`);
 }
 
 /**
@@ -365,6 +440,11 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
       const body = parseBodyHtml(updatedHtml);
       replaceSection(
         body,
+        "meetings",
+        buildMeetingProposalsSection(body.ownerDocument, patch.meetingProposals ?? [])
+      );
+      replaceSection(
+        body,
         "followups",
         buildFollowUpSection(
           body.ownerDocument,
@@ -384,6 +464,11 @@ export function applyCodexNotePatch(bodyHtml: string, patch: CodexMonitorNotePat
   const body = parseBodyHtml(bodyHtml);
 
   markChecklistItems(body, patch.checkedPlanItems);
+  replaceSection(
+    body,
+    "meetings",
+    buildMeetingProposalsSection(body.ownerDocument, patch.meetingProposals ?? [])
+  );
   replaceSection(
     body,
     "followups",

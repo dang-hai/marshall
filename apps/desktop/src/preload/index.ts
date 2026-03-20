@@ -130,8 +130,10 @@ contextBridge.exposeInMainWorld("codexMonitorAPI", {
     ipcRenderer.on("codex-monitor:meeting-proposal-update", handler);
     return () => ipcRenderer.removeListener("codex-monitor:meeting-proposal-update", handler);
   },
-  acceptMeetingProposal: (proposalId: string) =>
-    ipcRenderer.invoke("codex-monitor:accept-meeting-proposal", proposalId),
+  acceptMeetingProposal: (proposalId: string, participants?: string[]) =>
+    ipcRenderer.invoke("codex-monitor:accept-meeting-proposal", proposalId, participants),
+  remindMeetingProposal: (proposalId: string, participants?: string[]) =>
+    ipcRenderer.invoke("codex-monitor:remind-meeting-proposal", proposalId, participants),
   discardMeetingProposal: (proposalId: string) =>
     ipcRenderer.invoke("codex-monitor:discard-meeting-proposal", proposalId),
 });
@@ -397,8 +399,13 @@ declare global {
       onMeetingProposal: (callback: (proposal: MeetingProposal) => void) => () => void;
       onMeetingProposalUpdate: (callback: (proposal: MeetingProposal) => void) => () => void;
       acceptMeetingProposal: (
-        proposalId: string
+        proposalId: string,
+        participants?: string[]
       ) => Promise<{ status: string; event?: GoogleCalendarEvent; error?: string }>;
+      remindMeetingProposal: (
+        proposalId: string,
+        participants?: string[]
+      ) => Promise<{ status: string; error?: string }>;
       discardMeetingProposal: (proposalId: string) => Promise<{ status: string }>;
     };
     aiAPI: {

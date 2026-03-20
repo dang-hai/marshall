@@ -17,7 +17,6 @@ import { generateText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import {
   GOOGLE_CALENDAR_PROVIDER_ID,
-  GOOGLE_CALENDAR_READONLY_SCOPE,
   GOOGLE_CALENDAR_WRITE_SCOPE,
   hasGoogleCalendarAccess,
   hasGoogleCalendarWriteAccess,
@@ -283,7 +282,7 @@ function calendarConnectPage(baseUrl: string) {
 <body>
   <div class="container">
     <h1>Connect Google Calendar</h1>
-    <p class="subtitle">Grant Marshall read-only access to your upcoming Google Calendar events.</p>
+    <p class="subtitle">Grant Marshall access to view and create Google Calendar events.</p>
 
     <button id="googleCalendarBtn" class="btn" onclick="connectGoogleCalendar()">
       <svg viewBox="0 0 24 24">
@@ -299,7 +298,7 @@ function calendarConnectPage(baseUrl: string) {
     <div id="message" class="message"></div>
 
     <div class="footer">
-      Marshall only requests read-only Google Calendar access in this flow.
+      Marshall requests Google Calendar access to view and create events.
     </div>
   </div>
 
@@ -352,7 +351,7 @@ function calendarConnectPage(baseUrl: string) {
             "openid",
             "email",
             "profile",
-            "${GOOGLE_CALENDAR_READONLY_SCOPE}",
+            "${GOOGLE_CALENDAR_WRITE_SCOPE}",
           ],
         });
       } catch (error) {

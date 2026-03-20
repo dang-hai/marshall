@@ -544,44 +544,55 @@ app.whenReady().then(() => {
   ipcMain.handle("codex-monitor:send-chat", async (_event, message: string) =>
     codexMonitor.sendChat(message)
   );
-  ipcMain.handle("codex-monitor:accept-meeting-proposal", async (_event, proposalId: string) => {
-    const result = await codexMonitor.acceptMeetingProposal(proposalId);
-    if (result.status !== "accepted") {
-      return result;
-    }
-
-    // Get the proposal and create the calendar event
-    const proposal = codexMonitor.getMeetingProposal(proposalId);
-    if (!proposal) {
-      return { status: "error", error: "Proposal not found after accept" };
-    }
-
-    try {
-      const payload = await authenticatedJsonRequest("/api/calendar/google/events", {
-        method: "POST",
-        body: JSON.stringify({
-          title: proposal.title,
-          startAt: proposal.startAt,
-          endAt: proposal.endAt,
-          description: proposal.description ?? undefined,
-          location: proposal.location ?? undefined,
-          attendees: proposal.participants.length > 0 ? proposal.participants : undefined,
-        }),
-      });
-
-      const response = payload as { event?: unknown; error?: string };
-      if (response.error) {
-        return { status: "error", error: response.error };
+  ipcMain.handle(
+    "codex-monitor:accept-meeting-proposal",
+    async (_event, proposalId: string, participants?: string[]) => {
+      const result = await codexMonitor.acceptMeetingProposal(proposalId, participants);
+      if (result.status !== "accepted") {
+        return result;
       }
 
-      return { status: "accepted", event: response.event };
-    } catch (error) {
-      return {
-        status: "error",
-        error: error instanceof Error ? error.message : "Failed to create calendar event",
-      };
+      // Get the proposal and create the calendar event
+      const proposal = codexMonitor.getMeetingProposal(proposalId);
+      if (!proposal) {
+        return { status: "error", error: "Proposal not found after accept" };
+      }
+
+      // Use the proposal's participants (already updated by acceptMeetingProposal)
+      const attendees = proposal.participants;
+
+      try {
+        const payload = await authenticatedJsonRequest("/api/calendar/google/events", {
+          method: "POST",
+          body: JSON.stringify({
+            title: proposal.title,
+            startAt: proposal.startAt,
+            endAt: proposal.endAt,
+            description: proposal.description ?? undefined,
+            location: proposal.location ?? undefined,
+            attendees: attendees.length > 0 ? attendees : undefined,
+          }),
+        });
+
+        const response = payload as { event?: unknown; error?: string };
+        if (response.error) {
+          return { status: "error", error: response.error };
+        }
+
+        return { status: "accepted", event: response.event };
+      } catch (error) {
+        return {
+          status: "error",
+          error: error instanceof Error ? error.message : "Failed to create calendar event",
+        };
+      }
     }
-  });
+  );
+  ipcMain.handle(
+    "codex-monitor:remind-meeting-proposal",
+    async (_event, proposalId: string, participants?: string[]) =>
+      codexMonitor.remindMeetingProposal(proposalId, participants)
+  );
   ipcMain.handle("codex-monitor:discard-meeting-proposal", async (_event, proposalId: string) =>
     codexMonitor.discardMeetingProposal(proposalId)
   );

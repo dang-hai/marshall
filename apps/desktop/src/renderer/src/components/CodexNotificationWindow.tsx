@@ -25,7 +25,8 @@ export interface CodexNotificationWindowViewProps {
   meetingProposals: MeetingProposal[];
   onDismiss: () => void;
   onSendChat: (message: string) => void;
-  onAcceptMeeting: (proposalId: string) => void;
+  onAcceptMeeting: (proposalId: string, participants: string[]) => void;
+  onRemindMeeting: (proposalId: string, participants: string[]) => void;
   onDiscardMeeting: (proposalId: string) => void;
   loadingMeetingId?: string | null;
   showDebug?: boolean;
@@ -212,7 +213,8 @@ function formatMeetingTime(startAt: string, endAt: string): string {
 
 interface MeetingProposalCardProps {
   proposal: MeetingProposal;
-  onAccept: () => void;
+  onAccept: (participants: string[]) => void;
+  onRemind: (participants: string[]) => void;
   onDiscard: () => void;
   isLoading?: boolean;
 }
@@ -220,9 +222,32 @@ interface MeetingProposalCardProps {
 function MeetingProposalCard({
   proposal,
   onAccept,
+  onRemind,
   onDiscard,
   isLoading,
 }: MeetingProposalCardProps) {
+  const [participants, setParticipants] = useState<string[]>(proposal.participants);
+  const [newParticipant, setNewParticipant] = useState("");
+
+  const handleAddParticipant = () => {
+    const email = newParticipant.trim();
+    if (email && !participants.includes(email)) {
+      setParticipants([...participants, email]);
+      setNewParticipant("");
+    }
+  };
+
+  const handleRemoveParticipant = (email: string) => {
+    setParticipants(participants.filter((p) => p !== email));
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddParticipant();
+    }
+  };
+
   return (
     <div className="shrink-0 border-b border-zinc-800/60 bg-blue-950/30 px-5 py-4">
       <div className="mb-3 flex items-start gap-3">
@@ -235,26 +260,66 @@ function MeetingProposalCard({
         </div>
       </div>
 
-      {(proposal.participants.length > 0 || proposal.location) && (
-        <div className="mb-3 space-y-1.5 pl-7">
-          {proposal.participants.length > 0 && (
-            <div className="flex items-center gap-2 text-[12px] text-zinc-400">
-              <Users className="h-3 w-3 shrink-0" />
-              <span className="truncate">{proposal.participants.join(", ")}</span>
-            </div>
-          )}
-          {proposal.location && (
-            <div className="flex items-center gap-2 text-[12px] text-zinc-400">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{proposal.location}</span>
-            </div>
-          )}
+      {proposal.location && (
+        <div className="mb-3 flex items-center gap-2 pl-7 text-[12px] text-zinc-400">
+          <MapPin className="h-3 w-3 shrink-0" />
+          <span className="truncate">{proposal.location}</span>
         </div>
       )}
 
       {proposal.description && (
         <p className="mb-3 pl-7 text-[12px] text-zinc-500 line-clamp-2">{proposal.description}</p>
       )}
+
+      {/* Editable participants */}
+      <div className="mb-3 pl-7">
+        <div className="flex items-center gap-2 text-[12px] text-zinc-400 mb-2">
+          <Users className="h-3 w-3 shrink-0" />
+          <span>Participants</span>
+        </div>
+
+        {/* Participant chips */}
+        {participants.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {participants.map((email) => (
+              <span
+                key={email}
+                className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300"
+              >
+                {email}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveParticipant(email)}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-zinc-700"
+                  aria-label={`Remove ${email}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Add participant input */}
+        <div className="flex items-center gap-2">
+          <input
+            type="email"
+            value={newParticipant}
+            onChange={(e) => setNewParticipant(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Add email..."
+            className="flex-1 rounded border border-zinc-700 bg-zinc-800/60 px-2 py-1 text-[11px] text-zinc-200 placeholder-zinc-500 focus:border-zinc-600 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleAddParticipant}
+            disabled={!newParticipant.trim()}
+            className="rounded bg-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-600 disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      </div>
 
       <div className="flex items-center justify-end gap-2 pt-1">
         <button
@@ -267,7 +332,15 @@ function MeetingProposalCard({
         </button>
         <button
           type="button"
-          onClick={onAccept}
+          onClick={() => onRemind(participants)}
+          disabled={isLoading}
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-[12px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+        >
+          Remind me later
+        </button>
+        <button
+          type="button"
+          onClick={() => onAccept(participants)}
           disabled={isLoading}
           className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
         >
@@ -291,6 +364,7 @@ export function CodexNotificationWindowView({
   onDismiss,
   onSendChat,
   onAcceptMeeting,
+  onRemindMeeting,
   onDiscardMeeting,
   loadingMeetingId,
   showDebug,
@@ -461,7 +535,8 @@ export function CodexNotificationWindowView({
           <MeetingProposalCard
             key={proposal.id}
             proposal={proposal}
-            onAccept={() => onAcceptMeeting(proposal.id)}
+            onAccept={(participants) => onAcceptMeeting(proposal.id, participants)}
+            onRemind={(participants) => onRemindMeeting(proposal.id, participants)}
             onDiscard={() => onDiscardMeeting(proposal.id)}
             isLoading={loadingMeetingId === proposal.id}
           />
@@ -621,10 +696,10 @@ export function CodexNotificationWindow() {
     void window.codexMonitorAPI?.sendChat(message);
   };
 
-  const handleAcceptMeeting = async (proposalId: string) => {
+  const handleAcceptMeeting = async (proposalId: string, participants: string[]) => {
     setLoadingMeetingId(proposalId);
     try {
-      const result = await window.codexMonitorAPI?.acceptMeetingProposal(proposalId);
+      const result = await window.codexMonitorAPI?.acceptMeetingProposal(proposalId, participants);
       if (result?.status === "accepted") {
         setMeetingProposals((prev) =>
           prev.map((p) => (p.id === proposalId ? { ...p, status: "accepted" as const } : p))
@@ -633,6 +708,15 @@ export function CodexNotificationWindow() {
     } finally {
       setLoadingMeetingId(null);
     }
+  };
+
+  const handleRemindMeeting = async (proposalId: string, participants: string[]) => {
+    await window.codexMonitorAPI?.remindMeetingProposal(proposalId, participants);
+    setMeetingProposals((prev) =>
+      prev.map((p) =>
+        p.id === proposalId ? { ...p, status: "reminded" as const, participants } : p
+      )
+    );
   };
 
   const handleDiscardMeeting = async (proposalId: string) => {
@@ -651,6 +735,7 @@ export function CodexNotificationWindow() {
       }}
       onSendChat={handleSendChat}
       onAcceptMeeting={handleAcceptMeeting}
+      onRemindMeeting={handleRemindMeeting}
       onDiscardMeeting={handleDiscardMeeting}
       loadingMeetingId={loadingMeetingId}
       showDebug={showDebug}
