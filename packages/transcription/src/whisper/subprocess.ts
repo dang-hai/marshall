@@ -3,6 +3,7 @@ import { EventEmitter } from "events";
 import { join, dirname } from "path";
 import { existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { buildSpeakerUtterances } from "../deepgram-streaming-transcriber.js";
 import type { WhisperConfig, TranscriptionResult, WhisperProgress } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -154,7 +155,7 @@ export class WhisperProcess extends EventEmitter {
         text: json.text || json.transcription?.map((s: { text: string }) => s.text).join(" ") || "",
         language: json.language || this.config.language || "en",
         segments,
-        utterances: this.segmentsToUtterances(segments),
+        utterances: buildSpeakerUtterances(segments),
         duration: (Date.now() - this.startTime) / 1000,
       };
     } catch {
@@ -179,24 +180,10 @@ export class WhisperProcess extends EventEmitter {
         text: fullText.trim() || output.trim(),
         language: this.config.language || "en",
         segments,
-        utterances: this.segmentsToUtterances(segments),
+        utterances: buildSpeakerUtterances(segments),
         duration: (Date.now() - this.startTime) / 1000,
       };
     }
-  }
-
-  private segmentsToUtterances(
-    segments: TranscriptionResult["segments"]
-  ): TranscriptionResult["utterances"] {
-    return segments
-      .filter((segment) => segment.text.trim())
-      .map((segment, index) => ({
-        id: `utt-${index}-${segment.start.toFixed(3)}-${segment.end.toFixed(3)}`,
-        start: segment.start,
-        end: segment.end,
-        text: segment.text.trim(),
-        speaker: segment.speaker ?? null,
-      }));
   }
 
   private parseTimestamp(ts: string): number {

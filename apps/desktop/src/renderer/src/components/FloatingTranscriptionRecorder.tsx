@@ -184,20 +184,23 @@ export function FloatingTranscriptionRecorderView({
     baseUtterances.length === 0
       ? (isRecording ? partialText : transcript?.text || partialText).trim()
       : "";
-  const displayedUtterances: TranscriptionUtterance[] =
-    baseUtterances.length > 0
-      ? baseUtterances
-      : fallbackText
-        ? [
-            {
-              id: "fallback",
-              start: 0,
-              end: transcript?.duration ?? 0,
-              text: fallbackText,
-              speaker: null,
-            },
-          ]
-        : [];
+  const displayedUtterances = useMemo<TranscriptionUtterance[]>(() => {
+    if (baseUtterances.length > 0) {
+      return baseUtterances;
+    }
+    if (fallbackText) {
+      return [
+        {
+          id: "fallback",
+          start: 0,
+          end: transcript?.duration ?? 0,
+          text: fallbackText,
+          speaker: null,
+        },
+      ];
+    }
+    return [];
+  }, [baseUtterances, fallbackText, transcript?.duration]);
   const volatileText = baseUtterances.length > 0 ? interimText.trim() : "";
   const showPreparingState = isBootstrapping && !isRecording && !isTranscribing;
   const hasContent = displayedUtterances.length > 0 || Boolean(volatileText);
@@ -206,7 +209,7 @@ export function FloatingTranscriptionRecorderView({
     if (transcriptRef.current && isRecording) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
     }
-  }, [displayedUtterances, volatileText, isRecording]);
+  }, [displayedUtterances.length, volatileText, isRecording]);
 
   return (
     <>
