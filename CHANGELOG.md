@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.14](https://github.com/dang-hai/marshall/compare/v0.0.13...v0.0.14) (2026-03-21)
+
+
+### Features
+
+* **marketing:** link download button to latest github release dmg ([6325249](https://github.com/dang-hai/marshall/commit/632524939b97f486af9b6a300ab33d51c8c38dd4))
+
 ## [0.0.13](https://github.com/dang-hai/marshall/compare/v0.0.12...v0.0.13) (2026-03-21)
 
 
