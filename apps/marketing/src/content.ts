@@ -1,4 +1,5 @@
-export const downloadPlaceholderHref = "#download";
+export const downloadPlaceholderHref =
+  "https://github.com/dang-hai/marshall/releases/latest/download/Marshall-arm64.dmg";
 export const bookCallPlaceholderHref = "#book-call";
 
 export type Scenario = {

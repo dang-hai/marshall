@@ -17,7 +17,9 @@ describe("marketing app", () => {
     expect(markup).toContain("Download for macOS and run your first meeting in under a minute.");
     expect(markup).toContain('href="/privacy/"');
     expect(markup).toContain('href="/terms/"');
-    expect(markup).toContain('href="#download"');
+    expect(markup).toContain(
+      'href="https://github.com/dang-hai/marshall/releases/latest/download/Marshall-arm64.dmg"'
+    );
     expect(markup).toContain('class="button-icon"');
     expect(markup).toContain(">Download</span>");
     expect(markup).toContain("Book a Call");

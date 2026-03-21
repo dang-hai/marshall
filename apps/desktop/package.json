@@ -94,7 +94,8 @@
       }
     },
     "dmg": {
-      "sign": false
+      "sign": false,
+      "artifactName": "${productName}-${arch}.${ext}"
     },
     "extraResources": [
       {
