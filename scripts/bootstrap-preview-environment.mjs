@@ -4,14 +4,12 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   getCurrentGitBranch,
-  getNeonBranchNameForGitBranch,
   getWorkspaceRoot,
   isProtectedGitBranch,
   readLocalNeonProjectId,
-  resolveDatabaseUrlSync,
 } from "./neon-branch-utils.mjs";
 
-const PREVIEW_WORKFLOW_NAME = "Neon Preview Branches";
+const PREVIEW_WORKFLOW_NAME = "PR Preview Environment";
 const BOOTSTRAP_COMMIT_MESSAGE = "chore: initialize preview environment";
 const BOOTSTRAP_PR_BODY = `## Summary
 - initialize the Neon preview database for this branch
@@ -348,7 +346,13 @@ async function ensurePreviewPullRequest({
     });
   }
 
-  const neonBranchName = getNeonBranchNameForGitBranch(gitBranch);
+  // Get the PR to obtain its number for the Neon branch name
+  const currentPr = getExistingPullRequest({ gitBranch, cwd, env });
+  if (!currentPr) {
+    throw new Error(`Could not find PR for branch "${gitBranch}".`);
+  }
+
+  const neonBranchName = `pr-${currentPr.number}`;
   const projectId = getNeonProjectId({ workspaceRoot, cwd, env });
 
   await waitForWorkflowRun({
@@ -363,32 +367,53 @@ async function ensurePreviewPullRequest({
     env,
   });
 
-  return getExistingPullRequest({ gitBranch, cwd, env });
+  return currentPr;
+}
+
+function getBranchDatabaseUrl({
+  branchName,
+  projectId,
+  cwd = process.cwd(),
+  env = process.env,
+} = {}) {
+  return run(
+    "neon",
+    [
+      "connection-string",
+      branchName,
+      "--project-id",
+      projectId,
+      "--database-name",
+      "marshall",
+      "--role-name",
+      "marshall_owner",
+    ],
+    { cwd, env }
+  );
 }
 
 export async function bootstrapPreviewEnvironment({ cwd = process.cwd(), env = process.env } = {}) {
   const workspaceRoot = getWorkspaceRoot({ cwd });
   const gitBranch = getCurrentGitBranch({ cwd });
+  const projectId = getNeonProjectId({ workspaceRoot, cwd, env });
 
-  if (!isProtectedGitBranch(gitBranch)) {
-    await ensurePreviewPullRequest({
-      gitBranch,
-      workspaceRoot,
-      cwd,
-      env,
-    });
-  } else {
-    const projectId = getNeonProjectId({ workspaceRoot, cwd, env });
-    ensureLocalNeonContext({ workspaceRoot, projectId });
+  ensureLocalNeonContext({ workspaceRoot, projectId });
+
+  if (isProtectedGitBranch(gitBranch)) {
+    // For protected branches (main, master, release), use the branch directly
+    return getBranchDatabaseUrl({ branchName: gitBranch, projectId, cwd, env });
   }
 
-  return resolveDatabaseUrlSync({
+  // For feature branches, ensure PR exists and get the pr-<number> branch
+  const pr = await ensurePreviewPullRequest({
+    gitBranch,
+    workspaceRoot,
     cwd,
-    env: {
-      ...env,
-      NEON_FORCE_BRANCH_URL: "1",
-    },
+    env,
   });
+
+  const neonBranchName = `pr-${pr.number}`;
+  return getBranchDatabaseUrl({ branchName: neonBranchName, projectId, cwd, env });
 }
 
 const isEntrypoint =

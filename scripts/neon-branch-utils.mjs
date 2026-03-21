@@ -104,11 +104,43 @@ export function toNeonPreviewBranchName(gitBranch) {
   return `git-${safeSlug || "branch"}-${hash}`;
 }
 
-export function getNeonBranchNameForGitBranch(gitBranch) {
+export function getPullRequestNumber({ gitBranch, cwd = process.cwd() } = {}) {
+  try {
+    const output = runCommand(
+      "gh",
+      [
+        "pr",
+        "list",
+        "--head",
+        gitBranch,
+        "--state",
+        "open",
+        "--json",
+        "number",
+        "--jq",
+        ".[0].number",
+      ],
+      { cwd }
+    );
+    const prNumber = Number.parseInt(output, 10);
+    return Number.isNaN(prNumber) ? null : prNumber;
+  } catch {
+    return null;
+  }
+}
+
+export function getNeonBranchNameForGitBranch(gitBranch, { cwd = process.cwd() } = {}) {
   if (isProtectedGitBranch(gitBranch)) {
     return gitBranch;
   }
 
+  // Try to get PR number for pr-<number> naming
+  const prNumber = getPullRequestNumber({ gitBranch, cwd });
+  if (prNumber) {
+    return `pr-${prNumber}`;
+  }
+
+  // Fallback to old naming if no PR exists yet
   return toNeonPreviewBranchName(gitBranch);
 }
 
@@ -161,6 +193,7 @@ export function selectDatabaseUrl({
   roleName = DEFAULT_NEON_ROLE_NAME,
   preferBranchUrl = false,
   getBranchUrl,
+  cwd = process.cwd(),
 } = {}) {
   if (!neonProjectId && !loadedDatabaseUrl) {
     throw new Error(
@@ -170,7 +203,7 @@ export function selectDatabaseUrl({
 
   if (preferBranchUrl && neonProjectId) {
     return getBranchUrl({
-      branchName: getNeonBranchNameForGitBranch(gitBranch),
+      branchName: getNeonBranchNameForGitBranch(gitBranch, { cwd }),
       projectId: neonProjectId,
       databaseName,
       roleName,
@@ -193,7 +226,7 @@ export function selectDatabaseUrl({
     }
 
     return getBranchUrl({
-      branchName: getNeonBranchNameForGitBranch(gitBranch),
+      branchName: getNeonBranchNameForGitBranch(gitBranch, { cwd }),
       projectId: neonProjectId,
       databaseName,
       roleName,
@@ -207,7 +240,7 @@ export function selectDatabaseUrl({
   }
 
   return getBranchUrl({
-    branchName: getNeonBranchNameForGitBranch(gitBranch),
+    branchName: getNeonBranchNameForGitBranch(gitBranch, { cwd }),
     projectId: neonProjectId,
     databaseName,
     roleName,
@@ -238,6 +271,7 @@ export function resolveDatabaseUrlSync({
     databaseName: env.NEON_DATABASE_NAME || DEFAULT_NEON_DATABASE_NAME,
     roleName: env.NEON_ROLE_NAME || DEFAULT_NEON_ROLE_NAME,
     preferBranchUrl,
+    cwd,
     getBranchUrl: ({ branchName, projectId, databaseName, roleName }) =>
       getBranchUrl({
         branchName,

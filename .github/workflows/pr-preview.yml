@@ -1,0 +1,391 @@
+name: PR Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+  NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+  NEON_PROD_BRANCH: main
+  RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+  RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+  RAILWAY_PROD_ENV_ID: ${{ vars.RAILWAY_PROD_ENV_ID }}
+  RAILWAY_BACKEND_SERVICE_ID: ${{ vars.RAILWAY_BACKEND_SERVICE_ID }}
+  STAGING_NAME: pr-${{ github.event.pull_request.number }}
+
+jobs:
+  # =============================================================================
+  # SETUP - Create Neon branch and Railway environment
+  # =============================================================================
+
+  setup:
+    name: Setup Preview Environment
+    if: |
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.event.pull_request.head.ref, 'release-please--')
+    runs-on: ubuntu-latest
+    outputs:
+      neon_branch_id: ${{ steps.neon.outputs.branch_id }}
+      database_url_b64: ${{ steps.neon.outputs.database_url_b64 }}
+      railway_env_id: ${{ steps.railway.outputs.env_id }}
+      preview_url: ${{ steps.domain.outputs.url }}
+      is_new_environment: ${{ steps.check.outputs.is_new }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if Railway environment already exists
+        id: check
+        run: |
+          echo "Checking for existing Railway environment..."
+
+          RESPONSE=$(curl -s --request POST \
+            --url https://backboard.railway.com/graphql/v2 \
+            --header "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "{
+              \"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { environments { edges { node { id name } } } } }\"
+            }")
+
+          EXISTING_ENV_ID=$(echo "$RESPONSE" | jq -r --arg name "$STAGING_NAME" \
+            '.data.project.environments.edges[] | select(.node.name == $name) | .node.id // empty')
+
+          if [ -n "$EXISTING_ENV_ID" ]; then
+            echo "Environment already exists: $EXISTING_ENV_ID"
+            echo "is_new=false" >> "$GITHUB_OUTPUT"
+            echo "existing_env_id=$EXISTING_ENV_ID" >> "$GITHUB_OUTPUT"
+          else
+            echo "Environment does not exist, will create new"
+            echo "is_new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or get Neon branch
+        id: neon
+        run: |
+          # Check if branch already exists
+          RESPONSE=$(curl -s -X GET \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Accept: application/json")
+
+          EXISTING_BRANCH_ID=$(echo "$RESPONSE" | jq -r --arg name "$STAGING_NAME" \
+            '.branches[] | select(.name == $name) | .id // empty')
+
+          if [ -n "$EXISTING_BRANCH_ID" ]; then
+            echo "Neon branch already exists: $EXISTING_BRANCH_ID"
+            BRANCH_ID="$EXISTING_BRANCH_ID"
+          else
+            echo "Creating Neon branch '$STAGING_NAME' from $NEON_PROD_BRANCH..."
+
+            # Get production branch ID
+            PROD_BRANCH_ID=$(echo "$RESPONSE" | jq -r --arg name "$NEON_PROD_BRANCH" \
+              '.branches[] | select(.name == $name) | .id')
+
+            if [ -z "$PROD_BRANCH_ID" ] || [ "$PROD_BRANCH_ID" = "null" ]; then
+              echo "Error: Could not find production branch '$NEON_PROD_BRANCH'"
+              exit 1
+            fi
+
+            RESPONSE=$(curl -s -X POST \
+              "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+              -H "Authorization: Bearer $NEON_API_KEY" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json" \
+              -d "{
+                \"branch\": {
+                  \"name\": \"$STAGING_NAME\",
+                  \"parent_id\": \"$PROD_BRANCH_ID\"
+                },
+                \"endpoints\": [{
+                  \"type\": \"read_write\"
+                }]
+              }")
+
+            BRANCH_ID=$(echo "$RESPONSE" | jq -r '.branch.id')
+
+            if [ -z "$BRANCH_ID" ] || [ "$BRANCH_ID" = "null" ]; then
+              echo "Error: Failed to create Neon branch"
+              echo "Response: $RESPONSE"
+              exit 1
+            fi
+
+            echo "Waiting for endpoint to be ready..."
+            sleep 10
+          fi
+
+          echo "branch_id=$BRANCH_ID" >> "$GITHUB_OUTPUT"
+
+          # Get connection URI for marshall_owner
+          CONN_RESPONSE=$(curl -s -X GET \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&role_name=marshall_owner&database_name=marshall" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Accept: application/json")
+
+          DATABASE_URL=$(echo "$CONN_RESPONSE" | jq -r '.uri')
+
+          if [ -z "$DATABASE_URL" ] || [ "$DATABASE_URL" = "null" ]; then
+            echo "Error: Could not get connection URI"
+            exit 1
+          fi
+
+          DATABASE_URL_B64=$(echo -n "$DATABASE_URL" | base64 -w0)
+          echo "database_url_b64=$DATABASE_URL_B64" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages for migrations
+        run: bun run --filter @marshall/shared build
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL_B64: ${{ steps.neon.outputs.database_url_b64 }}
+        run: |
+          DATABASE_URL=$(echo "$DATABASE_URL_B64" | base64 -d)
+          echo "Running migrations on preview database..."
+          DATABASE_URL="$DATABASE_URL" bun run --filter @marshall/database db:migrate
+          echo "✓ Migrations complete"
+
+      - name: Create or update Railway environment
+        id: railway
+        env:
+          EXISTING_ENV_ID: ${{ steps.check.outputs.existing_env_id }}
+          IS_NEW: ${{ steps.check.outputs.is_new }}
+          PR_BRANCH: ${{ github.head_ref }}
+          DATABASE_URL_B64: ${{ steps.neon.outputs.database_url_b64 }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+        run: |
+          # Decode database URL
+          DATABASE_URL=$(echo "$DATABASE_URL_B64" | base64 -d)
+
+          # Install Railway CLI
+          INSTALLED=false
+          for attempt in 1 2 3; do
+            echo "Installing Railway CLI (attempt $attempt/3)..."
+            if curl -fsSL https://railway.com/install.sh | sh; then
+              INSTALLED=true
+              break
+            fi
+            sleep $((attempt * 5))
+          done
+          if [ "$INSTALLED" != "true" ]; then
+            echo "Falling back to npm install for Railway CLI..."
+            npm install -g @railway/cli
+          fi
+          export PATH="$HOME/.railway/bin:$PATH"
+          railway --version
+
+          # Link to project
+          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_PROD_ENV_ID"
+
+          get_railway_env_id() {
+            curl -s --request POST \
+              --url https://backboard.railway.com/graphql/v2 \
+              --header "Authorization: Bearer $RAILWAY_API_TOKEN" \
+              --header 'Content-Type: application/json' \
+              --data "{
+                \"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { environments { edges { node { id name } } } } }\"
+              }" | jq -r --arg name "$STAGING_NAME" \
+              '.data.project.environments.edges[] | select(.node.name == $name) | .node.id // empty'
+          }
+
+          if [ "$IS_NEW" = "true" ]; then
+            echo "Creating Railway environment '$STAGING_NAME'..."
+
+            CREATED=false
+            for attempt in 1 2 3; do
+              echo "Create Railway environment (attempt $attempt/3)..."
+              if railway environment new "$STAGING_NAME" --copy "$RAILWAY_PROD_ENV_ID" \
+                --service-config "$RAILWAY_BACKEND_SERVICE_ID" "source.branch" "$PR_BRANCH" \
+                --service-config "$RAILWAY_BACKEND_SERVICE_ID" "networking.serviceDomains" "{\"marshall-backend-$STAGING_NAME.up.railway.app\": {\"port\": 3000}}" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "DATABASE_URL=$DATABASE_URL" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "BETTER_AUTH_URL=https://marshall-backend-$STAGING_NAME.up.railway.app" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "BETTER_AUTH_TRUSTED_ORIGINS=marshall://" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "BETTER_AUTH_ELECTRON_PROTOCOL=marshall" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "DEEPGRAM_API_KEY=$DEEPGRAM_API_KEY" \
+                --service-variable "$RAILWAY_BACKEND_SERVICE_ID" "PORT=3000"; then
+                CREATED=true
+                break
+              fi
+
+              ENV_ID=$(get_railway_env_id)
+              if [ -n "$ENV_ID" ]; then
+                echo "Environment appears to exist: $ENV_ID"
+                CREATED=true
+                break
+              fi
+
+              sleep $((attempt * 10))
+            done
+
+            if [ "$CREATED" != "true" ]; then
+              echo "Error: Failed to create Railway environment"
+              exit 1
+            fi
+          else
+            echo "Updating existing Railway environment..."
+
+            # Update variables for existing environment
+            railway link --project "$RAILWAY_PROJECT_ID" --environment "$EXISTING_ENV_ID"
+            railway variables set --service "$RAILWAY_BACKEND_SERVICE_ID" \
+              "DATABASE_URL=$DATABASE_URL" \
+              "BETTER_AUTH_URL=https://marshall-backend-$STAGING_NAME.up.railway.app"
+          fi
+
+          # Get the environment ID
+          ENV_ID=$(get_railway_env_id)
+          echo "env_id=$ENV_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Get preview URL
+        id: domain
+        run: |
+          echo "url=https://marshall-backend-$STAGING_NAME.up.railway.app" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy backend
+        run: |
+          echo "Triggering Railway deployment..."
+
+          # Get the environment ID
+          ENV_ID=$(curl -s --request POST \
+            --url https://backboard.railway.com/graphql/v2 \
+            --header "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "{
+              \"query\": \"query { project(id: \\\"$RAILWAY_PROJECT_ID\\\") { environments { edges { node { id name } } } } }\"
+            }" | jq -r --arg name "$STAGING_NAME" \
+            '.data.project.environments.edges[] | select(.node.name == $name) | .node.id // empty')
+
+          curl -s --request POST \
+            --url https://backboard.railway.com/graphql/v2 \
+            --header "Authorization: Bearer $RAILWAY_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "{
+              \"query\": \"mutation { serviceInstanceDeploy(serviceId: \\\"$RAILWAY_BACKEND_SERVICE_ID\\\", environmentId: \\\"$ENV_ID\\\") }\"
+            }"
+
+          echo "✓ Deployment triggered"
+
+  # =============================================================================
+  # COMMENT - Post preview URL to PR
+  # =============================================================================
+
+  comment:
+    name: Comment Preview URL
+    needs: setup
+    if: needs.setup.outputs.is_new_environment == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚀 Preview Environment Ready
+
+            | Resource | URL |
+            |----------|-----|
+            | Backend | ${{ needs.setup.outputs.preview_url }} |
+            | Health Check | ${{ needs.setup.outputs.preview_url }}/health |
+
+            **Database:** Neon branch \`${{ env.STAGING_NAME }}\`
+
+            The preview environment will be automatically deleted when this PR is closed.`
+            })
+
+  # =============================================================================
+  # CLEANUP - Delete environment on PR close
+  # =============================================================================
+
+  cleanup:
+    name: Cleanup Preview Environment
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Railway environment
+        run: |
+          echo "Deleting Railway environment: $STAGING_NAME"
+
+          # Install Railway CLI
+          INSTALLED=false
+          for attempt in 1 2 3; do
+            echo "Installing Railway CLI (attempt $attempt/3)..."
+            if curl -fsSL https://railway.com/install.sh | sh; then
+              INSTALLED=true
+              break
+            fi
+            sleep $((attempt * 5))
+          done
+          if [ "$INSTALLED" != "true" ]; then
+            npm install -g @railway/cli
+          fi
+          export PATH="$HOME/.railway/bin:$PATH"
+          railway --version
+
+          # Link to project
+          railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_PROD_ENV_ID"
+
+          # Delete environment
+          railway environment delete "$STAGING_NAME" --yes || true
+
+          echo "✓ Railway environment deleted"
+
+      - name: Delete Neon branch
+        run: |
+          echo "Deleting Neon branch: $STAGING_NAME"
+
+          RESPONSE=$(curl -s -X GET \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Accept: application/json")
+
+          BRANCH_ID=$(echo "$RESPONSE" | jq -r --arg name "$STAGING_NAME" \
+            '.branches[] | select(.name == $name) | .id // empty')
+
+          if [ -n "$BRANCH_ID" ]; then
+            curl -s -X DELETE \
+              "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID" \
+              -H "Authorization: Bearer $NEON_API_KEY" \
+              -H "Accept: application/json"
+            echo "✓ Neon branch deleted"
+          else
+            echo "⚠ Neon branch not found"
+          fi
+
+      - name: Comment cleanup complete
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🧹 Preview Environment Cleaned Up
+
+            The following resources have been deleted:
+            - Railway environment: \`${{ env.STAGING_NAME }}\`
+            - Neon database branch: \`${{ env.STAGING_NAME }}\``
+            })
