@@ -189,11 +189,17 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
     this.recordingStartTime = Date.now();
 
     // Connect to backend WebSocket
-    const wsUrl = this.config.backendUrl.replace(/^http/, "ws") + "/transcription/stream";
+    // Construct WebSocket URL properly using URL API
+    const baseUrl = new URL(this.config.backendUrl);
+    const wsProtocol = baseUrl.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${baseUrl.host}/transcription/stream`;
+
+    console.log("[DeepgramTranscriber] Connecting to WebSocket:", wsUrl);
 
     this.ws = new WebSocket(wsUrl);
 
     this.ws.on("open", () => {
+      console.log("[DeepgramTranscriber] WebSocket connection opened");
       this.emit("recording:start");
     });
 
@@ -208,12 +214,14 @@ export class DeepgramStreamingTranscriber extends EventEmitter {
 
     this.ws.on("error", (error: Error) => {
       console.error("[DeepgramTranscriber] WebSocket error:", error);
-      this.emit("transcription:error", new Error("WebSocket connection error"));
+      this.emit("transcription:error", new Error(`WebSocket connection error: ${error.message}`));
     });
 
-    this.ws.on("close", () => {
+    this.ws.on("close", (code: number, reason: Buffer) => {
+      console.log("[DeepgramTranscriber] WebSocket closed:", code, reason.toString());
       if (this.isRecording) {
-        this.emit("transcription:error", new Error("WebSocket connection closed unexpectedly"));
+        const reasonStr = reason.toString() || `code ${code}`;
+        this.emit("transcription:error", new Error(`WebSocket connection closed: ${reasonStr}`));
       }
     });
   }

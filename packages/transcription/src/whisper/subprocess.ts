@@ -29,16 +29,27 @@ export class WhisperProcess extends EventEmitter {
     // Electron adds resourcesPath to process in packaged apps
     const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
 
-    const possiblePaths = [
-      // Development: in package bin folder
-      join(__dirname, "../../bin/whisper-cli"),
-      // Production: in app resources
-      ...(resourcesPath ? [join(resourcesPath, "bin/whisper-cli")] : []),
-      // System-wide installation
-      "/usr/local/bin/whisper-cli",
-      // Homebrew
-      "/opt/homebrew/bin/whisper-cli",
-    ];
+    // In packaged Electron apps, prioritize resourcesPath to avoid ASAR issues
+    // ASAR paths pass existsSync but fail spawn with ENOTDIR
+    const isPackaged = !!resourcesPath && !resourcesPath.includes("node_modules");
+
+    const possiblePaths = isPackaged
+      ? [
+          // Production: in app resources (must be first for packaged apps)
+          join(resourcesPath, "bin/whisper-cli"),
+          // System-wide installation
+          "/usr/local/bin/whisper-cli",
+          // Homebrew
+          "/opt/homebrew/bin/whisper-cli",
+        ]
+      : [
+          // Development: in package bin folder
+          join(__dirname, "../../bin/whisper-cli"),
+          // System-wide installation
+          "/usr/local/bin/whisper-cli",
+          // Homebrew
+          "/opt/homebrew/bin/whisper-cli",
+        ];
 
     for (const p of possiblePaths) {
       if (existsSync(p)) {
@@ -46,7 +57,7 @@ export class WhisperProcess extends EventEmitter {
       }
     }
 
-    // Default to package bin path (will error on use if not found)
+    // Default to first path (will error on use if not found)
     return possiblePaths[0];
   }
 

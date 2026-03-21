@@ -193,6 +193,7 @@ export function setupTranscriptionIPC(getWindows: () => BrowserWindow[]): void {
       if (provider === "deepgram") {
         // Use Deepgram cloud transcription
         const backendUrl = config.backendUrl || process.env.BACKEND_URL || "http://localhost:3000";
+        console.log("[Transcription] Initializing Deepgram with backend URL:", backendUrl);
 
         deepgramTranscriber = new DeepgramStreamingTranscriber({
           backendUrl,
