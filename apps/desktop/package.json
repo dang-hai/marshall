@@ -32,7 +32,8 @@
     "react-dom": "^18.3.0",
     "superjson": "^2.2.0",
     "tailwind-merge": "^2.3.0",
-    "ws": "^8.17.0"
+    "ws": "^8.17.0",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
@@ -52,6 +53,11 @@
   "build": {
     "appId": "com.marshall.app",
     "productName": "Marshall",
+    "publish": {
+      "provider": "github",
+      "owner": "anthropics",
+      "repo": "marshall"
+    },
     "protocols": [
       {
         "name": "Marshall Protocol",

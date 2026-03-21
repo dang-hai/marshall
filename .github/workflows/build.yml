@@ -87,11 +87,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Auto-updater (generates latest-mac.yml)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bun run package -- \
             --mac \
             --arm64 --x64 \
-            --config.mac.notarize.teamId="$APPLE_TEAM_ID"
+            --config.mac.notarize.teamId="$APPLE_TEAM_ID" \
+            --publish always
         working-directory: apps/desktop
 
       - name: Smoke test packaged app
@@ -125,6 +128,7 @@ jobs:
           path: |
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.zip
+            apps/desktop/dist/latest-mac.yml
           if-no-files-found: error
 
       - name: Create Release
@@ -135,6 +139,7 @@ jobs:
           files: |
             apps/desktop/dist/*.dmg
             apps/desktop/dist/*.zip
+            apps/desktop/dist/latest-mac.yml
           draft: true
           generate_release_notes: true
         env:
