@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.13](https://github.com/dang-hai/marshall/compare/v0.0.12...v0.0.13) (2026-03-21)
+
+
+### Features
+
+* **ci:** migrate backend from vercel to railway ([7e1a45a](https://github.com/dang-hai/marshall/commit/7e1a45a4ab6e12d32aedbe5e1b5f4a3328f8acdd))
+
 ## [0.0.12](https://github.com/dang-hai/marshall/compare/v0.0.11...v0.0.12) (2026-03-20)
 
 
