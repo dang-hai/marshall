@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.15](https://github.com/dang-hai/marshall/compare/v0.0.14...v0.0.15) (2026-03-21)
+
+
+### Bug Fixes
+
+* **desktop:** correct github publish owner for electron-builder ([91c3bed](https://github.com/dang-hai/marshall/commit/91c3bed624cd04854d010d7ac06172ba73458f01))
+
 ## [0.0.14](https://github.com/dang-hai/marshall/compare/v0.0.13...v0.0.14) (2026-03-21)
 
 
