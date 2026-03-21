@@ -55,7 +55,7 @@
     "productName": "Marshall",
     "publish": {
       "provider": "github",
-      "owner": "anthropics",
+      "owner": "dang-hai",
       "repo": "marshall"
     },
     "protocols": [
