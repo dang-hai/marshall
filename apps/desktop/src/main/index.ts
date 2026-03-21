@@ -25,6 +25,7 @@ import { detectAvailableAgents } from "./coding-agents";
 import { setupIntegrationsIPC, setNotionToken } from "./integrations";
 import { setupNotionIntegrationIPC } from "./notion-integration";
 import { NotchCompanionManager } from "./notch-companion";
+import { setupAutoUpdater, checkForUpdatesOnLaunch } from "./auto-updater";
 import type { NoteRecord, StoredNotionToken } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
@@ -467,8 +468,11 @@ app.whenReady().then(() => {
     callback({ video: request.frame, audio: "loopback" });
   });
 
-  // Set up settings IPC handlers first (needed by transcription)
+  // Set up settings IPC handlers first (needed by transcription and auto-updater)
   setupSettingsIPC();
+
+  // Set up auto-updater IPC handlers
+  setupAutoUpdater();
 
   // Set up integrations IPC handlers (Notion, etc.)
   setupIntegrationsIPC();
@@ -743,6 +747,9 @@ app.whenReady().then(() => {
     setupCallDetectionIPC(mainWindow);
     setupAIAgentMonitorWindowHandlers(mainWindow);
   }
+
+  // Check for updates after app is ready
+  checkForUpdatesOnLaunch();
 
   app.on("activate", () => {
     if (mainWindow === null) {

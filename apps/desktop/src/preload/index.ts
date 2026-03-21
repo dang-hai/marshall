@@ -20,6 +20,7 @@ import type {
 } from "@marshall/shared";
 import type { DesktopNavigationRoute } from "../shared/navigation";
 import type { AppSettings } from "../shared/settings";
+import type { UpdateStatus } from "../shared/auto-updater";
 
 // Electron API
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -175,6 +176,20 @@ contextBridge.exposeInMainWorld("codingAgentsAPI", {
 contextBridge.exposeInMainWorld("aiAPI", {
   completion: (input: { prompt: string; system?: string }) =>
     ipcRenderer.invoke("ai:completion", input),
+});
+
+// Auto-Updater API
+contextBridge.exposeInMainWorld("autoUpdaterAPI", {
+  checkForUpdates: () => ipcRenderer.invoke("auto-updater:check"),
+  downloadUpdate: () => ipcRenderer.invoke("auto-updater:download"),
+  installUpdate: () => ipcRenderer.invoke("auto-updater:install"),
+  getStatus: () => ipcRenderer.invoke("auto-updater:get-status"),
+  getVersion: () => ipcRenderer.invoke("auto-updater:get-version"),
+  onStatus: (callback: (status: UpdateStatus) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status);
+    ipcRenderer.on("auto-updater:status", handler);
+    return () => ipcRenderer.removeListener("auto-updater:status", handler);
+  },
 });
 
 // Transcription API
@@ -476,6 +491,14 @@ declare global {
     };
     aiAPI: {
       completion: (input: { prompt: string; system?: string }) => Promise<{ text: string }>;
+    };
+    autoUpdaterAPI: {
+      checkForUpdates: () => Promise<{ status: string; error?: string }>;
+      downloadUpdate: () => Promise<{ status: string; error?: string }>;
+      installUpdate: () => void;
+      getStatus: () => Promise<UpdateStatus>;
+      getVersion: () => Promise<string>;
+      onStatus: (callback: (status: UpdateStatus) => void) => () => void;
     };
     transcriptionAPI: {
       // Models
