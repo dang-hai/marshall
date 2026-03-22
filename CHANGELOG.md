@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.16](https://github.com/dang-hai/marshall/compare/v0.0.15...v0.0.16) (2026-03-22)
+
+
+### Bug Fixes
+
+* **desktop:** add fs-extra dependency for electron-updater ([c456d71](https://github.com/dang-hai/marshall/commit/c456d719a26fb2d612c22dfbdf982ea5d396542d))
+* **desktop:** bundle electron-updater to fix missing transitive deps ([6080473](https://github.com/dang-hai/marshall/commit/60804738077d29f4569df702806f87695c44826d))
+
 ## [0.0.15](https://github.com/dang-hai/marshall/compare/v0.0.14...v0.0.15) (2026-03-21)
 
 
