@@ -6,9 +6,52 @@
  * `claude` can't be found. This module fetches the user's shell PATH
  * and updates process.env.PATH.
  */
-import { shellPath } from "shell-path";
+import { spawn } from "child_process";
 
 let pathFixed = false;
+
+/**
+ * Gets the user's default shell from environment or falls back to common shells.
+ */
+function getDefaultShell(): string {
+  return process.env.SHELL || "/bin/zsh";
+}
+
+/**
+ * Fetches the PATH from the user's login shell.
+ */
+function getShellPath(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const shell = getDefaultShell();
+    // Use login shell (-l) to get full PATH including ~/.zshrc, ~/.bashrc, etc.
+    const child = spawn(shell, ["-l", "-c", "echo $PATH"], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+
+    child.on("close", (code) => {
+      if (code === 0 && stdout.trim()) {
+        resolve(stdout.trim());
+      } else {
+        resolve(null);
+      }
+    });
+
+    child.on("error", () => {
+      resolve(null);
+    });
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+      child.kill();
+      resolve(null);
+    }, 5000);
+  });
+}
 
 /**
  * Fixes process.env.PATH to include the user's shell PATH.
@@ -26,7 +69,7 @@ export async function fixPath(): Promise<void> {
   }
 
   try {
-    const userPath = await shellPath();
+    const userPath = await getShellPath();
     if (userPath) {
       process.env.PATH = userPath;
     }
