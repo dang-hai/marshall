@@ -6,7 +6,7 @@
  * `claude` can't be found. This module fetches the user's shell PATH
  * and updates process.env.PATH.
  */
-import shellPath from "shell-path";
+import { shellPath } from "shell-path";
 
 let pathFixed = false;
 
