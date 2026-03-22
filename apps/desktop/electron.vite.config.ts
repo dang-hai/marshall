@@ -2,6 +2,8 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
 import { copyFileSync, mkdirSync, existsSync } from "fs";
+import nodeResolve from "@rollup/plugin-node-resolve";
+import commonjs from "@rollup/plugin-commonjs";
 
 // Plugin to copy resources to output directory
 function copyResourcesPlugin() {
@@ -33,7 +35,7 @@ export default defineConfig({
         // Bundle these instead of resolving from packaged node_modules.
         // This avoids Bun symlink layout issues where transitive
         // dependency trees are incomplete inside the final app bundle.
-        exclude: ["conf", "ws"],
+        exclude: ["conf", "ws", "electron-updater", "fs-extra"],
       }),
       copyResourcesPlugin(),
     ],
@@ -48,6 +50,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/main/index.ts"),
         },
+        plugins: [nodeResolve({ preferBuiltins: true }), commonjs()],
       },
     },
   },
