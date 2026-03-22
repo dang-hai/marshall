@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.18](https://github.com/dang-hai/marshall/compare/v0.0.17...v0.0.18) (2026-03-22)
+
+
+### Bug Fixes
+
+* **desktop:** replace shell-path with inline implementation ([6dbe650](https://github.com/dang-hai/marshall/commit/6dbe650ba3876d3b7d82d181883424569fcd7dcc))
+
 ## [0.0.17](https://github.com/dang-hai/marshall/compare/v0.0.16...v0.0.17) (2026-03-22)
 
 
