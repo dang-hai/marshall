@@ -153,6 +153,7 @@ export function createCodexExecutor(): AgentExecutor {
           "exec",
           "resume",
           "--json",
+          "--skip-git-repo-check",
           "-m",
           "gpt-5.4-mini",
           "--config",
@@ -163,6 +164,7 @@ export function createCodexExecutor(): AgentExecutor {
       : [
           "exec",
           "--json",
+          "--skip-git-repo-check",
           "--color",
           "never",
           "--sandbox",

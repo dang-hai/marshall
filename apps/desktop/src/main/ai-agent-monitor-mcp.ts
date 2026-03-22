@@ -272,10 +272,20 @@ async function runCodexWithContext(
 ): Promise<AgentFinalResponse> {
   return new Promise((resolve, reject) => {
     const args = conversationId
-      ? ["exec", "resume", "--json", "-m", "gpt-5.4-mini", conversationId, "-"]
+      ? [
+          "exec",
+          "resume",
+          "--json",
+          "--skip-git-repo-check",
+          "-m",
+          "gpt-5.4-mini",
+          conversationId,
+          "-",
+        ]
       : [
           "exec",
           "--json",
+          "--skip-git-repo-check",
           "--color",
           "never",
           "-m",
