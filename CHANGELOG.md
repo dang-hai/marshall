@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.17](https://github.com/dang-hai/marshall/compare/v0.0.16...v0.0.17) (2026-03-22)
+
+
+### Bug Fixes
+
+* **desktop:** resolve cli spawn errors in packaged app ([1ff43f6](https://github.com/dang-hai/marshall/commit/1ff43f6fa8b1f2e6933513741c0e823d616d87d9))
+* **desktop:** use named import for shell-path ([d95a165](https://github.com/dang-hai/marshall/commit/d95a165d11590defd39d15cc929cc01f652fa13e))
+
 ## [0.0.16](https://github.com/dang-hai/marshall/compare/v0.0.15...v0.0.16) (2026-03-22)
 
 
