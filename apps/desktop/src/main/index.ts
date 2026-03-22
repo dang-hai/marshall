@@ -26,6 +26,7 @@ import { setupIntegrationsIPC, setNotionToken } from "./integrations";
 import { setupNotionIntegrationIPC } from "./notion-integration";
 import { NotchCompanionManager } from "./notch-companion";
 import { setupAutoUpdater, checkForUpdatesOnLaunch } from "./auto-updater";
+import { fixPath } from "./fix-path";
 import type { NoteRecord, StoredNotionToken } from "@marshall/shared";
 
 // Suppress Chromium DevTools warnings that are not relevant to Electron
@@ -423,7 +424,10 @@ function setupAIAgentMonitorWindowHandlers(window: BrowserWindow) {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Fix PATH for packaged app so CLI tools (codex, claude) can be found
+  await fixPath();
+
   const aiAgentMonitor = new AIAgentMonitorMCPService({
     createNotificationWindow: createAIAgentNotificationWindow,
     getSelectedAgent: () => getSetting("monitor").agent,
