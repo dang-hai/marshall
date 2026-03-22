@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.19](https://github.com/dang-hai/marshall/compare/v0.0.18...v0.0.19) (2026-03-22)
+
+
+### Bug Fixes
+
+* **desktop:** add --skip-git-repo-check flag to codex spawn ([dacedd4](https://github.com/dang-hai/marshall/commit/dacedd44c899c77ba0478a39c2b99eb9e30f7036))
+
 ## [0.0.18](https://github.com/dang-hai/marshall/compare/v0.0.17...v0.0.18) (2026-03-22)
 
 
